@@ -89,7 +89,10 @@ jobs:
           php artisan storage:link
 
       - name: Lint (Pint)
-        run: vendor/bin/pint --test
+        # --test: no escribe, solo verifica
+        # -v: muestra qué archivos cambiarían y por qué (útil para diagnosticar
+        # diferencias entre vendor/ local y vendor/ del runner CI).
+        run: vendor/bin/pint --test -v
 
       - name: Static analysis (PHPStan)
         run: vendor/bin/phpstan analyse --memory-limit=2G --error-format=github
