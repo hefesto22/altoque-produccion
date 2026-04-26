@@ -7,7 +7,7 @@ Guía paso a paso para preparar la plantilla en una máquina nueva con macOS + H
 | Herramienta | Versión mínima | Cómo verificar |
 |---|---|---|
 | Laravel Herd | 1.x | `herd --version` |
-| PHP | 8.3+ | `php -v` (Herd lo trae) |
+| PHP | 8.4+ | `php -v` (Herd lo trae — selecciónalo en Sites para este proyecto) |
 | Composer | 2.7+ | `composer --version` |
 | Node.js | 20+ | `node --version` |
 | Docker Desktop | última | `docker --version` |

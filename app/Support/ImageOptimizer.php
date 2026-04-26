@@ -73,7 +73,7 @@ final class ImageOptimizer
      *   - Resto → se convierte a PNG cuadrado de 64x64 (compatible con todos
      *     los browsers, incluido el del Apple Touch Icon)
      *
-     * @param  positive-int  $size
+     * @param positive-int $size
      */
     public static function toFavicon(
         TemporaryUploadedFile $file,
@@ -147,7 +147,7 @@ final class ImageOptimizer
      * Redimensiona la imagen a un cuadrado del tamaño dado, recortando los bordes
      * para mantener el centro (cover behavior).
      *
-     * @param  positive-int  $tamano
+     * @param positive-int $tamano
      */
     private static function redimensionarCuadrado(GdImage $original, int $tamano): GdImage
     {

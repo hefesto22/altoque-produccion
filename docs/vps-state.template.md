@@ -26,13 +26,13 @@ Lista de proyectos productivos en este VPS al momento de auditar (NO TOCAR):
 
 | Proyecto | Ruta | Stack | Notas |
 |---|---|---|---|
-| `<nombre>` | `/var/www/proyectos/<nombre>` | PHP 8.3 / Postgres `<db>` / Redis db`<n>` | Cliente activo |
+| `<nombre>` | `/var/www/proyectos/<nombre>` | PHP 8.4 / Postgres `<db>` / Redis db`<n>` | Cliente activo |
 
 ## 3. PHP
 
 | Versión | Estado | Pool FPM | Notas |
 |---|---|---|---|
-| 8.3.x | Por defecto | `<pool>` | Compartido con `<otros proyectos>` |
+| 8.4.x | Por defecto | `<pool>` | Compartido con `<otros proyectos>` |
 
 Extensiones cargadas: `pdo_pgsql, redis, gd, mbstring, xml, bcmath, intl, zip, curl, openssl` ✓
 
@@ -117,7 +117,7 @@ Procesos supervisados al momento de auditoría (NO TOCAR los de otros proyectos)
 Lo que SÍ vamos a instalar/configurar:
 - [ ] Crear DB `<db_proyecto_nuevo>` y user dedicado en Postgres
 - [ ] Asignar DBs Redis 5, 6, 7
-- [ ] Crear pool FPM dedicado en `/etc/php/8.3/fpm/pool.d/<proyecto>.conf`
+- [ ] Crear pool FPM dedicado en `/etc/php/8.4/fpm/pool.d/<proyecto>.conf`
 - [ ] Crear vhost Nginx en `/etc/nginx/sites-available/<dominio>.conf`
 - [ ] Provisionar cert SSL Let's Encrypt para `<dominio>`
 - [ ] Configurar Supervisor para Horizon de este proyecto

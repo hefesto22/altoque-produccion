@@ -18,8 +18,9 @@ return RectorConfig::configure()
         __DIR__.'/vendor',
         __DIR__.'/public/build',
     ])
+    ->withPhpSets(php84: true)
     ->withSets([
-        LevelSetList::UP_TO_PHP_83,
+        LevelSetList::UP_TO_PHP_84,
     ])
     ->withRules([
         // Reglas de modernización seguras

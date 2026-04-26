@@ -6,7 +6,7 @@ Plantilla base para los proyectos de Grupo Olympo / Inversiones Olympo. Diseñad
 
 | Capa | Tecnología | Versión |
 |---|---|---|
-| Lenguaje | PHP | 8.3+ |
+| Lenguaje | PHP | 8.4+ |
 | Framework | Laravel | 12 |
 | Panel admin | Filament | v4 (Schemas) |
 | Base de datos | PostgreSQL | 16 |
@@ -58,7 +58,7 @@ Plantilla base para los proyectos de Grupo Olympo / Inversiones Olympo. Diseñad
 - Suite de tests Pest 3 con cobertura de Value Objects, modelos y rutas
 - CI en GitHub Actions: Pint + PHPStan + Pest sobre Postgres + Redis reales
 - Larastan nivel 7
-- Rector con sets de PHP 8.3, dead code, code quality, type declarations
+- Rector con sets de PHP 8.4, dead code, code quality, type declarations
 
 ## Setup local con Herd + Docker
 
