@@ -9,16 +9,16 @@ use App\Models\Producto;
 use Illuminate\Database\Seeder;
 
 /**
- * Menú real del restaurante (tomado del flyer del día) + reglas de combo.
+ * Menú real del restaurante (tomado del flyer de "Al Toque Comida Buffet")
+ * + reglas de precio por nivel.
  *
  * Precios individuales: Res L.70 · Pollo/Cerdo L.60 · Complemento L.30.
- * Combos: Pollo/Cerdo +2 = 100 · Res +2 = 110 · Pollo/Cerdo +3 = 125 · Res +3 = 135.
+ * Reglas de precio (proteína + N complementos → precio):
+ *   Pollo/Cerdo +2=100 +3=125 · Res +2=110 +3=135 · Pescado +2=105 +3=115.
  *
- * Idempotente (updateOrCreate): se puede re-correr sin duplicar.
- *
- * NOTA: las proteínas del día son tier pollo_cerdo. El tier 'res' queda
- * con sus combos cargados para cuando haya un plato de res. Las bebidas
- * son placeholders editables — confirmar precios reales con Mauricio.
+ * Toda la comida grava ISV 15% (confirmado con el contador). Idempotente
+ * por nombre — se puede re-correr sin duplicar. Los tiers los carga
+ * TierSeeder (corre antes).
  */
 class MenuSeeder extends Seeder
 {
@@ -27,28 +27,29 @@ class MenuSeeder extends Seeder
         $this->proteinas();
         $this->complementos();
         $this->bebidas();
-        $this->combos();
+        $this->reglasDePrecio();
     }
 
     private function proteinas(): void
     {
+        // [nombre, tier, precio individual]
         $proteinas = [
-            'Lomo de cerdo en salsa de mandarina',
-            'Chicharrones de cerdo',
-            'Pollo en teriyaki al horno',
-            'Alitas en barbacoa',
+            ['Pollo en salsa Alfredo', 'pollo_cerdo', 60.00],
+            ['Chuleta a la plancha', 'pollo_cerdo', 60.00],
+            ['Chicharrones de cerdo', 'pollo_cerdo', 60.00],
+            ['Pechuga a la plancha', 'pollo_cerdo', 60.00],
+            ['Carne molida con papas', 'res', 70.00],
         ];
 
-        foreach ($proteinas as $nombre) {
+        foreach ($proteinas as [$nombre, $tier, $precio]) {
             Producto::updateOrCreate(
                 ['nombre' => $nombre],
                 [
                     'categoria'  => 'proteina',
-                    'tier_combo' => 'pollo_cerdo',
-                    'precio'     => 60.00,
-                    // Servicio de restaurante: grava 15% (decisión a confirmar con el contador).
-                    'grava_isv' => true,
-                    'activo'    => true,
+                    'tier_combo' => $tier,
+                    'precio'     => $precio,
+                    'grava_isv'  => true,
+                    'activo'     => true,
                 ],
             );
         }
@@ -60,12 +61,12 @@ class MenuSeeder extends Seeder
             'Arroz imperial',
             'Vegetales al vapor',
             'Ensalada de lechuga',
-            'Ensalada de papa estilo casero',
+            'Puré de papas',
             'Remolacha cocida',
-            'Plátano cocido',
-            'Tajadas de plátano verde',
+            'Habichuela con huevo',
             'Frijoles guisados',
-            'Queso',
+            'Queso fresco',
+            'Tajadas de plátano verde',
         ];
 
         foreach ($complementos as $nombre) {
@@ -75,9 +76,8 @@ class MenuSeeder extends Seeder
                     'categoria'  => 'complemento',
                     'tier_combo' => null,
                     'precio'     => 30.00,
-                    // Servicio de restaurante: grava 15% (a confirmar con el contador).
-                    'grava_isv' => true,
-                    'activo'    => true,
+                    'grava_isv'  => true,
+                    'activo'     => true,
                 ],
             );
         }
@@ -85,7 +85,7 @@ class MenuSeeder extends Seeder
 
     private function bebidas(): void
     {
-        // Placeholders — confirmar lista y precios reales. Las bebidas gravan ISV.
+        // Bebidas gravan ISV siempre. Precios editables desde el panel.
         $bebidas = [
             'Fresco natural'  => 25.00,
             'Gaseosa'         => 20.00,
@@ -106,16 +106,19 @@ class MenuSeeder extends Seeder
         }
     }
 
-    private function combos(): void
+    private function reglasDePrecio(): void
     {
-        $combos = [
+        // [tier, nº de complementos, precio del combo]
+        $reglas = [
             ['pollo_cerdo', 2, 100.00],
-            ['res', 2, 110.00],
             ['pollo_cerdo', 3, 125.00],
+            ['res', 2, 110.00],
             ['res', 3, 135.00],
+            ['pescado', 2, 105.00],
+            ['pescado', 3, 115.00],
         ];
 
-        foreach ($combos as [$tier, $complementos, $precio]) {
+        foreach ($reglas as [$tier, $complementos, $precio]) {
             Combo::updateOrCreate(
                 ['tier' => $tier, 'complementos' => $complementos],
                 ['precio' => $precio, 'activo' => true],

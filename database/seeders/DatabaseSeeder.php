@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             RestauranteAccessSeeder::class,
             ServiciosSeeder::class,
+            TierSeeder::class,
             MenuSeeder::class,
             CaiSeeder::class,
             BrandingSettingSeeder::class,
