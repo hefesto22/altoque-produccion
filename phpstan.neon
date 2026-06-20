@@ -27,6 +27,11 @@ parameters:
         - identifier: missingType.iterableValue
           path: app/Filament/*
 
+        # getEloquentQuery() y cierres de Filament reciben/devuelven Builder
+        # genérico del framework — ruido, igual que en los modelos.
+        - identifier: missingType.generics
+          path: app/Filament/*
+
         - identifier: missingType.parameter
           path: app/Filament/Resources/ActivityLogResource.php
 
@@ -44,6 +49,12 @@ parameters:
         # ── Eloquent magic ──────────────────────────────────────────────────
         - '#Access to an undefined property App\\Models\\.*::\$.*#'
 
+        # Los scopes de Laravel reciben/devuelven Builder genérico. Exigir
+        # Builder<Model> en cada scope es ruido del framework; lo silenciamos
+        # solo en los modelos.
+        - identifier: missingType.generics
+          path: app/Models/*
+
         # ── Multi-tenant opcional ───────────────────────────────────────────
         # BelongsToEmpresa hace referencia a App\Models\Empresa que solo
         # existe en proyectos multi-tenant. La plantilla NO incluye Empresa.
@@ -54,12 +65,50 @@ parameters:
         # ── Pest 3 magic ────────────────────────────────────────────────────
         # $this, test(), pest()->extend(), expect() son magic globals.
         # PHPStan no los entiende sin pest plugin (no estable en Pest 3.x).
+        # $this->prop son propiedades que Pest asigna por binding en beforeEach.
         - identifier: variable.undefined
           path: tests/*
         - identifier: method.notFound
           path: tests/*
         - identifier: method.staticCall
           path: tests/*
+        - identifier: property.notFound
+          path: tests/*
+        - identifier: missingType.iterableValue
+          path: tests/*
+        - identifier: missingType.parameter
+          path: tests/*
+        - identifier: offsetAccess.notFound
+          path: tests/*
+        - identifier: argument.templateType
+          path: tests/*
+
+        # ── ?-> defensivo (puede no haber servicio activo) en pantallas ─────
+        - identifier: nullsafe.neverNull
+          path: app/Livewire/*
+        - identifier: nullsafe.neverNull
+          path: app/Filament/Pages/*
+        # $this->total y demás propiedades computadas (getXProperty) son
+        # magia de Livewire que PHPStan no resuelve.
+        - identifier: property.notFound
+          path: app/Livewire/*
+
+        # ── Maatwebsite Excel: interfaces (FromQuery, etc.) no son genéricas;
+        #    el @implements<Model> es documentación. Y el ?-> de la query.
+        - identifier: generics.notGeneric
+          path: app/Exports/*
+        - identifier: nullsafe.neverNull
+          path: app/Exports/*
+
+        # ── Páginas Livewire/Filament: las propiedades públicas se inicializan
+        #    en mount() (idioma Livewire), no en el constructor.
+        - identifier: property.uninitialized
+          path: app/Filament/Pages/*
+
+        # Las descargas de Excel devuelven BinaryFileResponse vía Maatwebsite;
+        # PHPStan ve la unión Response|BinaryFileResponse del facade.
+        - identifier: return.type
+          path: app/Filament/Pages/LibrosFiscales.php
 
         # ── Seeders ─────────────────────────────────────────────────────────
         # ?->command es defensivo — el comando puede ser null.

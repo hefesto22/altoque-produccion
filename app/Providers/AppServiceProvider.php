@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Contracts\CalculaImpuestos;
 use App\Listeners\RecordUserLogin;
+use App\Services\Pos\CalculadorVenta;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -17,7 +19,13 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Calculador de impuestos: la tasa de ISV viene de config, nunca
+        // hardcodeada. Único lugar donde se resuelve la implementación.
+        $this->app->bind(CalculaImpuestos::class, function (): CalculadorVenta {
+            return new CalculadorVenta(
+                tasaIsv: (float) config('honduras.impuestos.isv.tasa_general'),
+            );
+        });
     }
 
     public function boot(): void

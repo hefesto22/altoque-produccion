@@ -10,6 +10,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -55,6 +56,16 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
             ])
+            // ── Orden e iconos del menú lateral (lo más usado primero) ──────
+            ->navigationGroups([
+                NavigationGroup::make('Caja')->icon('heroicon-o-shopping-cart'),
+                NavigationGroup::make('Cocina')->icon('heroicon-o-fire'),
+                NavigationGroup::make('Menú')->icon('heroicon-o-book-open'),
+                NavigationGroup::make('Fiscal')->icon('heroicon-o-calculator'),
+                NavigationGroup::make('Facturación')->icon('heroicon-o-document-check'),
+                NavigationGroup::make('Administración')->icon('heroicon-o-users'),
+                NavigationGroup::make('Sistema')->icon('heroicon-o-cog-6-tooth'),
+            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -70,7 +81,9 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make(),
+                FilamentShieldPlugin::make()
+                    ->navigationGroup('Administración')
+                    ->navigationSort(2),
             ])
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
