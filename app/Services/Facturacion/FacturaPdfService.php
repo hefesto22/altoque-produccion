@@ -74,16 +74,28 @@ final class FacturaPdfService
     /** Bytes del PDF (80mm de ancho). */
     public function pdf(Factura $factura): string
     {
+        // Chromium necesita un directorio de datos ESCRIBIBLE para arrancar
+        // (ahí crea su perfil y la base de crashpad). Bajo www-data el HOME
+        // no es escribible, por eso el proceso muere con "Failed to launch /
+        // crashpad: --database is required". Lo apuntamos a storage/, que ya
+        // tiene permisos 775 para www-data.
+        $userDataDir = storage_path('app/browsershot');
+
+        if (! is_dir($userDataDir)) {
+            mkdir($userDataDir, 0775, true);
+        }
+
         $shot = Browsershot::html($this->html($factura))
             ->paperSize(80, 250, 'mm')
             ->margins(3, 3, 3, 3)
             ->showBackground()
             // Chromium corre bajo www-data sin namespaces de usuario: el sandbox
-            // no puede levantar su proceso y crashea (crashpad). --no-sandbox lo
-            // resuelve. --disable-dev-shm-usage evita crashes por /dev/shm chico
-            // en el contenedor del VPS bajo alto flujo de impresión.
+            // no puede levantar su proceso y crashea. --no-sandbox lo resuelve.
+            // --disable-dev-shm-usage evita crashes por /dev/shm chico en el VPS;
+            // --disable-gpu porque es headless sin tarjeta.
             ->noSandbox()
-            ->addChromiumArguments(['disable-dev-shm-usage']);
+            ->userDataDir($userDataDir)
+            ->addChromiumArguments(['disable-dev-shm-usage', 'disable-gpu']);
 
         if ($node = config('pdf.node_path')) {
             $shot->setNodeBinary($node);
