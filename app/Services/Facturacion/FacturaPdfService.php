@@ -74,11 +74,11 @@ final class FacturaPdfService
     /** Bytes del PDF (80mm de ancho). */
     public function pdf(Factura $factura): string
     {
-        // Chromium necesita un directorio de datos ESCRIBIBLE para arrancar
-        // (ahí crea su perfil y la base de crashpad). Bajo www-data el HOME
-        // no es escribible, por eso el proceso muere con "Failed to launch /
-        // crashpad: --database is required". Lo apuntamos a storage/, que ya
-        // tiene permisos 775 para www-data.
+        // Chromium necesita un HOME y un directorio de datos ESCRIBIBLES para
+        // arrancar (ahí crea su perfil y la base de crashpad). Bajo www-data el
+        // HOME viene vacío/no escribible, por eso el proceso moría con
+        // "Failed to launch / crashpad: --database is required". Apuntamos ambos
+        // a storage/, que ya tiene permisos para www-data.
         $userDataDir = storage_path('app/browsershot');
 
         if (! is_dir($userDataDir)) {
@@ -89,6 +89,10 @@ final class FacturaPdfService
             ->paperSize(80, 250, 'mm')
             ->margins(3, 3, 3, 3)
             ->showBackground()
+            // Imprescindible: sin un HOME escribible Chromium no levanta su
+            // proceso (crashpad: "--database is required"). Se lo inyectamos al
+            // comando de node, igual que PATH.
+            ->setNodeEnv(['HOME' => $userDataDir])
             // Chromium corre bajo www-data sin namespaces de usuario: el sandbox
             // no puede levantar su proceso y crashea. --no-sandbox lo resuelve.
             // --disable-dev-shm-usage evita crashes por /dev/shm chico en el VPS;
