@@ -77,7 +77,13 @@ final class FacturaPdfService
         $shot = Browsershot::html($this->html($factura))
             ->paperSize(80, 250, 'mm')
             ->margins(3, 3, 3, 3)
-            ->showBackground();
+            ->showBackground()
+            // Chromium corre bajo www-data sin namespaces de usuario: el sandbox
+            // no puede levantar su proceso y crashea (crashpad). --no-sandbox lo
+            // resuelve. --disable-dev-shm-usage evita crashes por /dev/shm chico
+            // en el contenedor del VPS bajo alto flujo de impresión.
+            ->noSandbox()
+            ->addChromiumArguments(['disable-dev-shm-usage']);
 
         if ($node = config('pdf.node_path')) {
             $shot->setNodeBinary($node);
