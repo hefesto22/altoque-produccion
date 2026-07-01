@@ -28,6 +28,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Combos promocionales con nombre (ej: "Combo Familiar"). Se venden de un
@@ -40,9 +41,9 @@ class ComboEspecialResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-gift';
 
-    protected static ?string $modelLabel = 'Combo especial';
+    protected static ?string $modelLabel = 'Platillo completo';
 
-    protected static ?string $pluralModelLabel = 'Combos Especiales';
+    protected static ?string $pluralModelLabel = 'Platillos Completos';
 
     protected static ?int $navigationSort = 3;
 
@@ -67,7 +68,7 @@ class ComboEspecialResource extends Resource
             // Identidad: nombre ancho + precio fijo destacado.
             Grid::make(3)->schema([
                 TextInput::make('nombre')
-                    ->label('Nombre del combo')
+                    ->label('Nombre del platillo')
                     ->required()->maxLength(120)
                     ->placeholder('Ej: Desayuno típico')
                     ->columnSpan(2),
@@ -75,9 +76,9 @@ class ComboEspecialResource extends Resource
                 MontoField::make('precio', 'Precio fijo')->columnSpan(1),
             ])->columnSpanFull(),
 
-            // Cómo se compone el combo.
+            // Cómo se compone el platillo.
             Select::make('combo_modo')
-                ->label('Tipo de combo')
+                ->label('Tipo de platillo')
                 ->options([
                     'cantidades' => 'El cliente elige (cantidades) — estilo buffet',
                     'platillo'   => 'Platillo armado (productos fijos) — desayuno / cena',
@@ -113,12 +114,25 @@ class ComboEspecialResource extends Resource
                             modifyQueryUsing: fn ($query) => $query
                                 ->where('categoria', '!=', 'combo')
                                 ->where('activo', true)
-                                ->orderBy('categoria')->orderBy('nombre'),
+                                // Orden lógico por categoría (no alfabético), luego por nombre.
+                                // La expresión va como columna del select para que funcione
+                                // con el SELECT DISTINCT que arma Filament en Postgres.
+                                ->addSelect(DB::raw("case categoria when 'proteina' then 1 when 'complemento' then 2 when 'bebida' then 3 when 'extra' then 4 else 5 end as cat_orden"))
+                                ->orderBy('cat_orden')
+                                ->orderBy('nombre'),
                         )
+                        // Prefijo de categoría para agrupar de un vistazo entre 100+ productos.
+                        ->getOptionLabelFromRecordUsing(fn (Producto $record): string => match ($record->categoria) {
+                            'proteina'    => '🍖 '.$record->nombre,
+                            'complemento' => '🥗 '.$record->nombre,
+                            'bebida'      => '🥤 '.$record->nombre,
+                            'extra'       => '➕ '.$record->nombre,
+                            default       => $record->nombre,
+                        })
                         ->searchable()
                         ->bulkToggleable()
                         ->columns(3)
-                        ->gridDirection('row'),
+                        ->gridDirection('column'),
                 ]),
 
             Textarea::make('descripcion')

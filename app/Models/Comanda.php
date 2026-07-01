@@ -69,7 +69,9 @@ class Comanda extends Model
     /** @param  Builder<Comanda>  $query */
     public function scopeEnCocina(Builder $query): Builder
     {
+        // Las que aún se preparan van primero; las "listo" se van al final.
         return $query->whereIn('estado', ['pendiente', 'preparando', 'listo'])
+            ->orderByRaw("case when estado = 'listo' then 1 else 0 end")
             ->orderBy('created_at');
     }
 }

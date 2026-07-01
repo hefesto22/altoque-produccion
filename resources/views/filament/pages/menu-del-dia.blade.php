@@ -26,7 +26,7 @@
         </x-filament::section>
 
         {{-- Productos por categoría --}}
-        @foreach (['proteina' => 'Proteínas', 'complemento' => 'Complementos', 'bebida' => 'Bebidas', 'extra' => 'Extras', 'combo' => 'Combos especiales'] as $cat => $titulo)
+        @foreach (['proteina' => 'Proteínas', 'complemento' => 'Complementos', 'bebida' => 'Bebidas', 'extra' => 'Extras', 'combo' => 'Platillos completos'] as $cat => $titulo)
             @if (! empty($productosPorCategoria[$cat]))
                 <x-filament::section>
                     <x-slot name="heading">{{ $titulo }}</x-slot>

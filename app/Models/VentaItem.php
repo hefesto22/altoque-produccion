@@ -16,9 +16,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $producto_id
  * @property string $nombre
  * @property float $precio_unitario
+ * @property float|null $precio_lista
  * @property int $cantidad
  * @property bool $grava_isv
+ * @property array<int, string>|null $detalle
+ * @property string|null $nota
+ * @property array<int, array{nombre: string, precio: float, grava_isv: bool, cantidad: int}>|null $componentes
  * @property float $importe
+ * @property float $descuento
  */
 class VentaItem extends Model
 {
@@ -28,10 +33,14 @@ class VentaItem extends Model
         'producto_id',
         'nombre',
         'precio_unitario',
+        'precio_lista',
         'cantidad',
         'grava_isv',
         'detalle',
+        'nota',
+        'componentes',
         'importe',
+        'descuento',
     ];
 
     /** @return array<string, string> */
@@ -39,10 +48,13 @@ class VentaItem extends Model
     {
         return [
             'precio_unitario' => 'decimal:2',
+            'precio_lista'    => 'decimal:2',
             'cantidad'        => 'integer',
             'grava_isv'       => 'boolean',
             'detalle'         => 'array',
+            'componentes'     => 'array',
             'importe'         => 'decimal:2',
+            'descuento'       => 'decimal:2',
         ];
     }
 

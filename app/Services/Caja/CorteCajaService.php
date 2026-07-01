@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Caja;
 
+use App\Models\Comanda;
 use App\Models\CorteCaja;
 use App\Models\Venta;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +25,8 @@ final class CorteCajaService
             ->first();
     }
 
-    /** Abre un turno con su fondo inicial (si ya hay uno abierto, lo devuelve). */
-    public function abrir(int $cajeroId, float $fondoInicial): CorteCaja
+    /** Abre un turno con su fondo de efectivo y el saldo inicial del terminal POS. */
+    public function abrir(int $cajeroId, float $fondoInicial, float $fondoTerminal = 0): CorteCaja
     {
         $existente = $this->abierto($cajeroId);
 
@@ -34,10 +35,11 @@ final class CorteCajaService
         }
 
         return CorteCaja::create([
-            'cajero_id'     => $cajeroId,
-            'fondo_inicial' => $fondoInicial,
-            'estado'        => 'abierto',
-            'abierto_at'    => now(),
+            'cajero_id'      => $cajeroId,
+            'fondo_inicial'  => $fondoInicial,
+            'fondo_terminal' => $fondoTerminal,
+            'estado'         => 'abierto',
+            'abierto_at'     => now(),
         ]);
     }
 
@@ -50,6 +52,7 @@ final class CorteCajaService
         return DB::transaction(function () use ($corte, $efectivoContado, $notas): CorteCaja {
             $fila = Venta::query()
                 ->where('corte_caja_id', $corte->id)
+                ->where('pagada', true)   // los pendientes por cobrar no cuentan
                 ->selectRaw("
                     count(*) as cantidad,
                     coalesce(sum(total), 0) as total,
@@ -76,6 +79,12 @@ final class CorteCajaService
                 'diferencia'          => round($efectivoContado - $esperado, 2),
                 'notas'               => $notas,
             ]);
+
+            // Cierre de día: la pantalla de cocina se vacía (todo lo que quede
+            // en cola se marca entregado).
+            Comanda::query()
+                ->whereIn('estado', ['pendiente', 'preparando', 'listo'])
+                ->update(['estado' => 'entregado', 'entregado_at' => now()]);
 
             return $corte;
         });

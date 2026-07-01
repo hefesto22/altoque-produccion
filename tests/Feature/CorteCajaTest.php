@@ -6,7 +6,9 @@ use App\Domain\ValueObjects\LineaVenta;
 use App\Models\CorteCaja;
 use App\Models\Producto;
 use App\Models\User;
+use App\Models\Venta;
 use App\Services\Caja\CorteCajaService;
+use App\Services\Cocina\ComandaService;
 use App\Services\Pos\VentaService;
 
 it('abre un turno y vincula las ventas a ese corte', function () {
@@ -56,4 +58,23 @@ it('cierra el turno y concilia el efectivo (faltante/sobrante)', function () {
         ->and((float) $cerrado->total_efectivo)->toBe(100.00)
         ->and((float) $cerrado->total_tarjeta)->toBe(100.00)
         ->and((float) $cerrado->diferencia)->toBe(10.00);
+});
+
+it('al cerrar el turno se vacía la pantalla de cocina', function () {
+    $cajero = User::factory()->create();
+    $caja = app(CorteCajaService::class);
+    $corte = $caja->abrir($cajero->id, 0.0);
+
+    $venta = Venta::create([
+        'cajero_id' => $cajero->id, 'tipo' => 'recibo', 'total' => 100, 'vendida_at' => now(),
+    ]);
+    $comanda = app(ComandaService::class)->crear(
+        $venta,
+        'llevar',
+        [['nombre' => 'Pollo', 'cantidad' => 1, 'detalle' => []]],
+    );
+
+    $caja->cerrar($corte, 0.0);
+
+    expect($comanda->fresh()->estado)->toBe('entregado'); // salió de cocina
 });

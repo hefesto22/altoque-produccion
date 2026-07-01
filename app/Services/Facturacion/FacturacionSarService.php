@@ -82,6 +82,8 @@ final class FacturacionSarService
                 'nombre_cliente'    => $nombreMayus,
                 'gravado'           => $venta->gravado,
                 'exento'            => $venta->exento,
+                'subtotal_lista'    => $venta->subtotal_lista,
+                'descuento'         => $venta->descuento,
                 'isv'               => $venta->isv,
                 'total'             => $venta->total,
                 'emitida_at'        => now(),

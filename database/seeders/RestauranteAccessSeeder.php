@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\User;
+use BezhanSalleh\FilamentShield\Support\Utils;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
@@ -168,7 +169,9 @@ class RestauranteAccessSeeder extends Seeder
                 ],
             );
 
-            $user->syncRoles([$rol]);
+            // Además del rol de dominio, necesita panel_user para que
+            // canAccessPanel() lo deje entrar (si no, Filament rebota el login).
+            $user->syncRoles([$rol, Utils::getPanelUserRoleName()]);
             $this->command?->info("✓ {$rol}: {$email} / ".self::PASSWORD_DEV);
         }
     }

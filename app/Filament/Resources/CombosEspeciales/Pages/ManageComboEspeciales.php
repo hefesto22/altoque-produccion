@@ -14,15 +14,15 @@ class ManageComboEspeciales extends ManageRecords
 
     public function getSubheading(): ?string
     {
-        return 'Promociones cerradas con nombre y precio fijo (ej: "Combo Familiar L.250"). El cajero las '
-            .'cobra de un toque en el POS, sin armar complemento por complemento. Distintas de las "Reglas '
+        return 'Platillos preparados con nombre y precio fijo (ej: "Desayuno típico L.50"). El cajero los '
+            .'cobra de un toque en el POS, sin armar complemento por complemento. Distintos de las "Reglas '
             .'de Precio", que calculan el precio del plato según cuántos complementos lleve.';
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Nuevo combo especial'),
+            CreateAction::make()->label('Nuevo platillo completo'),
         ];
     }
 }

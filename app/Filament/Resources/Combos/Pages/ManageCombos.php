@@ -20,7 +20,7 @@ class ManageCombos extends ManageRecords
     {
         return 'Precio automático del buffet: cuando el cajero arma una proteína + N complementos, '
             .'el POS aplica solo el precio del combo que calce (ej: Res + 2 = L.110). Gobierna casi '
-            .'todas las ventas normales. Para promociones con nombre y precio fijo, usá "Combos Especiales".';
+            .'todas las ventas normales. Para platillos con nombre y precio fijo, usá "Platillos Completos".';
     }
 
     protected function getHeaderActions(): array
@@ -28,10 +28,10 @@ class ManageCombos extends ManageRecords
         return [
             CreateAction::make()->label('Nueva regla de precio'),
 
-            // Combo promocional con nombre (otra cosa que el combo-regla):
-            // se crea desde acá mismo y se administra en "Combos Especiales".
+            // Platillo completo con nombre (otra cosa que el combo-regla):
+            // se crea desde acá mismo y se administra en "Platillos Completos".
             Action::make('nuevoComboEspecial')
-                ->label('Nuevo combo especial')
+                ->label('Nuevo platillo completo')
                 ->icon('heroicon-o-gift')
                 ->color('gray')
                 ->schema(ComboEspecialResource::camposFormulario())
@@ -39,8 +39,8 @@ class ManageCombos extends ManageRecords
                     ComboEspecial::create($data);
 
                     Notification::make()
-                        ->title('Combo especial creado')
-                        ->body('Ya aparece en el POS y en "Combos Especiales".')
+                        ->title('Platillo completo creado')
+                        ->body('Ya aparece en el POS y en "Platillos Completos".')
                         ->success()
                         ->send();
                 }),

@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\URL;
  * @property string $nombre_cliente
  * @property float $gravado
  * @property float $exento
+ * @property float $subtotal_lista
+ * @property float $descuento
  * @property float $isv
  * @property float $total
  * @property bool $anulada
@@ -46,6 +48,8 @@ class Factura extends Model
         'nombre_cliente',
         'gravado',
         'exento',
+        'subtotal_lista',
+        'descuento',
         'isv',
         'total',
         'anulada',
@@ -58,15 +62,17 @@ class Factura extends Model
     protected function casts(): array
     {
         return [
-            'correlativo' => 'integer',
-            'detallada'   => 'boolean',
-            'gravado'     => 'decimal:2',
-            'exento'      => 'decimal:2',
-            'isv'         => 'decimal:2',
-            'total'       => 'decimal:2',
-            'anulada'     => 'boolean',
-            'anulada_at'  => 'datetime',
-            'emitida_at'  => 'datetime',
+            'correlativo'    => 'integer',
+            'detallada'      => 'boolean',
+            'gravado'        => 'decimal:2',
+            'exento'         => 'decimal:2',
+            'subtotal_lista' => 'decimal:2',
+            'descuento'      => 'decimal:2',
+            'isv'            => 'decimal:2',
+            'total'          => 'decimal:2',
+            'anulada'        => 'boolean',
+            'anulada_at'     => 'datetime',
+            'emitida_at'     => 'datetime',
         ];
     }
 

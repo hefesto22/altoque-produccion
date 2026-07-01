@@ -5,7 +5,9 @@
     <style>
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 10.5px; color: #000; line-height: 1.32; }
-        .doc { width: 74mm; }
+        .doc { width: 74mm; text-transform: uppercase; }
+        .preserve { text-transform: none; }
+        .orden { font-size: 15px; font-weight: bold; text-align: right; }
         .center { text-align: center; }
         .right { text-align: right; }
         .bold { font-weight: bold; }
@@ -24,6 +26,11 @@
 </head>
 <body>
 <div class="doc">
+
+    {{-- ───── Número de orden interno (control diario), arriba a la derecha ───── --}}
+    @if ($f->venta?->numero_orden)
+        <div class="orden">{{ $f->venta->numero_orden }}</div>
+    @endif
 
     {{-- ───── Emisor ───── --}}
     @if (! empty($logo))
@@ -74,6 +81,18 @@
 
     <div class="hr"></div>
 
+    {{-- ───── Desglose SAR: el descuento de combo se aplica ANTES del ISV.
+         El detalle se imprime a precio de lista; la línea "Descuentos y
+         rebajas otorgados" cuadra el subtotal con el total cobrado. ───── --}}
+    @php
+        $descuento = (float) $f->descuento;
+        // Subtotal a precio de lista (antes de descuento). Fallback para
+        // facturas previas a esta función: total + descuento.
+        $subtotal = (float) $f->subtotal_lista > 0
+            ? (float) $f->subtotal_lista
+            : (float) $f->total + $descuento;
+    @endphp
+
     {{-- ───── Detalle ───── --}}
     <table class="items">
         <tr class="bold sm">
@@ -84,23 +103,45 @@
         </tr>
         @if ($detallada)
             @foreach ($f->venta->items as $item)
-                <tr>
-                    <td>{{ $item->cantidad }}</td>
-                    <td>{{ $item->nombre }}</td>
-                    <td class="right">{{ number_format((float) $item->precio_unitario, 2) }}</td>
-                    <td class="right">{{ number_format((float) $item->importe, 2) }}</td>
-                </tr>
-                @if (! empty($item->detalle))
-                    <tr><td></td><td class="sm" colspan="3" style="padding-bottom:2px;">{{ implode(', ', $item->detalle) }}</td></tr>
+                {{-- Se expande a precio de lista solo cuando hay referencia à la carte
+                     (buffet). El platillo de precio fijo va como una sola línea. --}}
+                @if (! empty($item->componentes) && (float) $item->precio_lista > 0)
+                    {{-- Plato detallado: cada producto a su precio de lista (à la carte) --}}
+                    @foreach ($item->componentes as $c)
+                        @php
+                            $cant = (int) ($c['cantidad'] ?? 1) * (int) $item->cantidad;
+                            $pu = (float) ($c['precio'] ?? 0);
+                        @endphp
+                        <tr>
+                            <td>{{ $cant }}</td>
+                            <td>{{ $c['nombre'] }}</td>
+                            <td class="right">{{ number_format($pu, 2) }}</td>
+                            <td class="right">{{ number_format($pu * $cant, 2) }}</td>
+                        </tr>
+                    @endforeach
+                @else
+                    <tr>
+                        <td>{{ $item->cantidad }}</td>
+                        <td>{{ $item->nombre }}</td>
+                        <td class="right">{{ number_format((float) $item->precio_unitario, 2) }}</td>
+                        <td class="right">{{ number_format((float) $item->importe, 2) }}</td>
+                    </tr>
+                    @if (! empty($item->detalle))
+                        <tr><td></td><td class="sm" colspan="3" style="padding-bottom:2px;">{{ implode(', ', $item->detalle) }}</td></tr>
+                    @endif
+                    @if (! empty($item->nota))
+                        <tr><td></td><td class="sm" colspan="3" style="padding-bottom:2px;">Nota: {{ $item->nota }}</td></tr>
+                    @endif
                 @endif
             @endforeach
         @else
-            {{-- Concepto único, como acostumbran los restaurantes --}}
+            {{-- Concepto único, como acostumbran los restaurantes. Se muestra a
+                 precio de lista para que la línea de descuento cuadre al total. --}}
             <tr>
                 <td>1</td>
                 <td>{{ $empresa['factura_concepto'] }}</td>
-                <td class="right">{{ number_format((float) $f->total, 2) }}</td>
-                <td class="right">{{ number_format((float) $f->total, 2) }}</td>
+                <td class="right">{{ number_format($subtotal, 2) }}</td>
+                <td class="right">{{ number_format($subtotal, 2) }}</td>
             </tr>
         @endif
     </table>
@@ -108,12 +149,9 @@
     <div class="hr"></div>
 
     {{-- ───── Totales (desglose SAR completo) ───── --}}
-    @php
-        $subtotal = (float) $f->exento + (float) $f->gravado + (float) $f->isv;
-    @endphp
     <table class="tot">
         <tr><td>Subtotal:</td><td class="right">L. {{ number_format($subtotal, 2) }}</td></tr>
-        <tr><td>Descuentos y rebajas:</td><td class="right">L. 0.00</td></tr>
+        <tr><td>Descuentos y rebajas:</td><td class="right">L. {{ number_format($descuento, 2) }}</td></tr>
         <tr><td>Importe exento:</td><td class="right">L. {{ number_format((float) $f->exento, 2) }}</td></tr>
         <tr><td>Importe exonerado:</td><td class="right">L. 0.00</td></tr>
         <tr><td>Importe gravado 15%:</td><td class="right">L. {{ number_format((float) $f->gravado, 2) }}</td></tr>
@@ -134,7 +172,7 @@
         <div class="center" style="margin:5px 0;">
             <img src="{{ $qr }}" style="width:26mm; height:26mm;" alt="QR verificación">
             <div class="sm">Escaneá para verificar esta factura</div>
-            <div class="xs" style="word-break:break-all;">Verificación: {{ substr($f->hash_verificacion, 0, 24) }}…</div>
+            <div class="xs preserve" style="word-break:break-all;">Verificación: {{ substr($f->hash_verificacion, 0, 24) }}…</div>
         </div>
         <div class="hr"></div>
     @endif

@@ -23,13 +23,20 @@ use Illuminate\Support\Carbon;
  * @property int $cajero_id
  * @property int|null $corte_caja_id
  * @property string $tipo
+ * @property string $tipo_orden
+ * @property string|null $numero_orden
  * @property string|null $numero_recibo
  * @property string|null $rtn_cliente
  * @property string|null $nombre_cliente
  * @property float $gravado
  * @property float $exento
+ * @property float $subtotal_lista
+ * @property float $descuento
  * @property float $isv
  * @property float $total
+ * @property float $costo_viaje
+ * @property bool $pagada
+ * @property Carbon|null $pagada_at
  * @property Carbon $vendida_at
  */
 class Venta extends Model
@@ -39,6 +46,8 @@ class Venta extends Model
         'cajero_id',
         'corte_caja_id',
         'tipo',
+        'tipo_orden',
+        'numero_orden',
         'forma_pago',
         'banco',
         'numero_recibo',
@@ -46,8 +55,13 @@ class Venta extends Model
         'nombre_cliente',
         'gravado',
         'exento',
+        'subtotal_lista',
+        'descuento',
         'isv',
         'total',
+        'costo_viaje',
+        'pagada',
+        'pagada_at',
         'vendida_at',
     ];
 
@@ -55,11 +69,16 @@ class Venta extends Model
     protected function casts(): array
     {
         return [
-            'gravado'    => 'decimal:2',
-            'exento'     => 'decimal:2',
-            'isv'        => 'decimal:2',
-            'total'      => 'decimal:2',
-            'vendida_at' => 'datetime',
+            'gravado'        => 'decimal:2',
+            'exento'         => 'decimal:2',
+            'subtotal_lista' => 'decimal:2',
+            'descuento'      => 'decimal:2',
+            'isv'            => 'decimal:2',
+            'total'          => 'decimal:2',
+            'costo_viaje'    => 'decimal:2',
+            'pagada'         => 'boolean',
+            'pagada_at'      => 'datetime',
+            'vendida_at'     => 'datetime',
         ];
     }
 
@@ -116,5 +135,15 @@ class Venta extends Model
     public function scopeDelTurno(Builder $query, int $corteCajaId): Builder
     {
         return $query->where('corte_caja_id', $corteCajaId);
+    }
+
+    /**
+     * @param Builder<Venta> $query
+     *
+     * @return Builder<Venta>
+     */
+    public function scopePendientes(Builder $query): Builder
+    {
+        return $query->where('pagada', false);
     }
 }

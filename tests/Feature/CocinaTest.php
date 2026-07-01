@@ -29,7 +29,7 @@ it('crea una comanda a domicilio con datos del cliente y su snapshot de items', 
         ['nombre' => 'Ana', 'telefono' => '9999-9999', 'direccion' => 'Barrio Centro', 'identidad' => '0801-1990-12345'],
     );
 
-    expect($comanda->estado)->toBe('pendiente')
+    expect($comanda->estado)->toBe('preparando')
         ->and($comanda->numero)->toStartWith('C-')
         ->and($comanda->tipo)->toBe('domicilio')
         ->and($comanda->cliente_nombre)->toBe('Ana')
@@ -49,6 +49,30 @@ it('marca la comanda como lista con su timestamp', function () {
 
     expect($comanda->fresh()->estado)->toBe('listo')
         ->and($comanda->fresh()->listo_at)->not->toBeNull();
+});
+
+it('cambiar el tipo de la comanda ajusta el costo de viaje en la venta', function () {
+    $cajero = User::factory()->create();
+    $venta = Venta::create([
+        'cajero_id' => $cajero->id, 'tipo' => 'recibo', 'tipo_orden' => 'domicilio',
+        'total'     => 100, 'costo_viaje' => 40, 'vendida_at' => now(),
+    ]);
+    $comanda = app(ComandaService::class)->crear(
+        $venta,
+        'domicilio',
+        [['nombre' => 'Pollo', 'cantidad' => 1, 'detalle' => []]],
+        ['nombre' => 'Ana', 'telefono' => '9999', 'direccion' => 'Centro'],
+    );
+
+    // A "para llevar": se quita el viaje.
+    app(ComandaService::class)->cambiarTipo($comanda, 'llevar');
+    expect($venta->fresh()->tipo_orden)->toBe('llevar')
+        ->and((float) $venta->fresh()->costo_viaje)->toBe(0.0);
+
+    // De vuelta a domicilio con viaje 50: se coloca el costo.
+    app(ComandaService::class)->cambiarTipo($comanda, 'domicilio', ['nombre' => 'Ana', 'telefono' => '9999', 'direccion' => 'Centro'], 50.0);
+    expect($venta->fresh()->tipo_orden)->toBe('domicilio')
+        ->and((float) $venta->fresh()->costo_viaje)->toBe(50.0);
 });
 
 it('no duplica la alerta activa de un complemento', function () {

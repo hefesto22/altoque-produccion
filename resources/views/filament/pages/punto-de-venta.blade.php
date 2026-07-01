@@ -1,20 +1,19 @@
 <x-filament-panels::page>
+    {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja --}}
+    <div style="text-transform:uppercase;">
     {{-- Turno de caja --}}
     @if (! $turnoAbierto)
         <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:.75rem 1rem; border:1px solid #f59e0b; border-radius:.6rem; background:rgba(245,158,11,.08);">
             <span style="font-weight:700;">⚠ Turno de caja cerrado</span>
             <span style="opacity:.7; font-size:.85rem;">Abrí el turno para empezar a cobrar.</span>
-            <div style="display:flex; align-items:center; gap:.4rem; margin-left:auto;">
-                <span style="font-size:.8rem;">Fondo inicial:</span>
-                <div style="max-width:8rem;"><x-filament::input.wrapper><x-filament::input type="number" step="0.01" wire:model="fondoInicial" placeholder="0.00" /></x-filament::input.wrapper></div>
-                <x-filament::button color="success" wire:click="abrirTurno">Abrir turno</x-filament::button>
-            </div>
+            <x-filament::button color="success" wire:click="$set('mostrarApertura', true)" style="margin-left:auto;">Abrir turno</x-filament::button>
         </div>
     @else
-        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:.5rem 1rem; border:1px solid #10b981; border-radius:.6rem; background:rgba(16,185,129,.08);">
-            <span style="font-weight:700; color:#10b981;">● Turno abierto</span>
-            <span style="opacity:.7; font-size:.8rem;">desde {{ $turnoDesde }}</span>
-            <x-filament::button size="sm" color="danger" outlined wire:click="$set('mostrarCierre', true)" style="margin-left:auto;">Cerrar turno</x-filament::button>
+        {{-- Turno abierto: línea fina para no ocupar espacio --}}
+        <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; font-size:.76rem;">
+            <span style="color:#10b981; font-weight:700;">● Turno abierto</span>
+            <span style="opacity:.55;">desde {{ $turnoDesde }}</span>
+            <x-filament::button size="xs" color="danger" outlined wire:click="$set('mostrarCierre', true)" style="margin-left:auto;">Cerrar turno</x-filament::button>
         </div>
     @endif
 
@@ -31,16 +30,28 @@
         @endif
         <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
-            @foreach (['local' => 'En el local', 'domicilio' => 'A domicilio'] as $val => $lbl)
+            @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
                 <x-filament::button size="sm" :color="$tipoServicio === $val ? 'primary' : 'gray'" wire:click="setTipoServicio('{{ $val }}')">{{ $lbl }}</x-filament::button>
             @endforeach
         </div>
     </div>
 
+    @if ($tipoServicio === 'llevar')
+        <div style="margin-bottom:1.25rem;">
+            <x-filament::section>
+                <x-slot name="heading">Para llevar — el cliente lo recoge</x-slot>
+                <div style="max-width:22rem;">
+                    <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre (opcional, para llamarlo)</label>
+                    <x-filament::input.wrapper><x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" /></x-filament::input.wrapper>
+                </div>
+            </x-filament::section>
+        </div>
+    @endif
+
     @if ($tipoServicio === 'domicilio')
         <div style="margin-bottom:1.25rem;">
             <x-filament::section>
-                <x-slot name="heading">Datos del cliente (domicilio)</x-slot>
+                <x-slot name="heading">Datos del cliente (domicilio — lo lleva un repartidor)</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem;">
                     <div>
                         <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre</label>
@@ -58,6 +69,11 @@
                         <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Dirección *</label>
                         <x-filament::input.wrapper><x-filament::input type="text" wire:model="domDireccion" placeholder="Dirección de entrega" /></x-filament::input.wrapper>
                     </div>
+                    <div>
+                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Costo del viaje (repartidor)</label>
+                        <x-filament::input.wrapper><x-filament::input type="number" step="0.01" wire:model="costoViaje" placeholder="0.00" /></x-filament::input.wrapper>
+                        <span style="font-size:.66rem; opacity:.6;">Control interno — no aparece en la factura.</span>
+                    </div>
                 </div>
             </x-filament::section>
         </div>
@@ -68,14 +84,66 @@
         {{-- ─────────── MENÚ ─────────── --}}
         <div style="display:flex; flex-direction:column; gap:1.5rem;">
 
-            {{-- Combos especiales: cobro de un toque a precio fijo --}}
+            {{-- Pedidos pendientes de pago: botón que se despliega, para no ocupar espacio --}}
+            @php($pendientes = $this->pedidosPendientes)
+            @if (count($pendientes))
+                <div>
+                    <x-filament::button color="warning" wire:click="$toggle('mostrarPendientes')" style="width:100%; justify-content:space-between;">
+                        <span>🧾 Pedidos por cobrar ({{ count($pendientes) }})</span>
+                        <span>{{ $mostrarPendientes ? '▲' : '▼' }}</span>
+                    </x-filament::button>
+                    @if ($mostrarPendientes)
+                    <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.6rem;">
+                        @foreach ($pendientes as $p)
+                            <div style="border:1.5px solid #f59e0b; border-radius:.6rem; padding:.6rem .75rem; display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; text-transform:uppercase;">
+                                <div style="flex:1 1 12rem; min-width:10rem;">
+                                    <span style="font-weight:800; font-size:1.05rem;">{{ $p->numero_orden }}</span>
+                                    <span style="font-size:.72rem; opacity:.7;">· {{ $p->tipo_orden }}@if ($p->nombre_cliente) · {{ $p->nombre_cliente }}@endif</span>
+                                    <div style="font-size:.72rem; opacity:.7;">{{ collect($p->items)->map(fn ($i) => $i->cantidad.'× '.$i->nombre)->implode(', ') }}</div>
+                                    @if ((float) $p->costo_viaje > 0)
+                                        <div style="font-size:.7rem; opacity:.7;">Viaje L. {{ number_format((float) $p->costo_viaje, 2) }} (interno)</div>
+                                    @endif
+                                </div>
+                                <span style="font-weight:800;">L. {{ number_format((float) $p->total, 2) }}</span>
+                                @if ($cobrandoTransferId === $p->id)
+                                    {{-- Selector de banco para cobrar por transferencia --}}
+                                    <div style="display:flex; gap:.3rem; align-items:center; flex-wrap:wrap;">
+                                        <x-filament::input.wrapper>
+                                            <x-filament::input.select wire:model="cobroBanco">
+                                                <option value="">— Banco —</option>
+                                                @foreach (config('empresa.bancos', []) as $b)
+                                                    <option value="{{ $b }}">{{ $b }}</option>
+                                                @endforeach
+                                            </x-filament::input.select>
+                                        </x-filament::input.wrapper>
+                                        <x-filament::button size="xs" color="success" wire:click="confirmarTransferenciaPendiente">Cobrar</x-filament::button>
+                                        <x-filament::button size="xs" color="gray" wire:click="cancelarTransferenciaPendiente">Cancelar</x-filament::button>
+                                    </div>
+                                @else
+                                    <div style="display:flex; gap:.3rem; flex-wrap:wrap;">
+                                        <x-filament::button size="xs" color="success" wire:click="cobrarPendienteCF({{ $p->id }}, 'efectivo')">Efectivo</x-filament::button>
+                                        @if ($p->tipo_orden === 'llevar')
+                                            <x-filament::button size="xs" color="info" wire:click="pedirBancoPendiente({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
+                                        @endif
+                                        <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
+                                        <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
+                                    </div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                    @endif
+                </div>
+            @endif
+
+            {{-- Platillos completos: cobro de un toque a precio fijo --}}
             @if (count($combos))
                 <x-filament::section>
-                    <x-slot name="heading">⭐ Combos especiales</x-slot>
+                    <x-slot name="heading">⭐ Platillos completos</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                         @foreach ($combos as $combo)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="warning"
-                                wire:click="agregarProducto({{ $combo['id'] }})">
+                                wire:click="personalizarPlatillo({{ $combo['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
                                     <span style="font-weight:600;">{{ $combo['nombre'] }}</span>
                                     <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $combo['precio'], 2) }}</span>
@@ -102,31 +170,79 @@
                 </div>
             </x-filament::section>
 
+            {{-- Barra de armado FIJA: aparece al tocar la proteína y queda
+                 flotando visible mientras se eligen complementos. El flujo
+                 rápido (proteína → Sin/1/2/3) agrega al carrito sin scroll. --}}
+            @if ($proteinaId)
+                @php($prev = $this->platoPreview)
+                <div style="position:sticky; top:.5rem; z-index:30;">
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.7rem .9rem; border:2px solid #d946ef; border-radius:.7rem; background:rgba(24,24,32,.97); box-shadow:0 6px 20px rgba(0,0,0,.35);">
+                        {{-- Plato en construcción: nombre + precio en vivo --}}
+                        <div style="flex:1 1 12rem; min-width:11rem;">
+                            <div style="font-weight:700;">{{ $prev['nombre'] }}</div>
+                            <div style="font-size:.8rem; opacity:.9;">
+                                L. {{ number_format($prev['precio'], 2) }}
+                                @if ($prev['descuento'] > 0)
+                                    · <span style="color:#16a34a; font-weight:600;">ahorro L. {{ number_format($prev['descuento'], 2) }}</span>
+                                @endif
+                            </div>
+                        </div>
+
+                        {{-- Atajo "por cantidad": agrega al carrito al instante --}}
+                        <div style="display:flex; align-items:center; gap:.3rem;">
+                            <span style="font-size:.72rem; opacity:.6;">Rápido:</span>
+                            <button type="button" wire:click="agregarSinComplementos"
+                                style="font-size:.78rem; padding:.4rem .6rem; border-radius:.45rem; border:1px solid rgba(128,128,128,.45); background:transparent; color:inherit; cursor:pointer;">Sin compl.</button>
+                            @foreach ([1, 2, 3] as $q)
+                                <button type="button" wire:click="platoRapido({{ $q }})"
+                                    style="width:2.1rem; height:2.1rem; border-radius:.45rem; border:1px solid #d946ef; background:rgba(217,70,239,.12); color:inherit; cursor:pointer; font-weight:800; font-size:1rem;">{{ $q }}</button>
+                            @endforeach
+                        </div>
+
+                        {{-- Cantidad de platos idénticos --}}
+                        <div style="display:flex; align-items:center; gap:.3rem;">
+                            <span style="font-size:.74rem; opacity:.6;">Cant.:</span>
+                            <button type="button" wire:click="cambiarCantidadPlato(-1)"
+                                style="width:1.6rem; height:1.6rem; border-radius:.35rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1.1rem; line-height:1;">−</button>
+                            <span style="min-width:1.4rem; text-align:center; font-weight:800; font-size:1rem;">{{ $cantidadPlato }}</span>
+                            <button type="button" wire:click="cambiarCantidadPlato(1)"
+                                style="width:1.6rem; height:1.6rem; border-radius:.35rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1.1rem; line-height:1;">+</button>
+                        </div>
+
+                        <x-filament::button wire:click="agregarPlato" icon="heroicon-o-plus" color="primary">
+                            Agregar {{ $cantidadPlato > 1 ? $cantidadPlato.' platos' : 'plato' }}
+                        </x-filament::button>
+                    </div>
+                </div>
+            @endif
+
             <x-filament::section>
                 <x-slot name="heading">2 · Complementos</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                     @foreach ($complementos as $c)
                         @php($n = $this->contarComplemento($c['id']))
                         @php($bajo = in_array($c['id'], $productosBajos, true))
-                        <div style="position:relative; border:1.5px solid {{ $n > 0 ? '#f59e0b' : 'rgba(128,128,128,.22)' }}; border-radius:.6rem; padding:.5rem .55rem; background:{{ $n > 0 ? 'rgba(245,158,11,.08)' : 'transparent' }};">
-                            <button type="button" wire:click="agregarComplemento({{ $c['id'] }})"
-                                style="display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer; color:inherit; padding:0; padding-right:1.4rem;">
+                        {{-- TODA la tarjeta agrega el complemento. Los botones internos
+                             (⚠, −, + Solo) usan .stop para no disparar el agregado. --}}
+                        <div wire:click="agregarComplemento({{ $c['id'] }})"
+                            style="position:relative; border:1.5px solid {{ $n > 0 ? '#f59e0b' : 'rgba(128,128,128,.22)' }}; border-radius:.6rem; padding:.5rem .55rem; background:{{ $n > 0 ? 'rgba(245,158,11,.08)' : 'transparent' }}; cursor:pointer;">
+                            <div style="padding-right:1.4rem;">
                                 <span style="display:block; font-weight:600; font-size:.88rem;">{{ $c['nombre'] }}</span>
                                 <span style="font-size:.72rem; opacity:.65;">L. {{ number_format((float) $c['precio'], 2) }}</span>
-                            </button>
+                            </div>
 
                             {{-- Aviso "se está acabando": ícono chico en la esquina (toggle) --}}
-                            <button type="button" wire:click="alternarReposicion({{ $c['id'] }})"
+                            <button type="button" wire:click.stop="alternarReposicion({{ $c['id'] }})"
                                 title="{{ $bajo ? 'Ya se repuso (quitar aviso)' : 'Marcar: se está acabando' }}"
                                 style="position:absolute; top:.3rem; right:.3rem; width:1.35rem; height:1.35rem; line-height:1; border-radius:.35rem; border:none; cursor:pointer; font-size:.78rem; background:{{ $bajo ? '#f59e0b' : 'rgba(128,128,128,.16)' }}; color:{{ $bajo ? '#000' : 'inherit' }};">⚠</button>
 
                             <div style="display:flex; align-items:center; gap:.5rem; margin-top:.4rem;">
                                 @if ($n > 0)
-                                    <button type="button" wire:click="quitarComplemento({{ $c['id'] }})"
+                                    <button type="button" wire:click.stop="quitarComplemento({{ $c['id'] }})"
                                         style="width:1.4rem; height:1.4rem; border-radius:.3rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1rem; line-height:1;">−</button>
                                     <span style="font-weight:700; font-size:.85rem;">{{ $n }}</span>
                                 @endif
-                                <button type="button" wire:click="agregarProducto({{ $c['id'] }})" title="Vender este complemento solo"
+                                <button type="button" wire:click.stop="agregarProducto({{ $c['id'] }})" title="Vender este complemento solo"
                                     style="margin-left:auto; font-size:.66rem; padding:.12rem .45rem; border-radius:.3rem; border:1px solid rgba(128,128,128,.4); background:transparent; color:inherit; cursor:pointer;">+ Solo</button>
                             </div>
 
@@ -135,30 +251,6 @@
                             @endif
                         </div>
                     @endforeach
-                </div>
-
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:1rem; padding-top:1rem; border-top:1px solid rgba(128,128,128,.25);">
-                    <span style="font-size:.9rem; opacity:.85;">
-                        @if ($proteinaId)
-                            Plato: <strong>{{ collect($proteinas)->firstWhere('id', $proteinaId)['nombre'] ?? '' }}</strong>
-                            + {{ count($complementoSel) }} complemento(s)
-                        @else
-                            Seleccioná una proteína para armar un plato
-                        @endif
-                    </span>
-                    <div style="display:flex; align-items:center; gap:.6rem;">
-                        <div style="display:flex; align-items:center; gap:.3rem;">
-                            <span style="font-size:.78rem; opacity:.6;">Cantidad:</span>
-                            <button type="button" wire:click="cambiarCantidadPlato(-1)"
-                                style="width:1.6rem; height:1.6rem; border-radius:.35rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1.1rem; line-height:1;">−</button>
-                            <span style="min-width:1.4rem; text-align:center; font-weight:800; font-size:1rem;">{{ $cantidadPlato }}</span>
-                            <button type="button" wire:click="cambiarCantidadPlato(1)"
-                                style="width:1.6rem; height:1.6rem; border-radius:.35rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1.1rem; line-height:1;">+</button>
-                        </div>
-                        <x-filament::button wire:click="agregarPlato" icon="heroicon-o-plus">
-                            Agregar {{ $cantidadPlato > 1 ? $cantidadPlato.' platos' : 'plato' }}
-                        </x-filament::button>
-                    </div>
                 </div>
             </x-filament::section>
 
@@ -212,32 +304,40 @@
                 </x-slot>
 
                 <div style="display:flex; flex-direction:column; gap:.5rem; max-height:20rem; overflow-y:auto;">
-                    @forelse ($carrito as $item)
+                    @forelse ($this->carritoAgrupado as $g)
+                        @php($p = $g['principal'])
+                        @php($grupo = $p['grupo'] ?? $p['key'])
                         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; padding:.5rem; border:1px solid rgba(128,128,128,.2); border-radius:.5rem;">
-                            <div>
-                                <div style="font-weight:600;">{{ $item['nombre'] }}</div>
-                                @if (! empty($item['detalle']))
-                                    <div style="font-size:.72rem; opacity:.7;">{{ implode(', ', $item['detalle']) }}</div>
+                            <div style="flex:1;">
+                                <div style="font-weight:600;">{{ $p['nombre'] }}</div>
+                                @if (! empty($p['detalle']))
+                                    <div style="font-size:.72rem; opacity:.7;">{{ implode(', ', $p['detalle']) }}</div>
                                 @endif
-                                @if ($tipoServicio === 'local')
-                                    @php($dest = $item['destino'] ?? 'aqui')
-                                    <button type="button" wire:click="alternarDestino('{{ $item['key'] }}')"
-                                        style="margin-top:.3rem; font-size:.68rem; padding:.1rem .45rem; border-radius:.35rem; cursor:pointer; border:1px solid {{ $dest === 'llevar' ? '#3b82f6' : 'rgba(128,128,128,.4)' }}; background:{{ $dest === 'llevar' ? '#3b82f6' : 'transparent' }}; color:{{ $dest === 'llevar' ? '#fff' : 'inherit' }};">
-                                        {{ $dest === 'llevar' ? '🛍 Llevar' : '🍽 Aquí' }}
-                                    </button>
-                                @else
-                                    <div style="margin-top:.3rem; font-size:.68rem; color:#3b82f6;">🛵 Domicilio</div>
+                                @if (! empty($p['nota']))
+                                    <div style="font-size:.72rem; color:#f59e0b;">📝 {{ $p['nota'] }}</div>
                                 @endif
+                                {{-- Extras del platillo, anidados debajo (mismo grupo) --}}
+                                @foreach ($g['extras'] as $ex)
+                                    <div style="display:flex; justify-content:space-between; align-items:center; gap:.4rem; margin-top:.28rem; padding-left:.45rem; border-left:2px solid #f59e0b; font-size:.75rem;">
+                                        <span style="opacity:.9;">+ {{ $ex['nombre'] }}</span>
+                                        <span style="display:flex; align-items:center; gap:.35rem; white-space:nowrap;">
+                                            L. {{ number_format((float) $ex['precio'] * (int) $ex['cantidad'], 2) }}
+                                            <button type="button" wire:click="quitarLinea('{{ $ex['key'] }}')" style="border:none; background:none; color:#ef4444; cursor:pointer; font-weight:700;">×</button>
+                                        </span>
+                                    </div>
+                                @endforeach
                             </div>
                             <div style="display:flex; flex-direction:column; align-items:flex-end; gap:.35rem; white-space:nowrap;">
-                                <span style="font-weight:700;">L. {{ number_format((float) $item['precio'] * (int) $item['cantidad'], 2) }}</span>
+                                <span style="font-weight:700;">L. {{ number_format($g['total'], 2) }}</span>
                                 <div style="display:flex; align-items:center; gap:.3rem;">
-                                    <button type="button" wire:click="cambiarCantidad('{{ $item['key'] }}', -1)"
-                                        style="width:1.4rem; height:1.4rem; border-radius:.3rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1rem; line-height:1;">−</button>
-                                    <span style="min-width:1.2rem; text-align:center; font-weight:700;">{{ $item['cantidad'] }}</span>
-                                    <button type="button" wire:click="cambiarCantidad('{{ $item['key'] }}', 1)"
-                                        style="width:1.4rem; height:1.4rem; border-radius:.3rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1rem; line-height:1;">+</button>
-                                    <x-filament::icon-button icon="heroicon-o-x-mark" color="danger" wire:click="quitarLinea('{{ $item['key'] }}')" label="Quitar" />
+                                    @if (count($g['extras']) === 0)
+                                        <button type="button" wire:click="cambiarCantidad('{{ $p['key'] }}', -1)"
+                                            style="width:1.4rem; height:1.4rem; border-radius:.3rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1rem; line-height:1;">−</button>
+                                        <span style="min-width:1.2rem; text-align:center; font-weight:700;">{{ $p['cantidad'] }}</span>
+                                        <button type="button" wire:click="cambiarCantidad('{{ $p['key'] }}', 1)"
+                                            style="width:1.4rem; height:1.4rem; border-radius:.3rem; border:none; cursor:pointer; background:rgba(128,128,128,.2); color:inherit; font-size:1rem; line-height:1;">+</button>
+                                    @endif
+                                    <x-filament::icon-button icon="heroicon-o-x-mark" color="danger" wire:click="quitarGrupo('{{ $grupo }}')" label="Quitar" />
                                 </div>
                             </div>
                         </div>
@@ -247,6 +347,10 @@
                 </div>
 
                 <div style="margin-top:1rem; padding-top:.75rem; border-top:1px solid rgba(128,128,128,.25); display:flex; flex-direction:column; gap:.25rem; font-size:.9rem;">
+                    @if ($this->resumen['descuento'] > 0)
+                        <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Precio normal</span><span>L. {{ number_format($this->resumen['subtotal_lista'], 2) }}</span></div>
+                        <div style="display:flex; justify-content:space-between; color:#16a34a; font-weight:600;"><span>Descuento</span><span>− L. {{ number_format($this->resumen['descuento'], 2) }}</span></div>
+                    @endif
                     <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Exento</span><span>L. {{ number_format($this->resumen['exento'], 2) }}</span></div>
                     <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Gravado</span><span>L. {{ number_format($this->resumen['gravado'], 2) }}</span></div>
                     <div style="display:flex; justify-content:space-between; opacity:.75;"><span>ISV (15%)</span><span>L. {{ number_format($this->resumen['isv'], 2) }}</span></div>
@@ -260,9 +364,9 @@
                     @endforeach
                 </div>
 
-                @if ($formaPago === 'transferencia')
+                @if (in_array($formaPago, ['tarjeta', 'transferencia'], true))
                     <div style="margin-top:.5rem;">
-                        <label style="display:block; font-size:.74rem; opacity:.6; margin-bottom:.2rem;">Banco de la transferencia</label>
+                        <label style="display:block; font-size:.74rem; opacity:.6; margin-bottom:.2rem;">{{ $formaPago === 'tarjeta' ? 'Banco de la tarjeta' : 'Banco de la transferencia' }}</label>
                         <x-filament::input.wrapper>
                             <x-filament::input.select wire:model="banco">
                                 <option value="">— Elegí el banco —</option>
@@ -277,6 +381,9 @@
                 <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.75rem;">
                     <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
                     <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
+                    @if ($tipoServicio !== 'local')
+                        <x-filament::button wire:click="pagarDespues" color="warning" outlined size="lg" style="width:100%;">Pagar después (a cocina)</x-filament::button>
+                    @endif
                 </div>
             </x-filament::section>
         </div>
@@ -319,6 +426,121 @@
     @endscript
 
     {{-- ─────────── MODAL CIERRE DE TURNO ─────────── --}}
+    {{-- ─────────── MODAL PERSONALIZAR PLATILLO ─────────── --}}
+    @if ($personalizando)
+        @php($prev = $this->platilloResumen)
+        <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
+            <div style="width:100%; max-width:40rem; max-height:90vh; overflow-y:auto;">
+                <x-filament::section>
+                    <x-slot name="heading">Personalizar: {{ $platilloNombre }}</x-slot>
+                    <x-slot name="description">
+                        @php($bebTxt = $platilloBase['bebida'] > 0 ? ' · '.$platilloBase['bebida'].' bebida(s)' : '')
+                        Base: {{ $platilloBase['carne'] }} carne · {{ $platilloBase['complemento'] }} complementos{{ $bebTxt }} — L. {{ number_format($platilloPrecio, 2) }}. Cambiá lo que quieras; lo que pase de la base se cobra extra.
+                    </x-slot>
+
+                    {{-- Selección actual --}}
+                    <div style="margin-bottom:.6rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:.74rem; margin-bottom:.25rem;">
+                            <span style="opacity:.6;">Lleva:</span>
+                            <span style="opacity:.75;">Carne {{ $prev['carne'] }}/{{ $platilloBase['carne'] }} · Compl. {{ $prev['complemento'] }}/{{ $platilloBase['complemento'] }}{{ $platilloBase['bebida'] > 0 ? ' · Beb. '.$prev['bebida'].'/'.$platilloBase['bebida'] : '' }}</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:.35rem;">
+                            @forelse ($platilloSel as $i => $s)
+                                @php($esExtra = in_array($i, $prev['extra_indices'], true))
+                                <span style="display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .5rem; border:1px solid {{ $esExtra ? '#f59e0b' : 'rgba(128,128,128,.35)' }}; background:{{ $esExtra ? 'rgba(245,158,11,.1)' : 'transparent' }}; border-radius:999px; font-size:.82rem;">
+                                    {{ $s['nombre'] }}{{ $esExtra ? ' · extra L.'.number_format((float) $s['precio'], 0) : '' }}
+                                    <button type="button" wire:click="platilloQuitar({{ $i }})" style="border:none; background:none; color:#ef4444; cursor:pointer; font-weight:700;">×</button>
+                                </span>
+                            @empty
+                                <span style="opacity:.55; font-size:.82rem;">Nada seleccionado.</span>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    {{-- Agregar / cambiar productos --}}
+                    <div style="border-top:1px solid rgba(128,128,128,.2); padding-top:.5rem;">
+                        <x-filament::input.wrapper>
+                            <x-filament::input type="text" wire:model.live.debounce.250ms="platilloBuscar" placeholder="🔍 Buscar producto…" />
+                        </x-filament::input.wrapper>
+                    </div>
+                    @php($q = mb_strtolower(trim($platilloBuscar)))
+                    <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.4rem; max-height:32vh; overflow-y:auto;">
+                        @foreach (['Proteínas' => $proteinas, 'Complementos' => $complementos, 'Bebidas' => $bebidas] as $titulo => $lista)
+                            @php($filtrados = $q === '' ? $lista : collect($lista)->filter(fn ($p) => str_contains(mb_strtolower((string) $p['nombre']), $q))->all())
+                            @if (count($filtrados))
+                                <div>
+                                    <div style="font-size:.72rem; opacity:.6; margin-bottom:.2rem;">{{ $titulo }}</div>
+                                    <div style="display:flex; flex-wrap:wrap; gap:.3rem;">
+                                        @foreach ($filtrados as $prod)
+                                            <button type="button" wire:click="platilloAgregar({{ $prod['id'] }})"
+                                                style="font-size:.76rem; padding:.25rem .5rem; border-radius:.4rem; border:1px solid rgba(128,128,128,.35); background:transparent; color:inherit; cursor:pointer;">
+                                                {{ $prod['nombre'] }} <span style="opacity:.5;">L.{{ number_format((float) $prod['precio'], 0) }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
+                        @if ($q !== '' && collect($proteinas)->merge($complementos)->merge($bebidas)->filter(fn ($p) => str_contains(mb_strtolower((string) $p['nombre']), $q))->isEmpty())
+                            <div style="opacity:.55; font-size:.82rem; text-align:center; padding:.5rem;">Sin resultados para “{{ $platilloBuscar }}”.</div>
+                        @endif
+                    </div>
+
+                    {{-- Nota --}}
+                    <div style="margin-top:.6rem;">
+                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nota para cocina (opcional)</label>
+                        <x-filament::input.wrapper><x-filament::input type="text" wire:model="platilloNota" placeholder="Ej: sin cebolla, bien cocido" /></x-filament::input.wrapper>
+                    </div>
+
+                    {{-- Resumen de precio --}}
+                    <div style="margin-top:.7rem; padding-top:.5rem; border-top:1px solid rgba(128,128,128,.25); display:flex; flex-direction:column; gap:.2rem; font-size:.9rem;">
+                        <div style="display:flex; justify-content:space-between; opacity:.8;"><span>Precio base</span><span>L. {{ number_format($platilloPrecio, 2) }}</span></div>
+                        @if ($prev['extras'] > 0)
+                            <div style="display:flex; justify-content:space-between; color:#16a34a;"><span>Extras ({{ $prev['extras'] }})</span><span>+ L. {{ number_format($prev['precio_extras'], 2) }}</span></div>
+                        @endif
+                        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.05rem;"><span>Total</span><span>L. {{ number_format($prev['total'], 2) }}</span></div>
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.8rem;">
+                        <x-filament::button color="gray" wire:click="cancelarPlatillo">Cancelar</x-filament::button>
+                        <x-filament::button color="primary" wire:click="confirmarPlatillo">Agregar al carrito</x-filament::button>
+                    </div>
+                </x-filament::section>
+            </div>
+        </div>
+    @endif
+
+    {{-- ─────────── MODAL APERTURA DE TURNO ─────────── --}}
+    @if ($mostrarApertura)
+        <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
+            <div style="width:100%; max-width:26rem;">
+                <x-filament::section>
+                    <x-slot name="heading">Abrir turno de caja</x-slot>
+                    <x-slot name="description">Con cuánto arranca la caja al iniciar el POS.</x-slot>
+
+                    <div style="display:flex; flex-direction:column; gap:.8rem;">
+                        <div>
+                            <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Efectivo inicial en caja</label>
+                            <x-filament::input.wrapper><x-filament::input type="number" step="0.01" wire:model="fondoInicial" placeholder="0.00" /></x-filament::input.wrapper>
+                            <span style="font-size:.7rem; opacity:.6;">El efectivo (vuelto) con que arranca la gaveta.</span>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Saldo inicial del terminal POS</label>
+                            <x-filament::input.wrapper><x-filament::input type="number" step="0.01" wire:model="fondoTerminal" placeholder="0.00" /></x-filament::input.wrapper>
+                            <span style="font-size:.7rem; opacity:.6;">Lo que quedó en el terminal de tarjeta/transferencias sin cortar (si aplica).</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:1rem;">
+                        <x-filament::button color="gray" wire:click="$set('mostrarApertura', false)">Cancelar</x-filament::button>
+                        <x-filament::button color="success" wire:click="abrirTurno">Abrir turno</x-filament::button>
+                    </div>
+                </x-filament::section>
+            </div>
+        </div>
+    @endif
+
+    {{-- ─────────── MODAL CIERRE DE TURNO ─────────── --}}
     @if ($mostrarCierre)
         @php($rt = $this->resumenTurno)
         <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
@@ -335,6 +557,23 @@
                         <div style="display:flex; justify-content:space-between; opacity:.75;"><span>· Transferencia</span><span>L. {{ number_format($rt['transferencia'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between;"><span>Fondo inicial</span><span>L. {{ number_format($rt['fondo'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px solid rgba(128,128,128,.25); padding-top:.3rem;"><span>Efectivo esperado en caja</span><span>L. {{ number_format($rt['esperado'], 2) }}</span></div>
+
+                        @if (count($rt['tarjeta_banco']) || count($rt['transfer_banco']))
+                            <div style="border-top:1px dashed rgba(128,128,128,.25); margin-top:.3rem; padding-top:.3rem;">
+                                @foreach ($rt['tarjeta_banco'] as $tb)
+                                    <div style="display:flex; justify-content:space-between; opacity:.75; font-size:.82rem;"><span>Tarjeta · {{ $tb['banco'] }}</span><span>L. {{ number_format($tb['total'], 2) }}</span></div>
+                                @endforeach
+                                @foreach ($rt['transfer_banco'] as $tb)
+                                    <div style="display:flex; justify-content:space-between; opacity:.75; font-size:.82rem;"><span>Transf. · {{ $tb['banco'] }}</span><span>L. {{ number_format($tb['total'], 2) }}</span></div>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        @if ($rt['dom_viaje_transfer'] > 0)
+                            <div style="display:flex; justify-content:space-between; font-weight:700; color:#f59e0b; border-top:1px dashed rgba(245,158,11,.4); margin-top:.3rem; padding-top:.3rem;">
+                                <span>🛵 A pagar a repartidores (viajes a domicilio)</span><span>L. {{ number_format($rt['dom_viaje_transfer'], 2) }}</span>
+                            </div>
+                        @endif
                     </div>
 
                     <div style="margin-top:1rem;">
@@ -359,7 +598,7 @@
             <div style="width:100%; max-width:28rem;">
                 <x-filament::section>
                     <x-slot name="heading">Emitir factura SAR</x-slot>
-                    <x-slot name="description">Total a facturar: L. {{ number_format($this->resumen['total'], 2) }}</x-slot>
+                    <x-slot name="description">Total a facturar: L. {{ number_format($this->totalModal, 2) }}</x-slot>
 
                     <div style="display:flex; flex-direction:column; gap:.75rem;">
                         <div>
@@ -386,12 +625,33 @@
                                 </div>
                             @endif
                         </div>
+                        {{-- Forma de pago de la factura (efectivo / tarjeta / transferencia) --}}
+                        <div>
+                            <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Forma de pago</label>
+                            <div style="display:flex; gap:.4rem; flex-wrap:wrap;">
+                                @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.'] as $fp => $lbl)
+                                    <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
+                                @endforeach
+                            </div>
+                            @if (in_array($formaPago, ['tarjeta', 'transferencia'], true))
+                                <div style="margin-top:.5rem;">
+                                    <x-filament::input.wrapper>
+                                        <x-filament::input.select wire:model="banco">
+                                            <option value="">— {{ $formaPago === 'tarjeta' ? 'Banco de la tarjeta' : 'Banco de la transferencia' }} —</option>
+                                            @foreach (config('empresa.bancos', []) as $b)
+                                                <option value="{{ $b }}">{{ $b }}</option>
+                                            @endforeach
+                                        </x-filament::input.select>
+                                    </x-filament::input.wrapper>
+                                </div>
+                            @endif
+                        </div>
                         <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; padding:.5rem; border:1px solid rgba(128,128,128,.25); border-radius:.5rem;">
                             <input type="checkbox" wire:model="facturaDetallada" style="width:1.1rem; height:1.1rem;" />
                             <span style="font-size:.85rem;">Detallar productos en la factura<br><span style="font-size:.72rem; opacity:.65;">Si no, se factura como “Alimentación”</span></span>
                         </label>
                         <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.5rem;">
-                            <x-filament::button color="gray" wire:click="$set('mostrarFactura', false)">Cancelar</x-filament::button>
+                            <x-filament::button color="gray" wire:click="cerrarModalFactura">Cancelar</x-filament::button>
                             <x-filament::button color="primary" wire:click="emitirFactura">Emitir factura</x-filament::button>
                         </div>
                     </div>
@@ -399,4 +659,5 @@
             </div>
         </div>
     @endif
+    </div>
 </x-filament-panels::page>

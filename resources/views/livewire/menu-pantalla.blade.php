@@ -59,9 +59,9 @@
             @endforeach
         @endif
 
-        {{-- Combos especiales (promociones con nombre) --}}
+        {{-- Platillos completos (con nombre y precio fijo) --}}
         @if ($combosEspeciales->isNotEmpty())
-            <div class="combo-h">⭐ COMBOS ESPECIALES</div>
+            <div class="combo-h">⭐ PLATILLOS COMPLETOS</div>
             @foreach ($combosEspeciales as $ce)
                 <div class="combo">
                     {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}

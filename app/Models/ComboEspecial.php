@@ -67,6 +67,82 @@ class ComboEspecial extends Producto
         return $this->combo_modo === 'platillo';
     }
 
+    /** Mapea la categoría del producto al "slot" del platillo. */
+    private function slotDe(string $categoria): string
+    {
+        return match ($categoria) {
+            'proteina' => 'carne',
+            'bebida'   => 'bebida',
+            default    => 'complemento', // complemento y extra ocupan slot de complemento
+        };
+    }
+
+    /**
+     * Composición base del platillo para personalizar en el POS: cuántos
+     * slots hay por categoría y los productos por defecto.
+     *
+     * - Modo 'platillo': conteos y defaults salen de los productos fijos.
+     * - Modo 'cantidades': conteos de combo_num_* (+ 1 carne) sin defaults fijos.
+     *
+     * @return array{carne: int, complemento: int, bebida: int, defaults: array<int, array{producto_id: int, nombre: string, precio: float, grava_isv: bool, categoria: string}>}
+     */
+    public function composicionBase(): array
+    {
+        $counts = ['carne' => 0, 'complemento' => 0, 'bebida' => 0];
+        $defaults = [];
+
+        if ($this->esPlatillo()) {
+            /** @var Collection<int, ComboEspecialItem> $items */
+            $items = $this->items()->with('producto:id,nombre,precio,grava_isv,categoria')->get();
+
+            foreach ($items as $item) {
+                $p = $item->producto;
+
+                if ($p === null) {
+                    continue;
+                }
+
+                $veces = max(1, (int) $item->cantidad);
+                $counts[$this->slotDe((string) $p->categoria)] += $veces;
+
+                for ($i = 0; $i < $veces; $i++) {
+                    $defaults[] = [
+                        'producto_id' => (int) $p->id,
+                        'nombre'      => (string) $p->nombre,
+                        'precio'      => (float) $p->precio,
+                        'grava_isv'   => (bool) $p->grava_isv,
+                        'categoria'   => (string) $p->categoria,
+                    ];
+                }
+            }
+
+            return ['carne' => $counts['carne'], 'complemento' => $counts['complemento'], 'bebida' => $counts['bebida'], 'defaults' => $defaults];
+        }
+
+        // Modo cantidades: los conteos ya están definidos en el combo.
+        if ($this->combo_proteina_id !== null) {
+            $p = Producto::query()->find($this->combo_proteina_id);
+
+            if ($p !== null) {
+                $counts['carne'] = 1;
+                $defaults[] = [
+                    'producto_id' => (int) $p->id,
+                    'nombre'      => (string) $p->nombre,
+                    'precio'      => (float) $p->precio,
+                    'grava_isv'   => (bool) $p->grava_isv,
+                    'categoria'   => (string) $p->categoria,
+                ];
+            }
+        } elseif ($this->combo_tier_carne !== null) {
+            $counts['carne'] = 1;
+        }
+
+        $counts['complemento'] = (int) $this->combo_num_complementos;
+        $counts['bebida'] = (int) $this->combo_num_bebidas;
+
+        return ['carne' => $counts['carne'], 'complemento' => $counts['complemento'], 'bebida' => $counts['bebida'], 'defaults' => $defaults];
+    }
+
     /** Etiqueta legible de la carne del combo (específica si la hay, si no el tipo). */
     public function carneLabel(?string $nombreEspecifico = null): ?string
     {
