@@ -27,7 +27,7 @@ return [
             'pages'              => true,
             'widgets'            => true,
             'resources'          => true,
-            'custom_permissions' => false,
+            'custom_permissions' => true,
         ],
     ],
 
@@ -232,7 +232,16 @@ return [
     |
     */
 
-    'custom_permissions' => [],
+    /*
+     * Permisos del dominio que no mapean a un Resource/Page. Se crean en el
+     * RestauranteAccessSeeder; listarlos aquí los hace visibles y editables
+     * en la pantalla de Roles (pestaña "Permisos personalizados").
+     */
+    'custom_permissions' => [
+        'anular_factura'    => 'Anular facturas (SAR)',
+        'export_ventas'     => 'Exportar reporte de ventas',
+        'view_cortes_todos' => 'Ver cortes de otros cajeros',
+    ],
 
     /*
     |--------------------------------------------------------------------------

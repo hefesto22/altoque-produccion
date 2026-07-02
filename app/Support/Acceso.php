@@ -30,4 +30,27 @@ final class Acceso
 
         return $user->hasAnyRole($roles);
     }
+
+    /**
+     * ¿El usuario actual tiene este permiso (spatie/Shield)? El super_admin
+     * siempre pasa (Shield está con define_via_gate=false, así que el
+     * bypass se resuelve aquí, igual que en tieneAlguno()).
+     *
+     * Preferir esto sobre listas de roles hardcodeadas: qué rol puede qué
+     * se decide en datos (pantalla de Roles), no en código.
+     */
+    public static function puede(string $permiso): bool
+    {
+        $user = Auth::user();
+
+        if ($user === null) {
+            return false;
+        }
+
+        if (method_exists($user, 'hasRole') && $user->hasRole('super_admin')) {
+            return true;
+        }
+
+        return $user->can($permiso);
+    }
 }

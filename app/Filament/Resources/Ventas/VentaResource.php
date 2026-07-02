@@ -41,7 +41,9 @@ class VentaResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador', 'cajero']);
+        // Por permiso, no por lista de roles: quitarle view_any_venta a un
+        // rol desde la pantalla de Roles le oculta esta sección sin tocar código.
+        return Acceso::puede('view_any_venta');
     }
 
     /** Las ventas se registran desde el POS, no desde el CRUD. */
@@ -109,10 +111,13 @@ class VentaResource extends Resource
                     ->schema([
                         Textarea::make('motivo')->label('Motivo de la anulación')->required()->maxLength(255),
                     ])
-                    ->visible(fn (Venta $record): bool => $record->factura !== null
+                    ->visible(fn (Venta $record): bool => Acceso::puede('anular_factura')
+                        && $record->factura !== null
                         && ! $record->factura->anulada
                         && app(FacturacionSarService::class)->puedeAnular($record->factura))
                     ->action(function (Venta $record, array $data) {
+                        abort_unless(Acceso::puede('anular_factura'), 403);
+
                         app(FacturacionSarService::class)->anular($record->factura, $data['motivo'], (int) Auth::id());
 
                         Notification::make()->title('Factura anulada')->body('Corregí el pedido y volvé a facturar.')->success()->send();
@@ -129,10 +134,13 @@ class VentaResource extends Resource
                     ->schema([
                         Textarea::make('motivo')->label('Motivo de anulación')->required()->maxLength(255),
                     ])
-                    ->visible(fn (Venta $record): bool => $record->factura !== null
+                    ->visible(fn (Venta $record): bool => Acceso::puede('anular_factura')
+                        && $record->factura !== null
                         && ! $record->factura->anulada
                         && app(FacturacionSarService::class)->puedeAnular($record->factura))
                     ->action(function (Venta $record, array $data): void {
+                        abort_unless(Acceso::puede('anular_factura'), 403);
+
                         app(FacturacionSarService::class)->anular($record->factura, $data['motivo'], (int) Auth::id());
 
                         Notification::make()->title('Factura anulada')->success()->send();
