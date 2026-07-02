@@ -28,7 +28,6 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Combos promocionales con nombre (ej: "Combo Familiar"). Se venden de un
@@ -107,28 +106,31 @@ class ComboEspecialResource extends Resource
                 ->columnSpanFull()
                 ->schema([
                     CheckboxList::make('productosIncluidos')
+                        // Carga y guardado por el camino estándar de la relación.
+                        // OJO: nada de modifyQueryUsing aquí — Filament aplica ese
+                        // closure también a las queries de fill/save del BelongsToMany;
+                        // un addSelect ahí corrompe el select (Eloquent deja de agregar
+                        // productos.* y el pivote) y el modal de edición revienta con
+                        // las casillas vacías.
                         ->label('Productos incluidos')
-                        ->relationship(
-                            name: 'productosIncluidos',
-                            titleAttribute: 'nombre',
-                            modifyQueryUsing: fn ($query) => $query
-                                ->where('categoria', '!=', 'combo')
-                                ->where('activo', true)
-                                // Orden lógico por categoría (no alfabético), luego por nombre.
-                                // La expresión va como columna del select para que funcione
-                                // con el SELECT DISTINCT que arma Filament en Postgres.
-                                ->addSelect(DB::raw("case categoria when 'proteina' then 1 when 'complemento' then 2 when 'bebida' then 3 when 'extra' then 4 else 5 end as cat_orden"))
-                                ->orderBy('cat_orden')
-                                ->orderBy('nombre'),
-                        )
-                        // Prefijo de categoría para agrupar de un vistazo entre 100+ productos.
-                        ->getOptionLabelFromRecordUsing(fn (Producto $record): string => match ($record->categoria) {
-                            'proteina'    => '🍖 '.$record->nombre,
-                            'complemento' => '🥗 '.$record->nombre,
-                            'bebida'      => '🥤 '.$record->nombre,
-                            'extra'       => '➕ '.$record->nombre,
-                            default       => $record->nombre,
-                        })
+                        ->relationship(name: 'productosIncluidos', titleAttribute: 'nombre')
+                        // Las opciones se arman aparte con query directa: filtro, orden
+                        // lógico por categoría (no alfabético) y prefijo visual, sin
+                        // pelear con el SELECT DISTINCT que Filament arma en Postgres.
+                        ->options(fn (): array => Producto::query()
+                            ->where('categoria', '!=', 'combo')
+                            ->where('activo', true)
+                            ->orderByRaw("case categoria when 'proteina' then 1 when 'complemento' then 2 when 'bebida' then 3 when 'extra' then 4 else 5 end")
+                            ->orderBy('nombre')
+                            ->get(['id', 'nombre', 'categoria'])
+                            ->mapWithKeys(fn (Producto $p): array => [$p->id => match ($p->categoria) {
+                                'proteina'    => '🍖 '.$p->nombre,
+                                'complemento' => '🥗 '.$p->nombre,
+                                'bebida'      => '🥤 '.$p->nombre,
+                                'extra'       => '➕ '.$p->nombre,
+                                default       => $p->nombre,
+                            }])
+                            ->all())
                         ->searchable()
                         ->bulkToggleable()
                         ->columns(3)
