@@ -55,10 +55,16 @@ return [
             |------------------------------------------------------------------
             | Bases de datos a respaldar. Por defecto la conexión principal.
             | Postgres usa pg_dump (instalado dentro del contenedor postgres).
+            |
+            | OJO: env(), no config() — los config se cargan en orden
+            | alfabético y 'backup' se evalúa antes que 'database', así que
+            | config('database.default') aquí devuelve null (y con
+            | config:cache queda congelado en null → backup:run muere con
+            | "Argument #1 ($dbConnectionName) must be of type string").
             |------------------------------------------------------------------
             */
             'databases' => [
-                config('database.default'),
+                env('DB_CONNECTION', 'pgsql'),
             ],
         ],
 

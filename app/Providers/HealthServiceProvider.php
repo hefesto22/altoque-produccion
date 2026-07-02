@@ -13,6 +13,7 @@ use Spatie\Health\Checks\Checks\EnvironmentCheck;
 use Spatie\Health\Checks\Checks\OptimizedAppCheck;
 use Spatie\Health\Checks\Checks\QueueCheck;
 use Spatie\Health\Checks\Checks\RedisCheck;
+use Spatie\Health\Checks\Checks\ScheduleCheck;
 use Spatie\Health\Checks\Checks\UsedDiskSpaceCheck;
 use Spatie\Health\Facades\Health;
 
@@ -63,6 +64,15 @@ class HealthServiceProvider extends ServiceProvider
             // ── Queue (workers procesando jobs) ─────────────────────
             QueueCheck::new()
                 ->onQueue('default'),
+
+            // ── Scheduler (el cron está vivo) ───────────────────────
+            // health:schedule-check-heartbeat (programado cada minuto)
+            // escribe un timestamp en cache; este check falla si el
+            // heartbeat tiene más de 2 min — es decir, si el cron del
+            // servidor dejó de correr. Sin este check registrado, el
+            // comando heartbeat falla con exit 1 cada minuto.
+            ScheduleCheck::new()
+                ->heartbeatMaxAgeInMinutes(2),
 
             // ── Disco ───────────────────────────────────────────────
             UsedDiskSpaceCheck::new()
