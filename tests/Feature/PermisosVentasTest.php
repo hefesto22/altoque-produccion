@@ -6,6 +6,9 @@ use App\Models\User;
 use App\Support\Acceso;
 use Database\Seeders\RestauranteAccessSeeder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -65,4 +68,30 @@ it('sin usuario autenticado no hay permiso alguno', function () {
     Auth::logout();
 
     expect(Acceso::puede('view_any_venta'))->toBeFalse();
+});
+
+/**
+ * El registro de actividad es de auditoría: solo quien tenga
+ * ViewAny:Activity (hoy: super_admin vía Shield). La policy del modelo
+ * de Spatie se registra a mano en AppServiceProvider — Laravel no la
+ * auto-descubre por estar el modelo fuera de App\Models.
+ */
+it('ni el cajero ni el administrador ven el registro de actividad', function () {
+    $cajero = User::factory()->create();
+    $cajero->assignRole('cajero');
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrador');
+
+    expect(Gate::forUser($cajero)->denies('viewAny', Activity::class))->toBeTrue()
+        ->and(Gate::forUser($admin)->denies('viewAny', Activity::class))->toBeTrue();
+});
+
+it('quien tiene ViewAny:Activity sí ve el registro de actividad', function () {
+    Permission::firstOrCreate(['name' => 'ViewAny:Activity', 'guard_name' => 'web']);
+
+    $auditor = User::factory()->create();
+    $auditor->givePermissionTo('ViewAny:Activity');
+
+    expect(Gate::forUser($auditor)->allows('viewAny', Activity::class))->toBeTrue();
 });

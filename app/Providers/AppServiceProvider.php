@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Domain\Contracts\CalculaImpuestos;
 use App\Listeners\RecordUserLogin;
+use App\Policies\ActivityPolicy;
 use App\Services\Pos\CalculadorVenta;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -13,7 +14,9 @@ use Filament\Facades\Filament;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -55,6 +58,15 @@ class AppServiceProvider extends ServiceProvider
         Filament::serving(function (): void {
             app()->setLocale((string) config('app.locale', 'es'));
         });
+
+        // ─── Policies de modelos del vendor ─────────────────────────────
+        // Laravel solo auto-descubre policies de modelos en App\Models.
+        // Activity es de Spatie, así que su policy hay que registrarla a
+        // mano — sin esto, ActivityLogResource queda SIN control de acceso
+        // y cualquier usuario del panel ve el registro de actividad.
+        // Con la policy activa, solo quien tenga ViewAny:Activity lo ve
+        // (hoy: únicamente super_admin).
+        Gate::policy(Activity::class, ActivityPolicy::class);
 
         // ─── Eventos ────────────────────────────────────────────────────
         Event::listen(Login::class, RecordUserLogin::class);
