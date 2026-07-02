@@ -756,15 +756,28 @@ class PuntoDeVenta extends Page
         $this->cobroBanco = '';
     }
 
-    /** Valida los datos de domicilio si corresponde. */
+    /**
+     * Valida los datos del cliente según el tipo de orden (regla de Mauricio):
+     *  - llevar:    nombre obligatorio (para llamarlo al recoger).
+     *  - domicilio: nombre y teléfono obligatorios; dirección e identidad/RTN
+     *               opcionales (la dirección se puede coordinar por teléfono).
+     *  - local:     sin datos.
+     */
     private function domicilioValido(): bool
     {
-        if ($this->tipoServicio !== 'domicilio') {
-            return true;
+        if ($this->tipoServicio === 'llevar' && trim($this->domNombre) === '') {
+            Notification::make()->title('Falta el nombre del cliente')
+                ->body('Para llevar, el nombre es obligatorio (para llamarlo cuando esté listo).')
+                ->warning()->send();
+
+            return false;
         }
 
-        if (trim($this->domTelefono) === '' || trim($this->domDireccion) === '') {
-            Notification::make()->title('Faltan datos de domicilio')->body('Teléfono y dirección son obligatorios.')->warning()->send();
+        if ($this->tipoServicio === 'domicilio'
+            && (trim($this->domNombre) === '' || trim($this->domTelefono) === '')) {
+            Notification::make()->title('Faltan datos de domicilio')
+                ->body('Nombre y teléfono son obligatorios. Dirección e identidad son opcionales.')
+                ->warning()->send();
 
             return false;
         }

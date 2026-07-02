@@ -45,7 +45,7 @@
             <x-filament::section>
                 <x-slot name="heading">Para llevar — el cliente lo recoge</x-slot>
                 <div style="max-width:22rem;">
-                    <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre (opcional, para llamarlo)</label>
+                    <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre * (para llamarlo cuando esté listo)</label>
                     <x-filament::input.wrapper><x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" /></x-filament::input.wrapper>
                 </div>
             </x-filament::section>
@@ -58,7 +58,7 @@
                 <x-slot name="heading">Datos del cliente (domicilio — lo lleva un repartidor)</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem;">
                     <div>
-                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre</label>
+                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre *</label>
                         <x-filament::input.wrapper><x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" /></x-filament::input.wrapper>
                     </div>
                     <div>
@@ -66,11 +66,11 @@
                         <x-filament::input.wrapper><x-filament::input type="text" wire:model="domTelefono" placeholder="9999-9999" /></x-filament::input.wrapper>
                     </div>
                     <div>
-                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Identidad</label>
+                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Identidad / RTN (opcional)</label>
                         <x-filament::input.wrapper><x-filament::input type="text" wire:model="domIdentidad" placeholder="0801-1990-12345" /></x-filament::input.wrapper>
                     </div>
                     <div>
-                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Dirección *</label>
+                        <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Dirección (opcional)</label>
                         <x-filament::input.wrapper><x-filament::input type="text" wire:model="domDireccion" placeholder="Dirección de entrega" /></x-filament::input.wrapper>
                     </div>
                     <div>
