@@ -241,6 +241,7 @@ return [
         'anular_factura'    => 'Anular facturas (SAR)',
         'export_ventas'     => 'Exportar reporte de ventas',
         'view_cortes_todos' => 'Ver cortes de otros cajeros',
+        'abrir_turno'       => 'Abrir turnos de caja',
     ],
 
     /*

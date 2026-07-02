@@ -53,6 +53,7 @@ class RestauranteAccessSeeder extends Seeder
         'page_PuntoDeVenta',     // acceso a la pantalla de cobro
         'export_ventas',         // descargar reporte del contador
         'view_cortes_todos',     // ver cortes de otros cajeros (supervisión)
+        'abrir_turno',           // abrir turno de caja (quien entrega el fondo)
     ];
 
     public function run(): void
@@ -71,6 +72,7 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->soloLectura('corte_caja'),
             'export_ventas',
             'view_cortes_todos',
+            'abrir_turno',
         ]);
 
         $this->rol('cajero', [

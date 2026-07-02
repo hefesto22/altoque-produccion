@@ -269,8 +269,20 @@ class PuntoDeVenta extends Page
         $this->turnoDesde = $corte?->abierto_at?->format('d/m/Y h:i A');
     }
 
+    /**
+     * Quien entrega el fondo abre el turno (gerente/administrador). El
+     * cajero sin este permiso ve el aviso de pedirle la apertura al
+     * encargado; su turno se abre desde Cortes De Caja a su nombre.
+     */
+    public function puedeAbrirTurno(): bool
+    {
+        return Acceso::puede('abrir_turno');
+    }
+
     public function abrirTurno(): void
     {
+        abort_unless(Acceso::puede('abrir_turno'), 403);
+
         $fondo = is_numeric($this->fondoInicial) ? (float) $this->fondoInicial : 0.0;
         $terminal = is_numeric($this->fondoTerminal) ? (float) $this->fondoTerminal : 0.0;
 

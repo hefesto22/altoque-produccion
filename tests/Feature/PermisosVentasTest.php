@@ -87,6 +87,27 @@ it('ni el cajero ni el administrador ven el registro de actividad', function () 
         ->and(Gate::forUser($admin)->denies('viewAny', Activity::class))->toBeTrue();
 });
 
+/**
+ * Abrir turno es de quien entrega el fondo (gerente/administrador).
+ * El cajero no abre su propio turno; se lo abren desde Cortes De Caja.
+ */
+it('solo gerente y administrador pueden abrir turnos de caja', function () {
+    $cajero = User::factory()->create();
+    $cajero->assignRole('cajero');
+    Auth::login($cajero);
+    expect(Acceso::puede('abrir_turno'))->toBeFalse();
+
+    $gerente = User::factory()->create();
+    $gerente->assignRole('gerente');
+    Auth::login($gerente);
+    expect(Acceso::puede('abrir_turno'))->toBeTrue();
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrador');
+    Auth::login($admin);
+    expect(Acceso::puede('abrir_turno'))->toBeTrue();
+});
+
 it('quien tiene ViewAny:Activity sí ve el registro de actividad', function () {
     Permission::firstOrCreate(['name' => 'ViewAny:Activity', 'guard_name' => 'web']);
 

@@ -5,8 +5,12 @@
     @if (! $turnoAbierto)
         <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:.75rem 1rem; border:1px solid #f59e0b; border-radius:.6rem; background:rgba(245,158,11,.08);">
             <span style="font-weight:700;">⚠ Turno de caja cerrado</span>
-            <span style="opacity:.7; font-size:.85rem;">Abrí el turno para empezar a cobrar.</span>
-            <x-filament::button color="success" wire:click="$set('mostrarApertura', true)" style="margin-left:auto;">Abrir turno</x-filament::button>
+            @if ($this->puedeAbrirTurno())
+                <span style="opacity:.7; font-size:.85rem;">Abrí el turno para empezar a cobrar.</span>
+                <x-filament::button color="success" wire:click="$set('mostrarApertura', true)" style="margin-left:auto;">Abrir turno</x-filament::button>
+            @else
+                <span style="opacity:.7; font-size:.85rem;">Pedile al encargado que abra tu turno con el fondo de caja.</span>
+            @endif
         </div>
     @else
         {{-- Turno abierto: línea fina para no ocupar espacio --}}
@@ -511,7 +515,7 @@
     @endif
 
     {{-- ─────────── MODAL APERTURA DE TURNO ─────────── --}}
-    @if ($mostrarApertura)
+    @if ($mostrarApertura && $this->puedeAbrirTurno())
         <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:26rem;">
                 <x-filament::section>
