@@ -18,6 +18,35 @@ function lineaPlato(): array
     return [new LineaVenta($p->id, 'Pollo', 100.00, 1, gravaIsv: false)];
 }
 
+it('un pendiente EN EL LOCAL genera comanda con su ticket imprimible', function () {
+    $cajero = User::factory()->create();
+
+    // "Pagar después" también aplica en el local: la cocina prepara con
+    // el ticket físico y se cobra al entregar.
+    $venta = app(VentaService::class)->registrarPendiente(lineaPlato(), $cajero->id, 'local');
+
+    $comanda = app(ComandaService::class)->crear(
+        $venta,
+        'local',
+        [['nombre' => 'Pollo', 'cantidad' => 1, 'detalle' => [], 'nota' => 'sin cebolla']],
+    );
+
+    expect($comanda->tipo)->toBe('local')                  // el CHECK de comandas acepta 'local'
+        ->and($venta->numero_orden)->toBe('LOC-1');
+
+    // Ticket firmado: 200 con el contenido de cocina; sin firma se rechaza.
+    $this->get($comanda->urlTicket())
+        ->assertOk()
+        ->assertSee('LOC-1')
+        ->assertSee('EN EL LOCAL')
+        ->assertSee('Pollo')
+        ->assertSee('sin cebolla')
+        ->assertSee('PENDIENTE DE PAGO');
+
+    $this->get(route('comandas.ticket', ['comanda' => $comanda->id]))
+        ->assertForbidden();
+});
+
 it('registra un pedido pendiente sin cobrar, sin turno ni factura', function () {
     $cajero = User::factory()->create();
 

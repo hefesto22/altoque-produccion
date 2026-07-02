@@ -36,8 +36,8 @@
                                     <span style="font-weight:900; font-size:1.5rem;">{{ $c->venta?->numero_orden ?? $c->numero }}</span>
                                     <div style="font-size:.65rem; opacity:.6;">{{ $c->numero }}</div>
                                 </div>
-                                <x-filament::badge :color="$c->tipo === 'domicilio' ? 'info' : 'gray'">
-                                    {{ $c->tipo === 'domicilio' ? 'Domicilio' : 'Para llevar' }}
+                                <x-filament::badge :color="match ($c->tipo) { 'domicilio' => 'info', 'local' => 'warning', default => 'gray' }">
+                                    {{ $c->tipoLabel() }}
                                 </x-filament::badge>
                             </div>
 

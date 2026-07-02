@@ -385,26 +385,24 @@
                 <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.75rem;">
                     <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
                     <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
-                    @if ($tipoServicio !== 'local')
-                        <x-filament::button wire:click="pagarDespues" color="warning" outlined size="lg" style="width:100%;">Pagar después (a cocina)</x-filament::button>
-                    @endif
+                    <x-filament::button wire:click="pagarDespues" color="warning" outlined size="lg" style="width:100%;">Pagar después (a cocina)</x-filament::button>
                 </div>
             </x-filament::section>
         </div>
     </div>
 
-    {{-- Impresión directa de la factura: iframe oculto, sin pestaña nueva --}}
+    {{-- Impresión directa (factura PDF y ticket de comanda): iframe oculto, sin pestaña nueva --}}
     @script
     <script>
-        $wire.on('imprimir-factura', (event) => {
+        const imprimirUrl = (event, frameId) => {
             const url = Array.isArray(event) ? event[0]?.url : event?.url;
             if (! url) return;
 
-            // Reusar un iframe oculto para no acumular nodos.
-            let iframe = document.getElementById('factura-print-frame');
+            // Reusar un iframe oculto por tipo para no acumular nodos.
+            let iframe = document.getElementById(frameId);
             if (! iframe) {
                 iframe = document.createElement('iframe');
-                iframe.id = 'factura-print-frame';
+                iframe.id = frameId;
                 iframe.style.position = 'fixed';
                 iframe.style.width = '0';
                 iframe.style.height = '0';
@@ -419,13 +417,18 @@
                     iframe.contentWindow.focus();
                     iframe.contentWindow.print();
                 } catch (e) {
-                    // Si el navegador bloquea el print del PDF embebido, lo abre.
+                    // Si el navegador bloquea el print embebido, lo abre.
                     window.open(url, '_blank');
                 }
             };
 
             iframe.src = url;
-        });
+        };
+
+        $wire.on('imprimir-factura', (event) => imprimirUrl(event, 'factura-print-frame'));
+        // El ticket de comanda ya trae window.print() en su onload; el
+        // listener cubre navegadores que ignoran el print dentro de iframes.
+        $wire.on('imprimir-comanda', (event) => imprimirUrl(event, 'comanda-print-frame'));
     </script>
     @endscript
 

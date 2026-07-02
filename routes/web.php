@@ -19,6 +19,7 @@ declare(strict_types=1);
 | /horizon, etc.) las gestiona Filament automáticamente.
 */
 
+use App\Http\Controllers\ComandaTicketController;
 use App\Http\Controllers\FacturaPdfController;
 use App\Http\Controllers\VerificacionController;
 use App\Livewire\MenuPantalla;
@@ -39,3 +40,8 @@ Route::get('/facturas/{factura}/pdf', [FacturaPdfController::class, 'show'])
 // Verificación pública de autenticidad (destino del QR). El hash es el secreto.
 Route::get('/verificar/{hash}', [VerificacionController::class, 'show'])
     ->name('facturas.verificar');
+
+// Ticket de comanda (80mm, HTML) — ruta FIRMADA: lo imprime el POS para cocina.
+Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'])
+    ->name('comandas.ticket')
+    ->middleware('signed');

@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 
 /**
- * Comanda de cocina para pedidos 'para llevar' o 'a domicilio'. El buffet
- * servido en el local no genera comanda.
+ * Comanda de cocina para pedidos 'para llevar', 'a domicilio' o 'en el
+ * local' pendiente de pago (pagar después). El buffet servido y cobrado
+ * al momento no genera comanda.
  *
  * Flujo de estado: pendiente → preparando → listo → entregado.
  *
@@ -64,6 +66,22 @@ class Comanda extends Model
     public function esDomicilio(): bool
     {
         return $this->tipo === 'domicilio';
+    }
+
+    /** Etiqueta legible del tipo de orden (para ticket y pantallas). */
+    public function tipoLabel(): string
+    {
+        return match ($this->tipo) {
+            'domicilio' => 'A domicilio',
+            'llevar'    => 'Para llevar',
+            default     => 'En el local',
+        };
+    }
+
+    /** URL firmada del ticket imprimible de la comanda (80mm, para cocina). */
+    public function urlTicket(): string
+    {
+        return URL::signedRoute('comandas.ticket', ['comanda' => $this->id]);
     }
 
     /** @param  Builder<Comanda>  $query */

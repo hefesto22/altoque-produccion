@@ -9,6 +9,7 @@ use App\Domain\ValueObjects\ComponenteLinea;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
 use App\Models\Cliente;
+use App\Models\Comanda;
 use App\Models\ComboEspecial;
 use App\Models\CorteCaja;
 use App\Models\Producto;
@@ -777,10 +778,15 @@ class PuntoDeVenta extends Page
      *  - llevar: toda la orden a cocina; el cliente la recoge (nombre opcional).
      *  - domicilio: toda la orden a cocina; la lleva un repartidor (con dirección).
      */
-    private function enviarAComanda(Venta $venta): void
+    /**
+     * @param bool $incluirLocal El buffet servido y cobrado al momento no
+     *                           genera comanda; un "pagar después" en el
+     *                           local SÍ (la cocina prepara con su ticket).
+     */
+    private function enviarAComanda(Venta $venta, bool $incluirLocal = false): ?Comanda
     {
-        if ($this->tipoServicio === 'local') {
-            return; // el buffet servido en el local no genera comanda
+        if ($this->tipoServicio === 'local' && ! $incluirLocal) {
+            return null; // el buffet servido en el local no genera comanda
         }
 
         $datos = $this->tipoServicio === 'domicilio'
@@ -801,11 +807,19 @@ class PuntoDeVenta extends Page
 
         $comanda = app(ComandaService::class)->crear($venta, $this->tipoServicio, $items, $datos);
 
+        $etiquetaTipo = match ($this->tipoServicio) {
+            'domicilio' => 'Domicilio',
+            'llevar'    => 'Para llevar',
+            default     => 'En el local',
+        };
+
         Notification::make()
             ->title('Enviado a cocina')
-            ->body("Comanda {$comanda->numero} · ".($this->tipoServicio === 'domicilio' ? 'Domicilio' : 'Para llevar').' · '.count($items).' plato(s)')
+            ->body("Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
             ->success()
             ->send();
+
+        return $comanda;
     }
 
     // ── Totales en vivo ─────────────────────────────────────────────────
@@ -899,18 +913,12 @@ class PuntoDeVenta extends Page
 
     /**
      * "Pagar después": manda el pedido a cocina como PENDIENTE de pago (sin
-     * cobrar ni facturar). Solo para llevar / domicilio. Se cobra luego desde
-     * la lista de pendientes.
+     * cobrar ni facturar), en cualquier tipo de orden (local, llevar,
+     * domicilio). Imprime el ticket de comanda para cocina; la factura se
+     * imprime recién al cobrar desde la lista de pendientes.
      */
     public function pagarDespues(): void
     {
-        if ($this->tipoServicio === 'local') {
-            Notification::make()->title('“Pagar después” es para llevar o domicilio')
-                ->body('En el local se cobra al momento.')->warning()->send();
-
-            return;
-        }
-
         if ($this->carrito === [] || ! $this->turnoAbierto || ! $this->domicilioValido()) {
             if ($this->carrito === []) {
                 Notification::make()->title('El carrito está vacío')->warning()->send();
@@ -931,7 +939,12 @@ class PuntoDeVenta extends Page
             trim($this->domNombre) !== '' ? mb_strtoupper(trim($this->domNombre)) : null,
         );
 
-        $this->enviarAComanda($venta);
+        $comanda = $this->enviarAComanda($venta, incluirLocal: true);
+
+        // El ticket físico de comanda es lo que la cocina usa para preparar.
+        if ($comanda !== null) {
+            $this->dispatch('imprimir-comanda', url: $comanda->urlTicket());
+        }
 
         Notification::make()
             ->title("Pedido en cocina · Orden {$venta->numero_orden}")
