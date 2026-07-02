@@ -137,6 +137,41 @@ class MenuDelDia extends Page
         $this->cargarSeleccion();
     }
 
+    /** Atajo de los botones Hoy / Mañana / Pasado mañana. */
+    public function irAFecha(int $diasDesdeHoy): void
+    {
+        $this->fecha = now()->addDays($diasDesdeHoy)->toDateString();
+        $this->cargarSeleccion();
+    }
+
+    /**
+     * Etiqueta legible del día que se está editando, con aviso relativo
+     * ("hoy", "mañana") para que quede claro que el menú puede dejarse
+     * armado por adelantado.
+     */
+    public function etiquetaFecha(): string
+    {
+        $fecha = Carbon::parse($this->fecha);
+        $fecha->locale('es'); // setter aparte: encadenado, Larastan tipa el retorno como Carbon|string
+        $dias = (int) now()->startOfDay()->diffInDays($fecha->copy()->startOfDay(), false);
+
+        $relativo = match ($dias) {
+            0       => 'hoy',
+            1       => 'mañana',
+            2       => 'pasado mañana',
+            -1      => 'ayer',
+            default => $dias > 0 ? "en {$dias} días" : abs($dias).' días atrás',
+        };
+
+        return $fecha->isoFormat('dddd D [de] MMMM')." — {$relativo}";
+    }
+
+    /** True si la fecha editada no es hoy (para resaltar el aviso). */
+    public function esOtroDia(): bool
+    {
+        return ! Carbon::parse($this->fecha)->isToday();
+    }
+
     public function cambiarServicio(int $id): void
     {
         $this->servicioId = $id;
