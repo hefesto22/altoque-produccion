@@ -26,11 +26,11 @@ class ListCorteCajas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('abrir_turno')
+            Action::make('AbrirTurno')
                 ->label('Abrir turno')
                 ->icon('heroicon-o-play')
                 ->color('success')
-                ->visible(fn (): bool => Acceso::puede('abrir_turno'))
+                ->visible(fn (): bool => Acceso::puede('AbrirTurno'))
                 ->modalHeading('Abrir turno de caja')
                 ->modalDescription('Elegí el cajero y con cuánto arranca su caja. El turno queda a nombre del cajero.')
                 ->schema([
@@ -53,7 +53,7 @@ class ListCorteCajas extends ListRecords
                         ->helperText('Lo que quedó en el terminal de tarjeta/transferencias sin cortar (si aplica).'),
                 ])
                 ->action(function (array $data): void {
-                    abort_unless(Acceso::puede('abrir_turno'), 403);
+                    abort_unless(Acceso::puede('AbrirTurno'), 403);
 
                     $corte = app(CorteCajaService::class)->abrir(
                         (int) $data['cajero_id'],

@@ -23,10 +23,17 @@ return [
         'slug'            => 'shield/roles',
         'show_model_path' => true,
         'cluster'         => null,
-        'tabs'            => [
-            'pages'              => true,
-            'widgets'            => true,
-            'resources'          => true,
+        /*
+         * Solo la pestaña de permisos personalizados: es la única que los
+         * módulos obedecen hoy. Recursos/Páginas muestran los permisos
+         * generados por Shield (ViewAny:Venta…) que aún no gobiernan nada —
+         * mostrarlas confunde. Se reactivan cuando se migre todo el panel
+         * a policies de Shield (deuda planificada).
+         */
+        'tabs' => [
+            'pages'              => false,
+            'widgets'            => false,
+            'resources'          => false,
             'custom_permissions' => true,
         ],
     ],
@@ -238,10 +245,10 @@ return [
      * en la pantalla de Roles (pestaña "Permisos personalizados").
      */
     'custom_permissions' => [
-        'anular_factura'    => 'Anular facturas (SAR)',
-        'export_ventas'     => 'Exportar reporte de ventas',
-        'view_cortes_todos' => 'Ver cortes de otros cajeros',
-        'abrir_turno'       => 'Abrir turnos de caja',
+        'AnularFactura'  => 'Anular facturas (SAR)',
+        'ExportVentas'   => 'Exportar reporte de ventas',
+        'VerCortesTodos' => 'Ver cortes de otros cajeros',
+        'AbrirTurno'     => 'Abrir turnos de caja',
     ],
 
     /*

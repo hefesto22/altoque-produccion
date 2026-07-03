@@ -33,7 +33,7 @@ it('el cajero puede ver ventas pero no anular facturas', function () {
     Auth::login($cajero);
 
     expect(Acceso::puede('view_any_venta'))->toBeTrue()
-        ->and(Acceso::puede('anular_factura'))->toBeFalse();
+        ->and(Acceso::puede('AnularFactura'))->toBeFalse();
 });
 
 it('el administrador puede anular facturas', function () {
@@ -41,7 +41,7 @@ it('el administrador puede anular facturas', function () {
     $admin->assignRole('administrador');
     Auth::login($admin);
 
-    expect(Acceso::puede('anular_factura'))->toBeTrue();
+    expect(Acceso::puede('AnularFactura'))->toBeTrue();
 });
 
 it('el gerente ve ventas y también anula facturas', function () {
@@ -52,7 +52,7 @@ it('el gerente ve ventas y también anula facturas', function () {
     Auth::login($gerente);
 
     expect(Acceso::puede('view_any_venta'))->toBeTrue()
-        ->and(Acceso::puede('anular_factura'))->toBeTrue();
+        ->and(Acceso::puede('AnularFactura'))->toBeTrue();
 });
 
 it('el super_admin pasa cualquier permiso sin tenerlo asignado', function () {
@@ -62,7 +62,7 @@ it('el super_admin pasa cualquier permiso sin tenerlo asignado', function () {
     $root->assignRole('super_admin');
     Auth::login($root);
 
-    expect(Acceso::puede('anular_factura'))->toBeTrue()
+    expect(Acceso::puede('AnularFactura'))->toBeTrue()
         ->and(Acceso::puede('permiso_que_no_existe'))->toBeTrue();
 });
 
@@ -97,17 +97,17 @@ it('solo gerente y administrador pueden abrir turnos de caja', function () {
     $cajero = User::factory()->create();
     $cajero->assignRole('cajero');
     Auth::login($cajero);
-    expect(Acceso::puede('abrir_turno'))->toBeFalse();
+    expect(Acceso::puede('AbrirTurno'))->toBeFalse();
 
     $gerente = User::factory()->create();
     $gerente->assignRole('gerente');
     Auth::login($gerente);
-    expect(Acceso::puede('abrir_turno'))->toBeTrue();
+    expect(Acceso::puede('AbrirTurno'))->toBeTrue();
 
     $admin = User::factory()->create();
     $admin->assignRole('administrador');
     Auth::login($admin);
-    expect(Acceso::puede('abrir_turno'))->toBeTrue();
+    expect(Acceso::puede('AbrirTurno'))->toBeTrue();
 });
 
 it('quien tiene ViewAny:Activity sí ve el registro de actividad', function () {

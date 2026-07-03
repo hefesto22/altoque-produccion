@@ -277,12 +277,12 @@ class PuntoDeVenta extends Page
      */
     public function puedeAbrirTurno(): bool
     {
-        return Acceso::puede('abrir_turno');
+        return Acceso::puede('AbrirTurno');
     }
 
     public function abrirTurno(): void
     {
-        abort_unless(Acceso::puede('abrir_turno'), 403);
+        abort_unless(Acceso::puede('AbrirTurno'), 403);
 
         $fondo = is_numeric($this->fondoInicial) ? (float) $this->fondoInicial : 0.0;
         $terminal = is_numeric($this->fondoTerminal) ? (float) $this->fondoTerminal : 0.0;

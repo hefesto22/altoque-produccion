@@ -117,12 +117,12 @@ class VentaResource extends Resource
                     ->schema([
                         Textarea::make('motivo')->label('Motivo de la anulación')->required()->maxLength(255),
                     ])
-                    ->visible(fn (Venta $record): bool => Acceso::puede('anular_factura')
+                    ->visible(fn (Venta $record): bool => Acceso::puede('AnularFactura')
                         && $record->factura !== null
                         && ! $record->factura->anulada
                         && app(FacturacionSarService::class)->puedeAnular($record->factura))
                     ->action(function (Venta $record, array $data) {
-                        abort_unless(Acceso::puede('anular_factura'), 403);
+                        abort_unless(Acceso::puede('AnularFactura'), 403);
 
                         app(FacturacionSarService::class)->anular($record->factura, $data['motivo'], (int) Auth::id());
 
@@ -140,12 +140,12 @@ class VentaResource extends Resource
                     ->schema([
                         Textarea::make('motivo')->label('Motivo de anulación')->required()->maxLength(255),
                     ])
-                    ->visible(fn (Venta $record): bool => Acceso::puede('anular_factura')
+                    ->visible(fn (Venta $record): bool => Acceso::puede('AnularFactura')
                         && $record->factura !== null
                         && ! $record->factura->anulada
                         && app(FacturacionSarService::class)->puedeAnular($record->factura))
                     ->action(function (Venta $record, array $data): void {
-                        abort_unless(Acceso::puede('anular_factura'), 403);
+                        abort_unless(Acceso::puede('AnularFactura'), 403);
 
                         app(FacturacionSarService::class)->anular($record->factura, $data['motivo'], (int) Auth::id());
 

@@ -43,22 +43,36 @@ class RestauranteAccessSeeder extends Seeder
     private const PERMISOS = [
         'producto'   => ['view_any', 'view', 'create', 'update', 'delete'],
         'venta'      => ['view_any', 'view', 'create'],
-        'factura'    => ['view_any', 'view', 'create', 'anular'],
+        'factura'    => ['view_any', 'view', 'create'],
         'cai'        => ['view_any', 'view', 'create', 'update'],
         'corte_caja' => ['view_any', 'view', 'create'],
     ];
 
     /** Permisos sueltos (páginas / acciones especiales). */
+    /*
+     * En PascalCase porque la pestaña "Permisos personalizados" de Shield
+     * formatea los nombres con permissions.case = pascal: si no coinciden,
+     * las casillas nunca reflejan lo asignado ni guardan sobre el permiso real.
+     */
     private const PERMISOS_EXTRA = [
-        'page_PuntoDeVenta',     // acceso a la pantalla de cobro
-        'export_ventas',         // descargar reporte del contador
-        'view_cortes_todos',     // ver cortes de otros cajeros (supervisión)
-        'abrir_turno',           // abrir turno de caja (quien entrega el fondo)
+        'page_PuntoDeVenta',  // acceso a la pantalla de cobro (convención de páginas)
+        'ExportVentas',       // descargar reporte del contador
+        'VerCortesTodos',     // ver cortes de otros cajeros (supervisión)
+        'AbrirTurno',         // abrir turno de caja (quien entrega el fondo)
+        'AnularFactura',      // anular factura SAR (queda registrada, no se borra)
+    ];
+
+    /** Nombres viejos (snake) reemplazados por los PascalCase de arriba. */
+    private const PERMISOS_OBSOLETOS = [
+        'anular_factura', 'export_ventas', 'view_cortes_todos', 'abrir_turno',
     ];
 
     public function run(): void
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        // Limpia los nombres snake reemplazados (idempotente).
+        Permission::query()->whereIn('name', self::PERMISOS_OBSOLETOS)->delete();
 
         $this->crearPermisos();
 
@@ -70,10 +84,10 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->soloLectura('factura'),
             ...$this->soloLectura('cai'),
             ...$this->soloLectura('corte_caja'),
-            'export_ventas',
-            'view_cortes_todos',
-            'abrir_turno',
-            'anular_factura', // decisión de Mauricio (2026-07-03): el gerente también anula
+            'ExportVentas',
+            'VerCortesTodos',
+            'AbrirTurno',
+            'AnularFactura', // decisión de Mauricio (2026-07-03): el gerente también anula
         ]);
 
         $this->rol('cajero', [
@@ -86,7 +100,7 @@ class RestauranteAccessSeeder extends Seeder
         $this->rol('contador', [
             'view_any_venta', 'view_venta',
             'view_any_factura', 'view_factura',
-            'export_ventas',
+            'ExportVentas',
         ]);
 
         $this->crearUsuariosDePrueba();
