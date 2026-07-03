@@ -44,13 +44,15 @@ it('el administrador puede anular facturas', function () {
     expect(Acceso::puede('anular_factura'))->toBeTrue();
 });
 
-it('el gerente no anula facturas (solo lectura sobre facturación)', function () {
+it('el gerente ve ventas y también anula facturas', function () {
+    // Decisión de Mauricio (2026-07-03): el gerente supervisa la caja y
+    // puede anular; el único que NO anula es el cajero.
     $gerente = User::factory()->create();
     $gerente->assignRole('gerente');
     Auth::login($gerente);
 
     expect(Acceso::puede('view_any_venta'))->toBeTrue()
-        ->and(Acceso::puede('anular_factura'))->toBeFalse();
+        ->and(Acceso::puede('anular_factura'))->toBeTrue();
 });
 
 it('el super_admin pasa cualquier permiso sin tenerlo asignado', function () {

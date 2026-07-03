@@ -73,6 +73,7 @@ class RestauranteAccessSeeder extends Seeder
             'export_ventas',
             'view_cortes_todos',
             'abrir_turno',
+            'anular_factura', // decisión de Mauricio (2026-07-03): el gerente también anula
         ]);
 
         $this->rol('cajero', [
