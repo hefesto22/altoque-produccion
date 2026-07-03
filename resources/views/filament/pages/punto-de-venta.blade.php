@@ -410,46 +410,8 @@
         </div>
     </div>
 
-    {{-- Impresión directa (factura PDF y ticket de comanda): iframe oculto, sin pestaña nueva --}}
-    @script
-    <script>
-        const imprimirUrl = (event, frameId) => {
-            const url = Array.isArray(event) ? event[0]?.url : event?.url;
-            if (! url) return;
+    {{-- La impresión directa vive en el script global (render hook en AppServiceProvider) --}}
 
-            // Reusar un iframe oculto por tipo para no acumular nodos.
-            let iframe = document.getElementById(frameId);
-            if (! iframe) {
-                iframe = document.createElement('iframe');
-                iframe.id = frameId;
-                iframe.style.position = 'fixed';
-                iframe.style.width = '0';
-                iframe.style.height = '0';
-                iframe.style.border = '0';
-                iframe.style.right = '0';
-                iframe.style.bottom = '0';
-                document.body.appendChild(iframe);
-            }
-
-            iframe.onload = () => {
-                try {
-                    iframe.contentWindow.focus();
-                    iframe.contentWindow.print();
-                } catch (e) {
-                    // Si el navegador bloquea el print embebido, lo abre.
-                    window.open(url, '_blank');
-                }
-            };
-
-            iframe.src = url;
-        };
-
-        $wire.on('imprimir-factura', (event) => imprimirUrl(event, 'factura-print-frame'));
-        // El ticket de comanda ya trae window.print() en su onload; el
-        // listener cubre navegadores que ignoran el print dentro de iframes.
-        $wire.on('imprimir-comanda', (event) => imprimirUrl(event, 'comanda-print-frame'));
-    </script>
-    @endscript
 
     {{-- ─────────── MODAL CIERRE DE TURNO ─────────── --}}
     {{-- ─────────── MODAL PERSONALIZAR PLATILLO ─────────── --}}

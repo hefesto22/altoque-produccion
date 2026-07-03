@@ -59,6 +59,15 @@ class AppServiceProvider extends ServiceProvider
             app()->setLocale((string) config('app.locale', 'es'));
         });
 
+        // ─── Impresión directa global ───────────────────────────────────
+        // Script del iframe de impresión disponible en TODO el panel: el
+        // POS y el listado de Ventas despachan 'imprimir-factura' /
+        // 'imprimir-comanda' y esto los atiende sin abrir pestañas.
+        FilamentView::registerRenderHook(
+            'panels::body.end',
+            fn (): string => view('filament.partials.imprimir-script')->render(),
+        );
+
         // ─── Policies de modelos del vendor ─────────────────────────────
         // Laravel solo auto-descubre policies de modelos en App\Models.
         // Activity es de Spatie, así que su policy hay que registrarla a

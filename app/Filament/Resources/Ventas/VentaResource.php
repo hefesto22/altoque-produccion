@@ -96,7 +96,10 @@ class VentaResource extends Resource
                 Action::make('pdf')
                     ->label('Factura')
                     ->icon('heroicon-o-printer')
-                    ->url(fn (Venta $record): ?string => $record->factura?->urlPdf(), shouldOpenInNewTab: true)
+                    // Imprime directo (HTML instantáneo por iframe, igual que el
+                    // POS) — sin pestaña nueva ni esperar a Chromium. El PDF
+                    // sigue disponible vía WhatsApp.
+                    ->action(fn (Venta $record, $livewire) => $livewire->dispatch('imprimir-factura', url: $record->factura?->urlTicket()))
                     ->visible(fn (Venta $record): bool => $record->factura !== null),
                 Action::make('whatsapp')
                     ->label('WhatsApp')
