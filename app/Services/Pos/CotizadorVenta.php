@@ -179,12 +179,23 @@ final class CotizadorVenta
             }
         }
 
+        // Precio de lista del platillo: la suma à la carte de sus componentes.
+        // Solo se informa si supera el precio fijo — así la factura detallada
+        // muestra cada producto a su precio y el ahorro en "Descuentos y
+        // rebajas". Si la suma no supera el fijo, no hay descuento (nunca
+        // se inventa uno negativo).
+        $listaPlatillo = round(array_sum(array_map(
+            static fn (ComponenteLinea $c): float => $c->precio * $c->cantidad,
+            $componentes,
+        )), 2);
+
         return new LineaVenta(
             productoId: $producto->id,
             nombre: $producto->nombre,
             precioUnitario: (float) $producto->precio,
             cantidad: $cantidad,
             gravaIsv: (bool) $producto->grava_isv,
+            precioListaUnitario: $listaPlatillo > (float) $producto->precio ? $listaPlatillo : null,
             detalle: $detalle,
             componentes: $componentes,
         );
@@ -246,6 +257,14 @@ final class CotizadorVenta
             }
         }
 
+        // Suma à la carte de los slots base: si supera el precio fijo, la
+        // factura detallada muestra cada componente a su precio y el ahorro
+        // como "Descuentos y rebajas".
+        $listaBase = round(array_sum(array_map(
+            static fn (ComponenteLinea $c): float => $c->precio * $c->cantidad,
+            $baseComponentes,
+        )), 2);
+
         // Línea base a precio fijo (el ISV se prorratea sobre los slots base).
         $lineas = [new LineaVenta(
             productoId: $combo->id,
@@ -253,6 +272,7 @@ final class CotizadorVenta
             precioUnitario: round((float) $combo->precio, 2),
             cantidad: 1,
             gravaIsv: (bool) $combo->grava_isv,
+            precioListaUnitario: $listaBase > (float) $combo->precio ? $listaBase : null,
             detalle: $baseDetalle,
             componentes: $baseComponentes,
             nota: $nota,

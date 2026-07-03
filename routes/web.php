@@ -41,6 +41,11 @@ Route::get('/facturas/{factura}/pdf', [FacturaPdfController::class, 'show'])
 Route::get('/verificar/{hash}', [VerificacionController::class, 'show'])
     ->name('facturas.verificar');
 
+// Factura como HTML (impresión instantánea en caja, sin Chromium) — FIRMADA.
+Route::get('/facturas/{factura}/ticket', [FacturaPdfController::class, 'ticket'])
+    ->name('facturas.ticket')
+    ->middleware('signed');
+
 // Ticket de comanda (80mm, HTML) — ruta FIRMADA: lo imprime el POS para cocina.
 Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'])
     ->name('comandas.ticket')

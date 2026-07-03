@@ -94,6 +94,12 @@ class Factura extends Model
         return URL::signedRoute('facturas.pdf', ['factura' => $this->id]);
     }
 
+    /** URL firmada de la factura como HTML — impresión instantánea en caja. */
+    public function urlTicket(): string
+    {
+        return URL::signedRoute('facturas.ticket', ['factura' => $this->id]);
+    }
+
     /** Link de WhatsApp con el mensaje y la URL del PDF para el cliente. */
     public function urlWhatsApp(): string
     {

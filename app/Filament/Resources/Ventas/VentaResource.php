@@ -68,6 +68,9 @@ class VentaResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // El listado se refresca solo: las ventas que registra la caja
+            // aparecen sin recargar la página (pedido del restaurante).
+            ->poll('10s')
             ->columns([
                 TextColumn::make('vendida_at')->label('Fecha')->dateTime('d/m/Y H:i')->sortable(),
                 TextColumn::make('tipo')->label('Tipo')->badge()

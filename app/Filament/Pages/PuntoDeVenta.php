@@ -530,6 +530,16 @@ class PuntoDeVenta extends Page
 
     public function agregarProducto(int $id): void
     {
+        // Si hay un plato a medio armar (proteína elegida) y lo que se toca
+        // es una bebida o un extra, el plato se agrega PRIMERO al carrito:
+        // la bebida es el cierre natural del pedido y sin esto el plato en
+        // construcción se quedaba afuera — riesgo de cobrar solo la bebida.
+        // (Un complemento "+ Solo" NO cierra el plato: puede estar a medio elegir.)
+        if ($this->proteinaId !== null
+            && in_array(Producto::query()->whereKey($id)->value('categoria'), ['bebida', 'extra'], true)) {
+            $this->agregarPlato();
+        }
+
         // Si ese producto suelto ya está en el carrito, solo sumá la cantidad.
         foreach ($this->carrito as $idx => $item) {
             if ($item['tipo'] === 'producto' && (int) $item['producto_id'] === $id) {
@@ -903,7 +913,10 @@ class PuntoDeVenta extends Page
     /** Factura rápida a Consumidor Final (sin pedir RTN, concepto Alimentación). */
     public function facturarConsumidorFinal(): void
     {
-        $this->procesarFactura(null, 'Consumidor Final', false);
+        // detallada = null → manda el toggle "Detallar productos por defecto"
+        // de Datos de la Empresa. El restaurante pidió que las facturas a
+        // Consumidor Final también salgan con el platillo desglosado.
+        $this->procesarFactura(null, 'Consumidor Final', null);
     }
 
     /** Total que se muestra en el modal: el del pendiente si se cobra uno, si no el del carrito. */
@@ -1032,7 +1045,7 @@ class PuntoDeVenta extends Page
     }
 
     /** Núcleo del cobro de un pendiente: emite el documento y marca pagado. */
-    private function ejecutarCobroPendiente(int $ventaId, ?RTN $rtn, string $nombre, string $formaPago, ?bool $detallada = false, ?string $banco = null): bool
+    private function ejecutarCobroPendiente(int $ventaId, ?RTN $rtn, string $nombre, string $formaPago, ?bool $detallada = null, ?string $banco = null): bool
     {
         $venta = Venta::pendientes()->find($ventaId);
 
@@ -1070,7 +1083,7 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        $this->dispatch('imprimir-factura', url: $factura->urlPdf());
+        $this->dispatch('imprimir-factura', url: $factura->urlTicket()); // HTML: impresión instantánea, sin Chromium
 
         Notification::make()
             ->title("Cobrado · Orden {$factura->venta->numero_orden}")
@@ -1239,7 +1252,7 @@ class PuntoDeVenta extends Page
         }
 
         // Imprime directo (iframe oculto), sin abrir pestaña nueva.
-        $this->dispatch('imprimir-factura', url: $factura->urlPdf());
+        $this->dispatch('imprimir-factura', url: $factura->urlTicket()); // HTML: impresión instantánea, sin Chromium
 
         Notification::make()
             ->title("Factura emitida · Orden {$factura->venta->numero_orden}")

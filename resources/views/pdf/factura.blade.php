@@ -3,8 +3,16 @@
 <head>
     <meta charset="utf-8">
     <style>
+        /* Impresión HTML directa (ticket de caja): mismo 80mm que el PDF.
+           Browsershot fija el tamaño por parámetro; el print del navegador
+           lo toma de @page. */
+        @page { size: 80mm 250mm; margin: 3mm; }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 10.5px; color: #000; line-height: 1.32; }
+        /* Térmicas que imprimen tenue (3nStar): engrosar el trazo de todas
+           las letras sin perder la jerarquía de negritas. Complementa el
+           ajuste de densidad del driver de la impresora. */
+        body { -webkit-text-stroke: 0.25px #000; }
         .doc { width: 74mm; text-transform: uppercase; }
         .preserve { text-transform: none; }
         .orden { font-size: 15px; font-weight: bold; text-align: right; }
@@ -179,6 +187,7 @@
 
     {{-- ───── Leyendas SAR ───── --}}
     <div class="sm center">Este documento es una representación de la factura emitida por un autoimpresor autorizado por el SAR.</div>
+    <div class="sm center bold" style="margin-top:3px;">Favor revise su factura y su pedido antes de salir del establecimiento.</div>
     <div class="sm center bold" style="margin-top:3px;">"La factura es beneficio de todos, ¡EXÍJALA!"</div>
     <div class="center bold" style="margin-top:5px;">¡Gracias por su compra!</div>
 

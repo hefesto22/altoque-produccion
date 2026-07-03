@@ -139,6 +139,44 @@ it('prorratea el ISV de un platillo armado según el flag de cada producto', fun
         ->and($resumen->total)->toBe(100.00);
 });
 
+it('el platillo de precio fijo captura su precio de lista para mostrar el descuento', function () {
+    // Pedido del restaurante: la factura detallada muestra cada componente
+    // a su precio y el ahorro como "Descuentos y rebajas".
+    $platillo = Producto::factory()->create([
+        'categoria' => 'combo', 'combo_modo' => 'platillo', 'nombre' => 'Desayuno', 'precio' => 60.00, 'grava_isv' => true,
+    ]);
+    $pollo = Producto::factory()->create(['categoria' => 'proteina', 'nombre' => 'Pollo', 'precio' => 60.00, 'grava_isv' => false]);
+    $frijoles = Producto::factory()->create(['categoria' => 'complemento', 'nombre' => 'Frijoles', 'precio' => 30.00, 'grava_isv' => false]);
+
+    ComboEspecialItem::create(['combo_id' => $platillo->id, 'producto_id' => $pollo->id, 'cantidad' => 1, 'orden' => 1]);
+    ComboEspecialItem::create(['combo_id' => $platillo->id, 'producto_id' => $frijoles->id, 'cantidad' => 1, 'orden' => 2]);
+
+    $linea = $this->cotizador->cotizarProducto($platillo->id);
+
+    // Lista à la carte 90 > precio fijo 60 → descuento 30 visible en factura.
+    expect($linea->precioListaUnitario)->toBe(90.00)
+        ->and($linea->subtotalLista())->toBe(90.00)
+        ->and($linea->descuento())->toBe(30.00)
+        ->and($linea->importe())->toBe(60.00);
+});
+
+it('el platillo sin ahorro real no inventa descuento negativo', function () {
+    // Componentes baratos (suma 40) con precio fijo 60: no hay descuento que mostrar.
+    $platillo = Producto::factory()->create([
+        'categoria' => 'combo', 'combo_modo' => 'platillo', 'nombre' => 'Cena', 'precio' => 60.00, 'grava_isv' => true,
+    ]);
+    $huevo = Producto::factory()->create(['categoria' => 'complemento', 'nombre' => 'Huevo', 'precio' => 20.00, 'grava_isv' => false]);
+    $queso = Producto::factory()->create(['categoria' => 'complemento', 'nombre' => 'Queso', 'precio' => 20.00, 'grava_isv' => false]);
+
+    ComboEspecialItem::create(['combo_id' => $platillo->id, 'producto_id' => $huevo->id, 'cantidad' => 1, 'orden' => 1]);
+    ComboEspecialItem::create(['combo_id' => $platillo->id, 'producto_id' => $queso->id, 'cantidad' => 1, 'orden' => 2]);
+
+    $linea = $this->cotizador->cotizarProducto($platillo->id);
+
+    expect($linea->precioListaUnitario)->toBeNull()
+        ->and($linea->descuento())->toBe(0.00);
+});
+
 it('platillo personalizado: base a precio fijo + extras cobrados a su precio', function () {
     $platillo = Producto::factory()->create([
         'categoria' => 'combo', 'combo_modo' => 'platillo', 'nombre' => 'Combo', 'precio' => 150.00, 'grava_isv' => true,

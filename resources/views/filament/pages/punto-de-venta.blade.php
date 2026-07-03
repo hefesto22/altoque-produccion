@@ -89,6 +89,9 @@
         <div style="display:flex; flex-direction:column; gap:1.5rem;">
 
             {{-- Pedidos pendientes de pago: botón que se despliega, para no ocupar espacio --}}
+            {{-- wire:poll: pendientes creados por otra caja o por pedidos online
+                 aparecen solos, sin recargar la página (pedido del restaurante). --}}
+            <div wire:poll.15s>
             @php($pendientes = $this->pedidosPendientes)
             @if (count($pendientes))
                 <div>
@@ -139,14 +142,30 @@
                     @endif
                 </div>
             @endif
+            </div>
 
-            {{-- Platillos completos: cobro de un toque a precio fijo --}}
+            {{-- Platillos completos: cobro de un toque a precio fijo.
+                 Buscador Alpine (filtra en el navegador, sin tocar el server):
+                 con decenas de platillos, teclear es más rápido que buscar a ojo. --}}
             @if (count($combos))
-                <x-filament::section>
+                <x-filament::section
+                    x-data="{
+                        filtroPlatillo: '',
+                        norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+                        verPlatillo(n) { return this.filtroPlatillo === '' || this.norm(n).includes(this.norm(this.filtroPlatillo)); },
+                    }">
                     <x-slot name="heading">⭐ Platillos completos</x-slot>
+                    <x-slot name="afterHeader">
+                        <div style="min-width:16rem;">
+                            <x-filament::input.wrapper prefix-icon="heroicon-o-magnifying-glass">
+                                <x-filament::input type="search" x-model="filtroPlatillo" placeholder="Buscar platillo…" />
+                            </x-filament::input.wrapper>
+                        </div>
+                    </x-slot>
                     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                         @foreach ($combos as $combo)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="warning"
+                                x-show="verPlatillo(@js($combo['nombre']))"
                                 wire:click="personalizarPlatillo({{ $combo['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
                                     <span style="font-weight:600;">{{ $combo['nombre'] }}</span>
