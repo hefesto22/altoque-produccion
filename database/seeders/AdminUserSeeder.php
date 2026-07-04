@@ -71,8 +71,8 @@ class AdminUserSeeder extends Seeder
         $this->command?->info("✓ Super-admin listo: {$email}");
 
         // ─── Filament Shield: generar permisos para todos los Resources ─────
-        // Esto genera permisos como view_any_user, create_user, update_user,
-        // etc. para CADA Resource detectado en app/Filament/Resources.
+        // Esto genera permisos como ViewAny:User, Create:User, Update:User,
+        // etc. (case=pascal, separator=':') para CADA Resource del panel.
         // Sin esto, los Resources NO aparecen en el sidebar (Shield los oculta).
         $this->command?->info('Generando permisos de Shield para todos los Resources…');
 

@@ -46,7 +46,7 @@ class DatosEmpresaPage extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador']);
+        return Acceso::puede('View:DatosEmpresaPage');
     }
 
     /** @var array<string, mixed> */

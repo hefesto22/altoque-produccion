@@ -6,7 +6,6 @@ namespace App\Filament\Resources\PeriodosFiscales;
 
 use App\Filament\Resources\PeriodosFiscales\Pages\ListPeriodosFiscales;
 use App\Models\PeriodoFiscal;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -30,11 +29,6 @@ class PeriodoFiscalResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Fiscal';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador']);
     }
 
     /** Los períodos se crean/cierran desde la página de Declaración ISV. */

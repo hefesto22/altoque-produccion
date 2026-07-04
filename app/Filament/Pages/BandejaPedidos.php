@@ -49,7 +49,7 @@ class BandejaPedidos extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'cajero']);
+        return Acceso::puede('View:BandejaPedidos');
     }
 
     /** @return array<int, PedidoOnline> */

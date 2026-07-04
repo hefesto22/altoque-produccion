@@ -24,16 +24,15 @@ return [
         'show_model_path' => true,
         'cluster'         => null,
         /*
-         * Solo la pestaña de permisos personalizados: es la única que los
-         * módulos obedecen hoy. Recursos/Páginas muestran los permisos
-         * generados por Shield (ViewAny:Venta…) que aún no gobiernan nada —
-         * mostrarlas confunde. Se reactivan cuando se migre todo el panel
-         * a policies de Shield (deuda planificada).
+         * Recursos, Páginas y Personalizados: todos gobiernan de verdad
+         * (policies por Resource + canAccess por permiso en las Pages +
+         * Acceso::puede en acciones). Widgets queda oculto: no hay widgets
+         * propios que proteger — sería una pestaña vacía.
          */
         'tabs' => [
-            'pages'              => false,
+            'pages'              => true,
             'widgets'            => false,
-            'resources'          => false,
+            'resources'          => true,
             'custom_permissions' => true,
         ],
     ],

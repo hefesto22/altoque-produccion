@@ -8,7 +8,6 @@ use App\Filament\Resources\Combos\Pages\ManageCombos;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\Combo;
 use App\Models\Tier;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -36,11 +35,6 @@ class ComboResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Menú';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente']);
     }
 
     public static function form(Schema $schema): Schema

@@ -13,108 +13,187 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Roles, permisos y usuarios del restaurante.
+ * Roles, permisos y usuarios del restaurante — ÚNICA fuente de verdad
+ * inicial de la matriz de acceso.
  *
- * El super_admin lo maneja AdminUserSeeder (admin@gmail.com). Este
- * seeder agrega los roles operativos — administrador, gerente, cajero,
- * contador — con sus permisos y un usuario de prueba por rol.
+ * Todos los permisos usan la convención de Filament Shield con la config
+ * de este proyecto (case=pascal, separator=':'): `ViewAny:Venta`,
+ * `Update:Producto`, `View:PuntoDeVenta`. Así las pestañas Recursos,
+ * Páginas y Permisos personalizados de la pantalla de Roles reflejan y
+ * gobiernan la realidad: crear un rol nuevo es tildar casillas, sin código.
  *
- * Los permisos siguen la convención de Filament Shield ({accion}_{recurso})
- * para que coincidan con los que generará `shield:generate` cuando se
- * construyan los Resources (Producto, Venta, Cai, etc.). Crearlos aquí
- * de forma idempotente deja el acceso listo desde el primer seed.
+ * Este seeder siembra la matriz INICIAL de cada rol (decisión de negocio
+ * confirmada con Mauricio). Re-correrlo RESETEA los roles a esta matriz
+ * — pisa ajustes manuales hechos en la pantalla de Roles.
  *
- * Las fronteras por rol son DECISIÓN DE NEGOCIO (confirmadas con
- * Mauricio): el cajero no edita productos ni anula; el contador solo
- * lee y exporta; solo administrador gestiona CAI y anula facturas.
- *
- * Solo crea usuarios de prueba fuera de producción (contraseña débil).
+ * El super_admin se re-sincroniza aquí con TODOS los permisos: como Shield
+ * corre con define_via_gate=false, su acceso depende de tener cada permiso
+ * en la base. Sin esto, un permiso nuevo lo dejaría fuera (lock-out).
  */
 class RestauranteAccessSeeder extends Seeder
 {
     private const PASSWORD_DEV = '12345678';
 
     /**
-     * Permisos por recurso del dominio. Se crean todos; cada rol recibe
-     * el subconjunto que le corresponde.
+     * Acciones de policy que Shield genera por Resource (config
+     * filament-shield.policies.methods, en PascalCase).
      *
-     * @var array<string, array<int, string>>
+     * @var array<int, string>
      */
-    private const PERMISOS = [
-        'producto'   => ['view_any', 'view', 'create', 'update', 'delete'],
-        'venta'      => ['view_any', 'view', 'create'],
-        'factura'    => ['view_any', 'view', 'create'],
-        'cai'        => ['view_any', 'view', 'create', 'update'],
-        'corte_caja' => ['view_any', 'view', 'create'],
+    private const ACCIONES = [
+        'ViewAny', 'View', 'Create', 'Update', 'Delete', 'Restore',
+        'ForceDelete', 'ForceDeleteAny', 'RestoreAny', 'Replicate', 'Reorder',
     ];
 
-    /** Permisos sueltos (páginas / acciones especiales). */
-    /*
-     * En PascalCase porque la pestaña "Permisos personalizados" de Shield
-     * formatea los nombres con permissions.case = pascal: si no coinciden,
-     * las casillas nunca reflejan lo asignado ni guardan sobre el permiso real.
+    /**
+     * Modelos con Resource en el panel (subject=model → class_basename).
+     *
+     * @var array<int, string>
+     */
+    private const MODELOS = [
+        'Activity', 'Cai', 'Cliente', 'Combo', 'ComboEspecial', 'Compra',
+        'CorteCaja', 'PedidoOnline', 'PeriodoFiscal', 'Producto', 'Tier',
+        'User', 'Venta',
+    ];
+
+    /**
+     * Páginas custom del panel (subject=class, prefix=view → `View:Pagina`).
+     *
+     * @var array<int, string>
+     */
+    private const PAGINAS = [
+        'BandejaPedidos', 'BrandingSettingsPage', 'Cocina', 'DatosEmpresaPage',
+        'DeclaracionIsvMensual', 'LibrosFiscales', 'MenuDelDia', 'PuntoDeVenta',
+    ];
+
+    /**
+     * Permisos del dominio que no mapean a Resource/Page. Se etiquetan en
+     * config/filament-shield.php → custom_permissions.
+     *
+     * @var array<int, string>
      */
     private const PERMISOS_EXTRA = [
-        'page_PuntoDeVenta',  // acceso a la pantalla de cobro (convención de páginas)
-        'ExportVentas',       // descargar reporte del contador
-        'VerCortesTodos',     // ver cortes de otros cajeros (supervisión)
-        'AbrirTurno',         // abrir turno de caja (quien entrega el fondo)
-        'AnularFactura',      // anular factura SAR (queda registrada, no se borra)
+        'ExportVentas',   // descargar reporte del contador
+        'VerCortesTodos', // ver cortes de otros cajeros (supervisión)
+        'AbrirTurno',     // abrir turno de caja (quien entrega el fondo)
+        'AnularFactura',  // anular factura SAR (queda registrada, no se borra)
     ];
 
-    /** Nombres viejos (snake) reemplazados por los PascalCase de arriba. */
+    /**
+     * Nombres viejos reemplazados por la convención Shield. Se eliminan de
+     * la base en cada corrida (idempotente).
+     *
+     * @var array<int, string>
+     */
     private const PERMISOS_OBSOLETOS = [
+        // custom en snake (renombrados a PascalCase)
         'anular_factura', 'export_ventas', 'view_cortes_todos', 'abrir_turno',
+        // dominio en snake (reemplazados por Accion:Modelo)
+        'view_any_producto', 'view_producto', 'create_producto', 'update_producto', 'delete_producto',
+        'view_any_venta', 'view_venta', 'create_venta',
+        'view_any_factura', 'view_factura', 'create_factura',
+        'view_any_cai', 'view_cai', 'create_cai', 'update_cai',
+        'view_any_corte_caja', 'view_corte_caja', 'create_corte_caja',
+        // página en convención vieja
+        'page_PuntoDeVenta',
     ];
 
     public function run(): void
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Limpia los nombres snake reemplazados (idempotente).
         Permission::query()->whereIn('name', self::PERMISOS_OBSOLETOS)->delete();
 
         $this->crearPermisos();
 
-        $this->rol('administrador', $this->todasLasPermisos());
+        /*
+         * ── Matriz por rol (decisión de negocio, no técnica) ─────────────
+         * administrador: gestiona menú, precios, clientes, compras, CAI y
+         *   corrige cortes. NO ve el Registro de Actividad (solo super_admin)
+         *   ni gestiona usuarios/roles (solo super_admin).
+         * gerente: igual que administrador en lo operativo, sin CAI ni
+         *   corrección de cortes ni Datos de la Empresa.
+         * cajero: opera el POS, cocina y bandeja; ve ventas y su corte.
+         * contador: solo lectura fiscal + export.
+         */
+
+        $this->rol('administrador', [
+            ...$this->crud('Producto'),
+            ...$this->crud('Tier'),
+            ...$this->crud('Combo'),
+            ...$this->crud('ComboEspecial'),
+            ...$this->crud('Cliente'),
+            ...$this->crud('Compra'),
+            ...$this->lectura('Venta'), // las ventas nacen del POS y no se editan
+            'ViewAny:Cai', 'View:Cai', 'Create:Cai', 'Update:Cai', // sin Delete: un rango CAI no se borra
+            'ViewAny:CorteCaja', 'View:CorteCaja', 'Update:CorteCaja', // Update = acción "corregir"
+            'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',
+            'ViewAny:PeriodoFiscal', 'View:PeriodoFiscal', 'Create:PeriodoFiscal', 'Update:PeriodoFiscal',
+            'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina', 'View:MenuDelDia',
+            'View:DeclaracionIsvMensual', 'View:LibrosFiscales', 'View:DatosEmpresaPage',
+            ...self::PERMISOS_EXTRA,
+        ]);
 
         $this->rol('gerente', [
-            ...$this->paraRecurso('producto'),
-            ...$this->soloLectura('venta'),
-            ...$this->soloLectura('factura'),
-            ...$this->soloLectura('cai'),
-            ...$this->soloLectura('corte_caja'),
-            'ExportVentas',
-            'VerCortesTodos',
-            'AbrirTurno',
-            'AnularFactura', // decisión de Mauricio (2026-07-03): el gerente también anula
+            ...$this->crud('Producto'),
+            ...$this->crud('Tier'),
+            ...$this->crud('Combo'),
+            ...$this->crud('ComboEspecial'),
+            ...$this->crud('Cliente'),
+            ...$this->crud('Compra'),
+            ...$this->lectura('Venta'),
+            ...$this->lectura('Cai'),
+            ...$this->lectura('CorteCaja'), // sin Update: corregir cortes es del administrador
+            'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',
+            ...$this->lectura('PeriodoFiscal'),
+            'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina', 'View:MenuDelDia',
+            'View:DeclaracionIsvMensual', 'View:LibrosFiscales',
+            ...self::PERMISOS_EXTRA, // incluye AnularFactura (decisión 2026-07-03)
         ]);
 
         $this->rol('cajero', [
-            'view_any_venta', 'view_venta', 'create_venta',
-            'view_factura', 'create_factura',
-            'view_corte_caja', 'create_corte_caja',
-            'page_PuntoDeVenta',
+            ...$this->lectura('Venta'),
+            ...$this->lectura('CorteCaja'), // ve su corte; VerCortesTodos amplía a todos
+            'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',
+            'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina',
         ]);
 
         $this->rol('contador', [
-            'view_any_venta', 'view_venta',
-            'view_any_factura', 'view_factura',
+            ...$this->lectura('Venta'),
+            ...$this->lectura('CorteCaja'),
+            ...$this->lectura('Compra'),
+            ...$this->lectura('Cliente'),
+            ...$this->lectura('PeriodoFiscal'),
+            'View:DeclaracionIsvMensual', 'View:LibrosFiscales',
             'ExportVentas',
         ]);
+
+        // Anti lock-out: el super_admin depende de tener TODO en la base.
+        $superAdmin = Role::firstOrCreate(
+            ['name' => Utils::getSuperAdminName()],
+            ['guard_name' => 'web'],
+        );
+        $superAdmin->syncPermissions(Permission::all());
 
         $this->crearUsuariosDePrueba();
     }
 
     private function crearPermisos(): void
     {
-        foreach (self::PERMISOS as $recurso => $acciones) {
-            foreach ($acciones as $accion) {
+        foreach (self::MODELOS as $modelo) {
+            foreach (self::ACCIONES as $accion) {
                 Permission::firstOrCreate(
-                    ['name' => "{$accion}_{$recurso}"],
+                    ['name' => "{$accion}:{$modelo}"],
                     ['guard_name' => 'web'],
                 );
             }
+        }
+
+        foreach (self::PAGINAS as $pagina) {
+            Permission::firstOrCreate(
+                ['name' => "View:{$pagina}"],
+                ['guard_name' => 'web'],
+            );
         }
 
         foreach (self::PERMISOS_EXTRA as $permiso) {
@@ -133,31 +212,27 @@ class RestauranteAccessSeeder extends Seeder
         return $rol;
     }
 
-    /** @return array<int, string> */
-    private function paraRecurso(string $recurso): array
+    /**
+     * CRUD estándar de un Resource administrable.
+     *
+     * @return array<int, string>
+     */
+    private function crud(string $modelo): array
     {
-        return array_map(
-            static fn (string $accion): string => "{$accion}_{$recurso}",
-            self::PERMISOS[$recurso],
-        );
+        return [
+            "ViewAny:{$modelo}", "View:{$modelo}", "Create:{$modelo}",
+            "Update:{$modelo}", "Delete:{$modelo}",
+        ];
     }
 
-    /** @return array<int, string> */
-    private function soloLectura(string $recurso): array
+    /**
+     * Solo lectura de un Resource.
+     *
+     * @return array<int, string>
+     */
+    private function lectura(string $modelo): array
     {
-        return ["view_any_{$recurso}", "view_{$recurso}"];
-    }
-
-    /** @return array<int, string> */
-    private function todasLasPermisos(): array
-    {
-        $todas = [];
-
-        foreach (array_keys(self::PERMISOS) as $recurso) {
-            $todas = [...$todas, ...$this->paraRecurso($recurso)];
-        }
-
-        return [...$todas, ...self::PERMISOS_EXTRA];
+        return ["ViewAny:{$modelo}", "View:{$modelo}"];
     }
 
     private function crearUsuariosDePrueba(): void

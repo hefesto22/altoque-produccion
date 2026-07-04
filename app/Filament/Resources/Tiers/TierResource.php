@@ -6,7 +6,6 @@ namespace App\Filament\Resources\Tiers;
 
 use App\Filament\Resources\Tiers\Pages\ManageTiers;
 use App\Models\Tier;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -39,11 +38,6 @@ class TierResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Menú';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente']);
     }
 
     public static function form(Schema $schema): Schema

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\BrandingSetting;
+use App\Support\Acceso;
 use App\Support\ImageOptimizer;
-use BezhanSalleh\FilamentShield\Support\Utils;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
@@ -144,9 +144,9 @@ class BrandingSettingsPage extends Page
 
     public static function canAccess(): bool
     {
-        $user = auth()->user();
-
-        return $user !== null && method_exists($user, 'hasRole')
-            && $user->hasRole(Utils::getSuperAdminName());
+        // Sin asignar a ningún rol: solo el super_admin (bypass de Acceso).
+        // Si algún día el administrador debe tocar el branding, se le tilda
+        // View:BrandingSettingsPage en la pantalla de Roles.
+        return Acceso::puede('View:BrandingSettingsPage');
     }
 }

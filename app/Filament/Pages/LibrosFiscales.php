@@ -43,7 +43,7 @@ class LibrosFiscales extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador']);
+        return Acceso::puede('View:LibrosFiscales');
     }
 
     public int $anio;

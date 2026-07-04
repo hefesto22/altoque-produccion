@@ -8,7 +8,6 @@ use App\Filament\Resources\Productos\Pages\ManageProductos;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\Producto;
 use App\Models\Tier;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -42,11 +41,6 @@ class ProductoResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Menú';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente']);
     }
 
     /** El catálogo no muestra combos especiales: se administran en su propia pantalla. */

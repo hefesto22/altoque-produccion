@@ -65,7 +65,7 @@ class PuntoDeVenta extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'cajero']);
+        return Acceso::puede('View:PuntoDeVenta');
     }
 
     /** Proteína seleccionada para el plato en construcción. */

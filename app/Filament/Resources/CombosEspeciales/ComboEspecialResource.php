@@ -9,7 +9,6 @@ use App\Filament\Schemas\Components\MontoField;
 use App\Models\ComboEspecial;
 use App\Models\Producto;
 use App\Models\Tier;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -49,11 +48,6 @@ class ComboEspecialResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Menú';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente']);
     }
 
     public static function getEloquentQuery(): Builder

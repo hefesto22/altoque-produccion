@@ -7,7 +7,6 @@ namespace App\Filament\Resources\Clientes;
 use App\Filament\Resources\Clientes\Pages\ManageClientes;
 use App\Filament\Schemas\Components\RTNField;
 use App\Models\Cliente;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -32,11 +31,6 @@ class ClienteResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Facturación';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador']);
     }
 
     public static function form(Schema $schema): Schema

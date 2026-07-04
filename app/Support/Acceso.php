@@ -7,34 +7,16 @@ namespace App\Support;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Helper de acceso por rol para las pantallas del panel. Centraliza la
- * regla "¿el usuario actual tiene alguno de estos roles?" — el
- * super_admin siempre pasa. Evita repartir `hasRole` por todos lados.
+ * Helper de acceso del panel. Toda decisión de acceso pasa por un permiso
+ * de Shield editable en la pantalla de Roles — nunca por listas de roles
+ * hardcodeadas (tieneAlguno() se eliminó en la migración a Shield).
  */
 final class Acceso
 {
     /**
-     * @param array<int, string> $roles
-     */
-    public static function tieneAlguno(array $roles): bool
-    {
-        $user = Auth::user();
-
-        if ($user === null || ! method_exists($user, 'hasAnyRole')) {
-            return false;
-        }
-
-        if ($user->hasRole('super_admin')) {
-            return true;
-        }
-
-        return $user->hasAnyRole($roles);
-    }
-
-    /**
      * ¿El usuario actual tiene este permiso (spatie/Shield)? El super_admin
      * siempre pasa (Shield está con define_via_gate=false, así que el
-     * bypass se resuelve aquí, igual que en tieneAlguno()).
+     * bypass se resuelve aquí).
      *
      * Preferir esto sobre listas de roles hardcodeadas: qué rol puede qué
      * se decide en datos (pantalla de Roles), no en código.

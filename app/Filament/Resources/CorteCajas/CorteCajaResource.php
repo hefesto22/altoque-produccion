@@ -38,11 +38,6 @@ class CorteCajaResource extends Resource
         return 'Caja';
     }
 
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador', 'cajero']);
-    }
-
     public static function canCreate(): bool
     {
         return false;
@@ -87,7 +82,7 @@ class CorteCajaResource extends Resource
                     ->label('Corregir')
                     ->icon('heroicon-o-pencil-square')
                     ->color('warning')
-                    ->visible(fn (CorteCaja $record): bool => $record->estado === 'cerrado' && Acceso::tieneAlguno(['administrador']))
+                    ->visible(fn (CorteCaja $record): bool => $record->estado === 'cerrado' && Acceso::puede('Update:CorteCaja'))
                     ->modalHeading('Corregir corte de caja')
                     ->fillForm(fn (CorteCaja $record): array => [
                         'efectivo_contado' => $record->efectivo_contado,

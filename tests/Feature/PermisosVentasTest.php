@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Producto;
 use App\Models\User;
 use App\Support\Acceso;
 use Database\Seeders\RestauranteAccessSeeder;
@@ -13,10 +14,11 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Frontera de acceso confirmada con Mauricio (2026-07-02):
- * el cajero VE el listado de ventas (reimprimir/verificar) pero NO anula
- * facturas. Anular es permiso explícito (anular_factura), gestionable
- * desde la pantalla de Roles — nunca lista de roles hardcodeada.
+ * Fronteras de acceso confirmadas con Mauricio. Tras la migración a Shield
+ * (2026-07-03) TODO acceso pasa por un permiso `Accion:Modelo` /
+ * `View:Pagina` editable en la pantalla de Roles: policies para los
+ * Resources, canAccess por permiso en las Pages, Acceso::puede en acciones.
+ * Nunca listas de roles hardcodeadas.
  */
 beforeEach(function () {
     // panel_user lo crea Shield en el seeder principal; aquí sembramos solo
@@ -27,19 +29,23 @@ beforeEach(function () {
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 });
 
-it('el cajero puede ver ventas pero no anular facturas', function () {
-    $cajero = User::factory()->create();
-    $cajero->assignRole('cajero');
-    Auth::login($cajero);
+function usuarioConRol(string $rol): User
+{
+    $user = User::factory()->create();
+    $user->assignRole($rol);
 
-    expect(Acceso::puede('view_any_venta'))->toBeTrue()
+    return $user;
+}
+
+it('el cajero puede ver ventas pero no anular facturas', function () {
+    Auth::login(usuarioConRol('cajero'));
+
+    expect(Acceso::puede('ViewAny:Venta'))->toBeTrue()
         ->and(Acceso::puede('AnularFactura'))->toBeFalse();
 });
 
 it('el administrador puede anular facturas', function () {
-    $admin = User::factory()->create();
-    $admin->assignRole('administrador');
-    Auth::login($admin);
+    Auth::login(usuarioConRol('administrador'));
 
     expect(Acceso::puede('AnularFactura'))->toBeTrue();
 });
@@ -47,17 +53,13 @@ it('el administrador puede anular facturas', function () {
 it('el gerente ve ventas y también anula facturas', function () {
     // Decisión de Mauricio (2026-07-03): el gerente supervisa la caja y
     // puede anular; el único que NO anula es el cajero.
-    $gerente = User::factory()->create();
-    $gerente->assignRole('gerente');
-    Auth::login($gerente);
+    Auth::login(usuarioConRol('gerente'));
 
-    expect(Acceso::puede('view_any_venta'))->toBeTrue()
+    expect(Acceso::puede('ViewAny:Venta'))->toBeTrue()
         ->and(Acceso::puede('AnularFactura'))->toBeTrue();
 });
 
 it('el super_admin pasa cualquier permiso sin tenerlo asignado', function () {
-    Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
-
     $root = User::factory()->create();
     $root->assignRole('super_admin');
     Auth::login($root);
@@ -69,21 +71,61 @@ it('el super_admin pasa cualquier permiso sin tenerlo asignado', function () {
 it('sin usuario autenticado no hay permiso alguno', function () {
     Auth::logout();
 
-    expect(Acceso::puede('view_any_venta'))->toBeFalse();
+    expect(Acceso::puede('ViewAny:Venta'))->toBeFalse();
+});
+
+/*
+ * ── Policies de Resources: la matriz del seeder gobierna ─────────────────
+ */
+
+it('el cajero no ve el menú de productos pero el gerente sí lo administra', function () {
+    $cajero = usuarioConRol('cajero');
+    $gerente = usuarioConRol('gerente');
+
+    expect(Gate::forUser($cajero)->denies('viewAny', Producto::class))->toBeTrue()
+        ->and(Gate::forUser($gerente)->allows('viewAny', Producto::class))->toBeTrue()
+        ->and(Gate::forUser($gerente)->allows('create', Producto::class))->toBeTrue();
+});
+
+it('corregir un corte de caja (Update:CorteCaja) es solo del administrador', function () {
+    // La CorteCajaPolicy::update delega 1:1 en este permiso; la acción
+    // "corregir" del Resource lo chequea con Acceso::puede.
+    expect(usuarioConRol('cajero')->can('Update:CorteCaja'))->toBeFalse()
+        ->and(usuarioConRol('gerente')->can('Update:CorteCaja'))->toBeFalse()
+        ->and(usuarioConRol('administrador')->can('Update:CorteCaja'))->toBeTrue();
+});
+
+/*
+ * ── Permisos de página (View:Pagina) ─────────────────────────────────────
+ */
+
+it('el cajero entra al POS pero no al menú del día ni a lo fiscal', function () {
+    Auth::login(usuarioConRol('cajero'));
+
+    expect(Acceso::puede('View:PuntoDeVenta'))->toBeTrue()
+        ->and(Acceso::puede('View:Cocina'))->toBeTrue()
+        ->and(Acceso::puede('View:MenuDelDia'))->toBeFalse()
+        ->and(Acceso::puede('View:LibrosFiscales'))->toBeFalse();
+});
+
+it('el contador ve lo fiscal pero no opera el POS', function () {
+    Auth::login(usuarioConRol('contador'));
+
+    expect(Acceso::puede('View:LibrosFiscales'))->toBeTrue()
+        ->and(Acceso::puede('View:DeclaracionIsvMensual'))->toBeTrue()
+        ->and(Acceso::puede('ExportVentas'))->toBeTrue()
+        ->and(Acceso::puede('View:PuntoDeVenta'))->toBeFalse();
 });
 
 /**
  * El registro de actividad es de auditoría: solo quien tenga
- * ViewAny:Activity (hoy: super_admin vía Shield). La policy del modelo
- * de Spatie se registra a mano en AppServiceProvider — Laravel no la
- * auto-descubre por estar el modelo fuera de App\Models.
+ * ViewAny:Activity (hoy: super_admin, que sincroniza todos los permisos).
+ * La policy del modelo de Spatie se registra a mano en AppServiceProvider —
+ * Laravel no la auto-descubre por estar el modelo fuera de App\Models.
  */
 it('ni el cajero ni el administrador ven el registro de actividad', function () {
-    $cajero = User::factory()->create();
-    $cajero->assignRole('cajero');
-
-    $admin = User::factory()->create();
-    $admin->assignRole('administrador');
+    $cajero = usuarioConRol('cajero');
+    $admin = usuarioConRol('administrador');
 
     expect(Gate::forUser($cajero)->denies('viewAny', Activity::class))->toBeTrue()
         ->and(Gate::forUser($admin)->denies('viewAny', Activity::class))->toBeTrue();
@@ -94,19 +136,13 @@ it('ni el cajero ni el administrador ven el registro de actividad', function () 
  * El cajero no abre su propio turno; se lo abren desde Cortes De Caja.
  */
 it('solo gerente y administrador pueden abrir turnos de caja', function () {
-    $cajero = User::factory()->create();
-    $cajero->assignRole('cajero');
-    Auth::login($cajero);
+    Auth::login(usuarioConRol('cajero'));
     expect(Acceso::puede('AbrirTurno'))->toBeFalse();
 
-    $gerente = User::factory()->create();
-    $gerente->assignRole('gerente');
-    Auth::login($gerente);
+    Auth::login(usuarioConRol('gerente'));
     expect(Acceso::puede('AbrirTurno'))->toBeTrue();
 
-    $admin = User::factory()->create();
-    $admin->assignRole('administrador');
-    Auth::login($admin);
+    Auth::login(usuarioConRol('administrador'));
     expect(Acceso::puede('AbrirTurno'))->toBeTrue();
 });
 

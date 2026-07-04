@@ -45,7 +45,7 @@ class MenuDelDia extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente']);
+        return Acceso::puede('View:MenuDelDia');
     }
 
     public string $fecha;

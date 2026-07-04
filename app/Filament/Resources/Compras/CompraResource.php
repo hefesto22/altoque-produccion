@@ -7,7 +7,6 @@ namespace App\Filament\Resources\Compras;
 use App\Filament\Resources\Compras\Pages\ManageCompras;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\Compra;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -36,11 +35,6 @@ class CompraResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Fiscal';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'contador']);
     }
 
     public static function form(Schema $schema): Schema

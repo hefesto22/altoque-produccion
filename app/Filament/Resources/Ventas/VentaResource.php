@@ -39,13 +39,6 @@ class VentaResource extends Resource
         return 'Ventas';
     }
 
-    public static function canViewAny(): bool
-    {
-        // Por permiso, no por lista de roles: quitarle view_any_venta a un
-        // rol desde la pantalla de Roles le oculta esta sección sin tocar código.
-        return Acceso::puede('view_any_venta');
-    }
-
     /** Las ventas se registran desde el POS, no desde el CRUD. */
     public static function canCreate(): bool
     {

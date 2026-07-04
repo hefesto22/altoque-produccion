@@ -44,7 +44,7 @@ class Cocina extends Page
 
     public static function canAccess(): bool
     {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'cajero']);
+        return Acceso::puede('View:Cocina');
     }
 
     /** @return array<int, Comanda> */

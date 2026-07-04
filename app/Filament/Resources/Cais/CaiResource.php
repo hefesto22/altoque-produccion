@@ -6,7 +6,6 @@ namespace App\Filament\Resources\Cais;
 
 use App\Filament\Resources\Cais\Pages\ManageCais;
 use App\Models\Cai;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -36,11 +35,6 @@ class CaiResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Facturación';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador']);
     }
 
     public static function form(Schema $schema): Schema

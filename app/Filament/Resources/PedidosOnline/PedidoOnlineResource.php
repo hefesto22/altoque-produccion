@@ -7,7 +7,6 @@ namespace App\Filament\Resources\PedidosOnline;
 use App\Filament\Resources\PedidosOnline\Pages\ListPedidosOnline;
 use App\Models\PedidoOnline;
 use App\Services\Pedidos\PedidoOnlineService;
-use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -35,11 +34,6 @@ class PedidoOnlineResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return 'Cocina';
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Acceso::tieneAlguno(['administrador', 'gerente', 'cajero']);
     }
 
     /** La gestión diaria se hace en la página de tarjetas "Pedidos Online". */
