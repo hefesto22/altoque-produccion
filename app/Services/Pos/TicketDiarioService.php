@@ -7,8 +7,11 @@ namespace App\Services\Pos;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Asigna el número de orden interno (ticket) por tipo, con reinicio diario:
- * LOC-1, LL-1, DOM-1… Sirve para que cocina y caja sepan el orden del día.
+ * Asigna el número de orden interno (ticket) con reinicio diario. La
+ * secuencia es ÚNICA para todos los tipos de orden (pedido del restaurante,
+ * 2026-07-03): LOC-1, LL-2, LOC-3, DOM-4… El prefijo identifica el tipo,
+ * pero el número corre parejo — así cocina despacha en el orden real de
+ * llegada sin comparar tres numeraciones.
  *
  * NO es el correlativo fiscal SAR (ese va con CAI en la factura). Este es
  * control interno y puede tener huecos por rollback sin consecuencia legal.
@@ -19,6 +22,13 @@ use Illuminate\Support\Facades\DB;
  */
 final class TicketDiarioService
 {
+    /**
+     * Fila única del contador diario compartido. La columna `tipo` quedó de
+     * la numeración por tipo anterior; se fija a este valor para reutilizar
+     * la unique (fecha, tipo) sin migración.
+     */
+    private const CONTADOR_GLOBAL = 'global';
+
     /** @var array<string, string> */
     private const PREFIJOS = [
         'local'     => 'LOC',
@@ -26,7 +36,7 @@ final class TicketDiarioService
         'domicilio' => 'DOM',
     ];
 
-    /** Devuelve el siguiente número formateado para el tipo y el día de hoy. */
+    /** Devuelve el siguiente número del día (secuencia compartida) con el prefijo del tipo. */
     public function siguiente(string $tipoOrden): string
     {
         $prefijo = self::PREFIJOS[$tipoOrden] ?? 'LOC';
@@ -35,7 +45,7 @@ final class TicketDiarioService
             'INSERT INTO contador_tickets (fecha, tipo, ultimo) VALUES (?, ?, 1)
              ON CONFLICT (fecha, tipo) DO UPDATE SET ultimo = contador_tickets.ultimo + 1
              RETURNING ultimo',
-            [now()->toDateString(), $tipoOrden],
+            [now()->toDateString(), self::CONTADOR_GLOBAL],
         )->ultimo;
 
         return "{$prefijo}-{$n}";

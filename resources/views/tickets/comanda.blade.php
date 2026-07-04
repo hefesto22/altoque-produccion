@@ -34,7 +34,17 @@
 {{-- Auto-print solo si se abre directo (el POS lo imprime vía iframe; sin
      este guard saldrían dos diálogos de impresión). --}}
 <body onload="if (window.self === window.top) window.print()">
-    <div class="center grande">{{ $comanda->venta?->numero_orden ?? $comanda->numero }}</div>
+    @php($nombreCliente = trim((string) $comanda->cliente_nombre))
+    @if ($nombreCliente !== '')
+        {{-- Número a la izquierda y NOMBRE en la esquina superior derecha:
+             la cocina identifica de quién es el pedido de un vistazo. --}}
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:4px;">
+            <div class="grande">{{ $comanda->venta?->numero_orden ?? $comanda->numero }}</div>
+            <div style="font-size:15px; font-weight:700; text-transform:uppercase; text-align:right; max-width:42mm; word-break:break-word;">{{ mb_strtoupper($nombreCliente) }}</div>
+        </div>
+    @else
+        <div class="center grande">{{ $comanda->venta?->numero_orden ?? $comanda->numero }}</div>
+    @endif
     <div class="center medio">{{ mb_strtoupper($comanda->tipoLabel()) }}</div>
     <div class="center">Comanda {{ $comanda->numero }} · {{ $comanda->created_at->format('d/m/Y h:i A') }}</div>
 
@@ -55,9 +65,8 @@
         @endforeach
     </table>
 
-    @if ($comanda->cliente_nombre || $comanda->cliente_telefono || $comanda->cliente_direccion)
+    @if ($comanda->cliente_telefono || $comanda->cliente_direccion)
         <div class="sep"></div>
-        @if ($comanda->cliente_nombre)<div>CLIENTE: {{ mb_strtoupper($comanda->cliente_nombre) }}</div>@endif
         @if ($comanda->cliente_telefono)<div>TEL: {{ $comanda->cliente_telefono }}</div>@endif
         @if ($comanda->cliente_direccion)<div>DIR: {{ mb_strtoupper($comanda->cliente_direccion) }}</div>@endif
     @endif

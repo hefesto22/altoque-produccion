@@ -46,6 +46,7 @@
                 ['ISV del turno', 'L. '.number_format($totalIsv, 2)],
                 ['Fondo inicial (efectivo)', 'L. '.number_format($fondo, 2)],
                 ['Saldo inicial terminal POS', 'L. '.number_format((float) $corte->fondo_terminal, 2)],
+                ['Nuevo saldo terminal POS', 'L. '.number_format($cerrado ? (float) $corte->terminal_final : (float) $corte->fondo_terminal + $tarjeta + $transfer, 2)],
                 ['Efectivo esperado', 'L. '.number_format($esperado, 2)],
             ];
         @endphp

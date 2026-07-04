@@ -40,15 +40,22 @@
         </div>
     </div>
 
-    @if ($tipoServicio === 'llevar')
-        <div style="margin-bottom:1.25rem;">
-            <x-filament::section>
-                <x-slot name="heading">Para llevar — el cliente lo recoge</x-slot>
-                <div style="max-width:22rem;">
-                    <label style="display:block; font-size:.78rem; font-weight:600; margin-bottom:.2rem;">Nombre * (para llamarlo cuando esté listo)</label>
-                    <x-filament::input.wrapper><x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" /></x-filament::input.wrapper>
-                </div>
-            </x-filament::section>
+    {{-- Nombre del cliente (local y llevar): tarjeta compacta en línea, sin
+         sección completa — un dato no merece medio metro de pantalla. --}}
+    @if (in_array($tipoServicio, ['llevar', 'local'], true))
+        <div style="display:flex; align-items:center; gap:.8rem; margin-bottom:1.25rem; padding:.6rem .9rem; max-width:36rem;
+                    border:1px solid rgba(128,128,128,.25); border-radius:.75rem; background:rgba(128,128,128,.06);">
+            <x-filament::icon icon="heroicon-o-user" style="width:1.4rem; height:1.4rem; opacity:.65; flex-shrink:0;" />
+            <div style="flex:1;">
+                <label style="display:block; font-size:.7rem; font-weight:600; letter-spacing:.02em; opacity:.75; margin-bottom:.2rem;">
+                    {{ $tipoServicio === 'llevar'
+                        ? 'CLIENTE * — PARA LLAMARLO CUANDO ESTÉ LISTO'
+                        : 'CLIENTE — OBLIGATORIO AL MANDAR A COCINA (SALE EN LA COMANDA)' }}
+                </label>
+                <x-filament::input.wrapper>
+                    <x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" />
+                </x-filament::input.wrapper>
+            </div>
         </div>
     @endif
 
@@ -86,7 +93,16 @@
     <div style="display:grid; gap:1.5rem; grid-template-columns:minmax(0,2fr) minmax(0,1fr);">
 
         {{-- ─────────── MENÚ ─────────── --}}
-        <div style="display:flex; flex-direction:column; gap:1.5rem;">
+        {{-- El buscador es global: filtra platillos, proteínas, complementos,
+             bebidas y extras en el navegador (Alpine), sin pegarle al server.
+             El x-data vive en este div plano — nunca sobre un componente de
+             Filament, que trae su propio x-data y pisaría el nuestro. --}}
+        <div style="display:flex; flex-direction:column; gap:1.5rem;"
+            x-data="{
+                filtro: '',
+                norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+                ver(n) { return this.filtro === '' || this.norm(n).includes(this.norm(this.filtro)); },
+            }">
 
             {{-- Pedidos pendientes de pago: botón que se despliega, para no ocupar espacio --}}
             {{-- wire:poll: pendientes creados por otra caja o por pedidos online
@@ -144,28 +160,29 @@
             @endif
             </div>
 
-            {{-- Platillos completos: cobro de un toque a precio fijo.
-                 Buscador Alpine (filtra en el navegador, sin tocar el server):
-                 con decenas de platillos, teclear es más rápido que buscar a ojo. --}}
+            {{-- Buscador global del menú: barra completa, al ancho del menú,
+                 con botón para limpiar (solo aparece cuando hay texto). --}}
+            <div style="display:flex; align-items:center; gap:.6rem;">
+                <div style="flex:1;">
+                    <x-filament::input.wrapper prefix-icon="heroicon-o-magnifying-glass" style="width:100%;">
+                        <x-filament::input type="search" x-model="filtro"
+                            placeholder="Buscar en todo el menú — platillos, proteínas, complementos, bebidas…"
+                            style="width:100%; font-size:1rem; padding-top:.6rem; padding-bottom:.6rem;" />
+                    </x-filament::input.wrapper>
+                </div>
+                <x-filament::button color="gray" outlined x-show="filtro !== ''" x-on:click="filtro = ''" style="white-space:nowrap;">
+                    Limpiar ✕
+                </x-filament::button>
+            </div>
+
+            {{-- Platillos completos: cobro de un toque a precio fijo. --}}
             @if (count($combos))
-                <x-filament::section
-                    x-data="{
-                        filtroPlatillo: '',
-                        norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
-                        verPlatillo(n) { return this.filtroPlatillo === '' || this.norm(n).includes(this.norm(this.filtroPlatillo)); },
-                    }">
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($combos)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">⭐ Platillos completos</x-slot>
-                    <x-slot name="afterHeader">
-                        <div style="min-width:16rem;">
-                            <x-filament::input.wrapper prefix-icon="heroicon-o-magnifying-glass">
-                                <x-filament::input type="search" x-model="filtroPlatillo" placeholder="Buscar platillo…" />
-                            </x-filament::input.wrapper>
-                        </div>
-                    </x-slot>
                     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                         @foreach ($combos as $combo)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="warning"
-                                x-show="verPlatillo(@js($combo['nombre']))"
+                                x-show="ver({{ \Illuminate\Support\Js::from($combo['nombre']) }})"
                                 wire:click="personalizarPlatillo({{ $combo['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
                                     <span style="font-weight:600;">{{ $combo['nombre'] }}</span>
@@ -177,11 +194,12 @@
                 </x-filament::section>
             @endif
 
-            <x-filament::section>
+            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($proteinas)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">1 · Proteína</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                     @foreach ($proteinas as $p)
                         <x-filament::button style="width:100%; justify-content:flex-start;"
+                            x-show="ver({{ \Illuminate\Support\Js::from($p['nombre']) }})"
                             :color="$proteinaId === $p['id'] ? 'primary' : 'gray'"
                             wire:click="seleccionarProteina({{ $p['id'] }})">
                             <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
@@ -239,7 +257,7 @@
                 </div>
             @endif
 
-            <x-filament::section>
+            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($complementos)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">2 · Complementos</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                     @foreach ($complementos as $c)
@@ -248,6 +266,7 @@
                         {{-- TODA la tarjeta agrega el complemento. Los botones internos
                              (⚠, −, + Solo) usan .stop para no disparar el agregado. --}}
                         <div wire:click="agregarComplemento({{ $c['id'] }})"
+                            x-show="ver({{ \Illuminate\Support\Js::from($c['nombre']) }})"
                             style="position:relative; border:1.5px solid {{ $n > 0 ? '#f59e0b' : 'rgba(128,128,128,.22)' }}; border-radius:.6rem; padding:.5rem .55rem; background:{{ $n > 0 ? 'rgba(245,158,11,.08)' : 'transparent' }}; cursor:pointer;">
                             <div style="padding-right:1.4rem;">
                                 <span style="display:block; font-weight:600; font-size:.88rem;">{{ $c['nombre'] }}</span>
@@ -278,11 +297,12 @@
             </x-filament::section>
 
             <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.5rem;">
-                <x-filament::section>
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($bebidas)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Bebidas (ISV)</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem;">
                         @forelse ($bebidas as $b)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
+                                x-show="ver({{ \Illuminate\Support\Js::from($b['nombre']) }})"
                                 wire:click="agregarProducto({{ $b['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
                                     <span style="font-weight:600;">{{ $b['nombre'] }}</span>
@@ -295,11 +315,12 @@
                     </div>
                 </x-filament::section>
 
-                <x-filament::section>
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($extras)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Extras</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem;">
                         @forelse ($extras as $e)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
+                                x-show="ver({{ \Illuminate\Support\Js::from($e['nombre']) }})"
                                 wire:click="agregarProducto({{ $e['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
                                     <span style="font-weight:600;">{{ $e['nombre'] }}</span>
@@ -545,6 +566,8 @@
                         <div style="display:flex; justify-content:space-between; opacity:.75;"><span>· Transferencia</span><span>L. {{ number_format($rt['transferencia'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between;"><span>Fondo inicial</span><span>L. {{ number_format($rt['fondo'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px solid rgba(128,128,128,.25); padding-top:.3rem;"><span>Efectivo esperado en caja</span><span>L. {{ number_format($rt['esperado'], 2) }}</span></div>
+                        <div style="display:flex; justify-content:space-between; font-weight:700;"><span>Nuevo saldo en terminal POS</span><span>L. {{ number_format($rt['terminal_final'], 2) }}</span></div>
+                        <div style="display:flex; justify-content:space-between; opacity:.6; font-size:.8rem;"><span>(Saldo inicial L. {{ number_format($rt['terminal_inicial'], 2) }} + tarjeta + transferencia)</span><span></span></div>
 
                         @if (count($rt['tarjeta_banco']) || count($rt['transfer_banco']))
                             <div style="border-top:1px dashed rgba(128,128,128,.25); margin-top:.3rem; padding-top:.3rem;">

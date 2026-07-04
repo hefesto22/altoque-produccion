@@ -66,6 +66,13 @@ final class CorteCajaService
             $totalEfectivo = (float) ($fila->efectivo ?? 0);
             $esperado = (float) $corte->fondo_inicial + $totalEfectivo;
 
+            // Nuevo saldo del terminal POS: lo que traía al abrir + lo que
+            // entró por tarjeta y transferencia en el turno.
+            $terminalFinal = round(
+                (float) $corte->fondo_terminal + (float) ($fila->tarjeta ?? 0) + (float) ($fila->transferencia ?? 0),
+                2,
+            );
+
             $corte->update([
                 'estado'              => 'cerrado',
                 'cerrado_at'          => now(),
@@ -75,6 +82,7 @@ final class CorteCajaService
                 'total_efectivo'      => $totalEfectivo,
                 'total_tarjeta'       => (float) ($fila->tarjeta ?? 0),
                 'total_transferencia' => (float) ($fila->transferencia ?? 0),
+                'terminal_final'      => $terminalFinal,
                 'efectivo_contado'    => $efectivoContado,
                 'diferencia'          => round($efectivoContado - $esperado, 2),
                 'notas'               => $notas,

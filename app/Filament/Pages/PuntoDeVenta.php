@@ -298,15 +298,17 @@ class PuntoDeVenta extends Page
 
     /**
      * @return array{ventas: int, total: float, efectivo: float, tarjeta: float, transferencia: float,
-     *     esperado: float, fondo: float, tarjeta_banco: array<int, array{banco: string, total: float}>,
+     *     esperado: float, fondo: float, terminal_inicial: float, terminal_final: float,
+     *     tarjeta_banco: array<int, array{banco: string, total: float}>,
      *     transfer_banco: array<int, array{banco: string, total: float}>, dom_efectivo: float, dom_viaje_transfer: float}
      */
     public function getResumenTurnoProperty(): array
     {
         $vacio = [
-            'ventas'       => 0, 'total' => 0, 'efectivo' => 0, 'tarjeta' => 0, 'transferencia' => 0,
-            'esperado'     => 0, 'fondo' => 0, 'tarjeta_banco' => [], 'transfer_banco' => [],
-            'dom_efectivo' => 0, 'dom_viaje_transfer' => 0,
+            'ventas'        => 0, 'total' => 0, 'efectivo' => 0, 'tarjeta' => 0, 'transferencia' => 0,
+            'esperado'      => 0, 'fondo' => 0, 'terminal_inicial' => 0, 'terminal_final' => 0,
+            'tarjeta_banco' => [], 'transfer_banco' => [],
+            'dom_efectivo'  => 0, 'dom_viaje_transfer' => 0,
         ];
 
         $corte = $this->corteId !== null ? CorteCaja::find($this->corteId) : null;
@@ -342,6 +344,8 @@ class PuntoDeVenta extends Page
             'transferencia'      => (float) $fila->tr,
             'fondo'              => (float) $corte->fondo_inicial,
             'esperado'           => (float) $corte->fondo_inicial + $efectivo,
+            'terminal_inicial'   => (float) $corte->fondo_terminal,
+            'terminal_final'     => round((float) $corte->fondo_terminal + (float) $fila->ta + (float) $fila->tr, 2),
             'tarjeta_banco'      => $porBanco('tarjeta'),
             'transfer_banco'     => $porBanco('transferencia'),
             'dom_efectivo'       => (float) $fila->dom_ef,
@@ -771,10 +775,20 @@ class PuntoDeVenta extends Page
      *  - llevar:    nombre obligatorio (para llamarlo al recoger).
      *  - domicilio: nombre y teléfono obligatorios; dirección e identidad/RTN
      *               opcionales (la dirección se puede coordinar por teléfono).
-     *  - local:     sin datos.
+     *  - local:     nombre obligatorio SOLO si el pedido va a cocina
+     *               ($paraCocina) — sale en la esquina de la comanda para
+     *               identificar de quién es. El cobro directo no lo exige.
      */
-    private function domicilioValido(): bool
+    private function domicilioValido(bool $paraCocina = false): bool
     {
+        if ($paraCocina && $this->tipoServicio === 'local' && trim($this->domNombre) === '') {
+            Notification::make()->title('Falta el nombre del cliente')
+                ->body('Para mandar a cocina, poné el nombre: sale en la comanda para identificar el pedido.')
+                ->warning()->send();
+
+            return false;
+        }
+
         if ($this->tipoServicio === 'llevar' && trim($this->domNombre) === '') {
             Notification::make()->title('Falta el nombre del cliente')
                 ->body('Para llevar, el nombre es obligatorio (para llamarlo cuando esté listo).')
@@ -945,7 +959,7 @@ class PuntoDeVenta extends Page
      */
     public function pagarDespues(): void
     {
-        if ($this->carrito === [] || ! $this->turnoAbierto || ! $this->domicilioValido()) {
+        if ($this->carrito === [] || ! $this->turnoAbierto || ! $this->domicilioValido(paraCocina: true)) {
             if ($this->carrito === []) {
                 Notification::make()->title('El carrito está vacío')->warning()->send();
             } elseif (! $this->turnoAbierto) {

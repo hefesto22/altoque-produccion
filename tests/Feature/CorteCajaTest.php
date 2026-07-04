@@ -44,7 +44,7 @@ it('cierra el turno y concilia el efectivo (faltante/sobrante)', function () {
     $ventas = app(VentaService::class);
     $caja = app(CorteCajaService::class);
 
-    $corte = $caja->abrir($cajero->id, 200.00);
+    $corte = $caja->abrir($cajero->id, 200.00, fondoTerminal: 50.00);
 
     // Una venta en efectivo (100) y otra en tarjeta (100).
     $ventas->registrarRecibo([new LineaVenta($producto->id, 'A', 100.00, 1, gravaIsv: false)], $cajero->id, 'efectivo');
@@ -57,7 +57,9 @@ it('cierra el turno y concilia el efectivo (faltante/sobrante)', function () {
         ->and((float) $cerrado->total_ventas)->toBe(200.00)
         ->and((float) $cerrado->total_efectivo)->toBe(100.00)
         ->and((float) $cerrado->total_tarjeta)->toBe(100.00)
-        ->and((float) $cerrado->diferencia)->toBe(10.00);
+        ->and((float) $cerrado->diferencia)->toBe(10.00)
+        // Nuevo saldo del terminal POS: 50 inicial + 100 tarjeta + 0 transferencia.
+        ->and((float) $cerrado->terminal_final)->toBe(150.00);
 });
 
 it('al cerrar el turno se vacía la pantalla de cocina', function () {
