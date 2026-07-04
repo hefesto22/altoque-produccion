@@ -40,7 +40,7 @@ class VerificacionController extends Controller
                 'factura_concepto' => $e->factura_concepto,
             ],
             // Mismo criterio que el PDF: por factura si se definió; si no, default de la empresa.
-            'detallada'    => $factura?->detallada ?? $e->factura_detallada,
+            'detallada'    => $factura->detallada ?? $e->factura_detallada,
             'verificadaAt' => now(),
         ]);
     }
