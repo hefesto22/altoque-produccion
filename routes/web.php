@@ -46,6 +46,11 @@ Route::get('/facturas/{factura}/ticket', [FacturaPdfController::class, 'ticket']
     ->name('facturas.ticket')
     ->middleware('signed');
 
+// Factura + comanda en un solo documento imprimible — FIRMADA.
+Route::get('/facturas/{factura}/documentos', [FacturaPdfController::class, 'documentos'])
+    ->name('facturas.documentos')
+    ->middleware('signed');
+
 // Ticket de comanda (80mm, HTML) — ruta FIRMADA: lo imprime el POS para cocina.
 Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'])
     ->name('comandas.ticket')

@@ -106,6 +106,16 @@ class Venta extends Model
         return $this->hasOne(Factura::class);
     }
 
+    /**
+     * Comanda de cocina de esta venta (si la orden fue a cocina).
+     *
+     * @return HasOne<Comanda, $this>
+     */
+    public function comanda(): HasOne
+    {
+        return $this->hasOne(Comanda::class)->latestOfMany();
+    }
+
     public function esFactura(): bool
     {
         return $this->tipo === 'factura';

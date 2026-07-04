@@ -28,6 +28,15 @@ Artisan::command('inspire', function () {
 | corre `schedule:run` cada minuto automáticamente.)
 */
 
+// ─── Caja ──────────────────────────────────────────────────────────────
+// Cierre automático de turnos que quedaron abiertos: a las 11:59 PM el
+// corte se cierra sin efectivo contado y queda "por revisar" en Cortes
+// De Caja (lo corrige un administrador con la acción Corregir).
+Schedule::command('caja:cierre-automatico')
+    ->dailyAt('23:59')
+    ->onOneServer()
+    ->name('caja-cierre-automatico');
+
 // ─── Backups ───────────────────────────────────────────────────────────
 // Backup completo (DB + files) diario a las 02:00 a.m. hora Honduras.
 Schedule::command('backup:run')

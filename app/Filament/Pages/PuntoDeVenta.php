@@ -162,10 +162,10 @@ class PuntoDeVenta extends Page
     /** Pendiente al que se le está eligiendo banco para cobrar por transferencia. */
     public ?int $cobrandoTransferId = null;
 
-    /** Banco elegido para el cobro (tarjeta/transferencia) de un pendiente. */
+    /** Banco elegido para el cobro por transferencia de un pendiente. */
     public string $cobroBanco = '';
 
-    /** Forma de pago (tarjeta/transferencia) que se está cobrando con banco. */
+    /** Forma de pago que se está cobrando con banco (solo transferencia). */
     public string $cobroFormaPendiente = '';
 
     /** @var array<int, int> ids de productos con alerta de reposición activa */
@@ -974,7 +974,7 @@ class PuntoDeVenta extends Page
             (int) Auth::id(),
             $this->tipoServicio,
             $this->formaPago,
-            in_array($this->formaPago, ['tarjeta', 'transferencia'], true) ? $this->banco : null,
+            $this->formaPago === 'transferencia' ? $this->banco : null,
             $this->costoViajeNumerico(),
             trim($this->domNombre) !== '' ? mb_strtoupper(trim($this->domNombre)) : null,
         );
@@ -1007,13 +1007,13 @@ class PuntoDeVenta extends Page
             ->all();
     }
 
-    /** Cobra un pendiente a Consumidor Final (sin RTN) en efectivo (sin banco). */
+    /** Cobra un pendiente a Consumidor Final (sin RTN) sin banco: efectivo o tarjeta. */
     public function cobrarPendienteCF(int $ventaId, string $formaPago): void
     {
         $this->ejecutarCobroPendiente($ventaId, null, 'Consumidor Final', $formaPago);
     }
 
-    /** Abre el selector de banco para cobrar un pendiente con tarjeta o transferencia. */
+    /** Abre el selector de banco para cobrar un pendiente por transferencia. */
     public function pedirBancoPendiente(int $ventaId, string $forma): void
     {
         $this->cobrandoTransferId = $ventaId;
@@ -1028,7 +1028,7 @@ class PuntoDeVenta extends Page
         $this->cobroBanco = '';
     }
 
-    /** Confirma el cobro (tarjeta o transferencia) con el banco elegido. */
+    /** Confirma el cobro por transferencia con el banco elegido. */
     public function confirmarTransferenciaPendiente(): void
     {
         if ($this->cobrandoTransferId === null) {
@@ -1075,7 +1075,7 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        if (in_array($formaPago, ['tarjeta', 'transferencia'], true) && trim((string) $banco) === '') {
+        if ($formaPago === 'transferencia' && trim((string) $banco) === '') {
             Notification::make()->title('Elegí el banco')->warning()->send();
 
             return false;
@@ -1089,7 +1089,7 @@ class PuntoDeVenta extends Page
                 $nombre,
                 $formaPago,
                 $detallada,
-                in_array($formaPago, ['tarjeta', 'transferencia'], true) ? $banco : null,
+                $formaPago === 'transferencia' ? $banco : null,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->send();
@@ -1237,7 +1237,7 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        if (in_array($this->formaPago, ['tarjeta', 'transferencia'], true) && trim($this->banco) === '') {
+        if ($this->formaPago === 'transferencia' && trim($this->banco) === '') {
             Notification::make()->title('Elegí el banco')->warning()->send();
 
             return false;
@@ -1251,7 +1251,7 @@ class PuntoDeVenta extends Page
                 $nombre,
                 $this->formaPago,
                 $detallada,
-                in_array($this->formaPago, ['tarjeta', 'transferencia'], true) ? $this->banco : null,
+                $this->formaPago === 'transferencia' ? $this->banco : null,
                 $this->tipoServicio,
                 $this->costoViajeNumerico(),
             );
@@ -1265,8 +1265,16 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        // Imprime directo (iframe oculto), sin abrir pestaña nueva.
-        $this->dispatch('imprimir-factura', url: $factura->urlTicket()); // HTML: impresión instantánea, sin Chromium
+        // Cocina necesita su ticket físico: si la orden genera comanda
+        // (llevar/domicilio), factura + comanda salen en UNA sola ventana
+        // de impresión como documento de dos páginas (la térmica corta
+        // entre una y otra). En el local solo sale la factura.
+        $comanda = $this->enviarAComanda($factura->venta);
+
+        $this->dispatch(
+            'imprimir-factura',
+            url: $comanda !== null ? $factura->urlDocumentos() : $factura->urlTicket(),
+        );
 
         Notification::make()
             ->title("Factura emitida · Orden {$factura->venta->numero_orden}")
@@ -1282,7 +1290,6 @@ class PuntoDeVenta extends Page
             ->success()
             ->send();
 
-        $this->enviarAComanda($factura->venta);
         $this->limpiar();
 
         return true;

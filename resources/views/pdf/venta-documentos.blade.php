@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
+    {{-- Documento combinado: FACTURA + COMANDA en una sola impresión.
+         Un solo diálogo; el salto de página separa los dos tickets y la
+         térmica corta entre uno y otro. --}}
     <style>
+
         /* Impresión HTML directa (ticket de caja): mismo 80mm que el PDF.
            Browsershot fija el tamaño por parámetro; el print del navegador
            lo toma de @page. */
@@ -30,9 +34,34 @@
         .tot td { padding: 0; }
         .badge { display: inline-block; border: 1px solid #000; padding: 0 4px; font-weight: bold; }
         .anulada { color: #b00; border: 2px solid #b00; padding: 3px; text-align: center; font-weight: bold; margin: 5px 0; letter-spacing: 1px; }
+        /* ── Comanda (scopeada para no pisar los estilos de la factura) ── */
+        .salto { page-break-after: always; }
+        .comanda { width: 72mm; font-size: 12px; line-height: 1.35; font-family: 'Courier New', monospace; }
+        .comanda .center { text-align: center; }
+        .comanda .grande { font-size: 20px; font-weight: 700; }
+        .comanda .medio { font-size: 14px; font-weight: 700; }
+        .comanda .sep { border-top: 1px dashed #000; margin: 6px 0; }
+        .comanda table { width: 100%; border-collapse: collapse; }
+        .comanda td.cant { width: 28px; font-weight: 700; vertical-align: top; font-size: 14px; }
+        .comanda td.item { font-size: 14px; font-weight: 700; text-transform: uppercase; }
+        .comanda .detalle { font-size: 11px; padding-left: 28px; }
+        .comanda .nota { font-size: 12px; font-weight: 700; padding-left: 28px; }
+        .comanda .banner {
+            border: 2px solid #000; text-align: center; font-weight: 700;
+            font-size: 14px; padding: 4px; margin-top: 6px;
+        }
     </style>
 </head>
-<body>
+{{-- Auto-print solo si se abre directo (el POS imprime vía iframe). --}}
+<body onload="if (window.self === window.top) window.print()">
+<div class="doc">
 @include('pdf.partials.factura-contenido')
+</div>
+
+<div class="salto"></div>
+
+<div class="comanda">
+@include('tickets.partials.comanda-contenido')
+</div>
 </body>
 </html>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Facturacion;
 
 use App\Models\BrandingSetting;
+use App\Models\Comanda;
 use App\Models\EmpresaSetting;
 use App\Models\Factura;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,24 @@ final class FacturaPdfService
 
     public function html(Factura $factura): string
     {
+        return view('pdf.factura', $this->datosVista($factura))->render();
+    }
+
+    /**
+     * Factura + comanda en UN solo documento (dos páginas con salto):
+     * una sola ventana de impresión en caja; la térmica corta entre tickets.
+     */
+    public function htmlConComanda(Factura $factura, Comanda $comanda): string
+    {
+        return view('pdf.venta-documentos', [
+            ...$this->datosVista($factura),
+            'comanda' => $comanda,
+        ])->render();
+    }
+
+    /** @return array<string, mixed> Datos comunes de las vistas de factura. */
+    private function datosVista(Factura $factura): array
+    {
         $factura->loadMissing(['venta.items', 'cai']);
 
         $e = EmpresaSetting::actual();
@@ -39,7 +58,7 @@ final class FacturaPdfService
             'factura_concepto' => $e->factura_concepto,
         ];
 
-        return view('pdf.factura', [
+        return [
             'f'       => $factura,
             'empresa' => $empresa,
             'logo'    => $this->logoDataUri(),
@@ -48,7 +67,7 @@ final class FacturaPdfService
             'qr'        => $factura->hash_verificacion !== null
                 ? $this->qr->dataUri($factura->urlVerificacion(), 150)
                 : null,
-        ])->render();
+        ];
     }
 
     /** Logo de la empresa como data URI (se embebe en el PDF, sin red). */

@@ -80,3 +80,36 @@ it('al cerrar el turno se vacía la pantalla de cocina', function () {
 
     expect($comanda->fresh()->estado)->toBe('entregado'); // salió de cocina
 });
+
+it('el cierre automático deja el corte cerrado y pendiente de revisión', function () {
+    $cajero = User::factory()->create();
+    $producto = Producto::factory()->proteina()->create(['precio' => 100]);
+
+    $corte = app(CorteCajaService::class)->abrir($cajero->id, 500.00, fondoTerminal: 100.00);
+    app(VentaService::class)->registrarRecibo(
+        [new LineaVenta($producto->id, 'A', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        'tarjeta',
+    );
+
+    $this->artisan('caja:cierre-automatico')->assertSuccessful();
+
+    $corte->refresh();
+    expect($corte->estado)->toBe('cerrado')
+        ->and($corte->cierre_automatico)->toBeTrue()
+        ->and($corte->efectivo_contado)->toBeNull()   // nadie contó la gaveta
+        ->and($corte->diferencia)->toBeNull()          // no hay contra qué conciliar
+        ->and((float) $corte->terminal_final)->toBe(200.00) // 100 inicial + 100 tarjeta
+        ->and((float) $corte->total_ventas)->toBe(100.00);
+});
+
+it('el cierre manual NO queda marcado como automático', function () {
+    $cajero = User::factory()->create();
+    $caja = app(CorteCajaService::class);
+    $corte = $caja->abrir($cajero->id, 0.0);
+
+    $cerrado = $caja->cerrar($corte, 0.0);
+
+    expect($cerrado->cierre_automatico)->toBeFalse()
+        ->and((float) $cerrado->diferencia)->toBe(0.00);
+});

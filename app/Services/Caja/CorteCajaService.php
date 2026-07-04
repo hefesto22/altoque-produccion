@@ -46,10 +46,14 @@ final class CorteCajaService
     /**
      * Cierra el turno: calcula totales por agregación SQL, registra el
      * efectivo contado y la diferencia, y deja el snapshot inmutable.
+     *
+     * $efectivoContado null = cierre automático (nadie contó la gaveta):
+     * la diferencia queda null y el corte se marca "por revisar" hasta
+     * que un administrador lo corrija.
      */
-    public function cerrar(CorteCaja $corte, float $efectivoContado, ?string $notas = null): CorteCaja
+    public function cerrar(CorteCaja $corte, ?float $efectivoContado, ?string $notas = null, bool $automatico = false): CorteCaja
     {
-        return DB::transaction(function () use ($corte, $efectivoContado, $notas): CorteCaja {
+        return DB::transaction(function () use ($corte, $efectivoContado, $notas, $automatico): CorteCaja {
             $fila = Venta::query()
                 ->where('corte_caja_id', $corte->id)
                 ->where('pagada', true)   // los pendientes por cobrar no cuentan
@@ -83,8 +87,9 @@ final class CorteCajaService
                 'total_tarjeta'       => (float) ($fila->tarjeta ?? 0),
                 'total_transferencia' => (float) ($fila->transferencia ?? 0),
                 'terminal_final'      => $terminalFinal,
+                'cierre_automatico'   => $automatico,
                 'efectivo_contado'    => $efectivoContado,
-                'diferencia'          => round($efectivoContado - $esperado, 2),
+                'diferencia'          => $efectivoContado !== null ? round($efectivoContado - $esperado, 2) : null,
                 'notas'               => $notas,
             ]);
 

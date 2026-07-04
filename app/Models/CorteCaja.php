@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property float $fondo_terminal
  * @property float|null $terminal_final
  * @property string $estado
+ * @property bool $cierre_automatico
  * @property Carbon $abierto_at
  * @property Carbon|null $cerrado_at
  * @property float $total_ventas
@@ -35,7 +36,7 @@ class CorteCaja extends Model
 {
     /** @var array<int, string> */
     protected $fillable = [
-        'cajero_id', 'fondo_inicial', 'fondo_terminal', 'terminal_final', 'estado', 'abierto_at', 'cerrado_at',
+        'cajero_id', 'fondo_inicial', 'fondo_terminal', 'terminal_final', 'estado', 'cierre_automatico', 'abierto_at', 'cerrado_at',
         'total_ventas', 'total_efectivo', 'total_tarjeta', 'total_transferencia', 'total_isv',
         'cantidad_ventas', 'efectivo_contado', 'diferencia', 'notas',
     ];
@@ -47,6 +48,7 @@ class CorteCaja extends Model
             'fondo_inicial'       => 'decimal:2',
             'fondo_terminal'      => 'decimal:2',
             'terminal_final'      => 'decimal:2',
+            'cierre_automatico'   => 'boolean',
             'abierto_at'          => 'datetime',
             'cerrado_at'          => 'datetime',
             'total_ventas'        => 'decimal:2',

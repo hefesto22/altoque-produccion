@@ -55,8 +55,16 @@ class CorteCajaResource extends Resource
                 TextColumn::make('abierto_at')->label('Abierto')->dateTime('d/m/Y h:i A')->sortable(),
                 TextColumn::make('cajero.name')->label('Cajero')->placeholder('—'),
                 TextColumn::make('estado')->label('Estado')->badge()
-                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
-                    ->color(fn (string $state): string => $state === 'abierto' ? 'warning' : 'gray'),
+                    // Cierre automático sin contar la gaveta → "Por revisar"
+                    // hasta que un administrador lo corrija (registra el contado).
+                    ->formatStateUsing(fn (string $state, CorteCaja $record): string => $record->cierre_automatico && $record->efectivo_contado === null
+                        ? 'Por revisar'
+                        : ucfirst($state))
+                    ->color(fn (string $state, CorteCaja $record): string => match (true) {
+                        $record->cierre_automatico && $record->efectivo_contado === null => 'danger',
+                        $state === 'abierto'                                             => 'warning',
+                        default                                                          => 'gray',
+                    }),
                 TextColumn::make('cantidad_ventas')->label('Ventas')->alignCenter(),
                 TextColumn::make('total_ventas')->label('Total')->money('HNL'),
                 TextColumn::make('total_efectivo')->label('Efectivo')->money('HNL')->toggleable(),

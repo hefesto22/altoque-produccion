@@ -146,7 +146,7 @@
                                     <div style="display:flex; gap:.3rem; flex-wrap:wrap;">
                                         <x-filament::button size="xs" color="success" wire:click="cobrarPendienteCF({{ $p->id }}, 'efectivo')">Efectivo</x-filament::button>
                                         @if ($p->tipo_orden === 'llevar')
-                                            <x-filament::button size="xs" color="info" wire:click="pedirBancoPendiente({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
+                                            <x-filament::button size="xs" color="info" wire:click="cobrarPendienteCF({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
                                         @endif
                                         <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
                                         <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
@@ -408,9 +408,9 @@
                     @endforeach
                 </div>
 
-                @if (in_array($formaPago, ['tarjeta', 'transferencia'], true))
+                @if ($formaPago === 'transferencia')
                     <div style="margin-top:.5rem;">
-                        <label style="display:block; font-size:.74rem; opacity:.6; margin-bottom:.2rem;">{{ $formaPago === 'tarjeta' ? 'Banco de la tarjeta' : 'Banco de la transferencia' }}</label>
+                        <label style="display:block; font-size:.74rem; opacity:.6; margin-bottom:.2rem;">Banco de la transferencia</label>
                         <x-filament::input.wrapper>
                             <x-filament::input.select wire:model="banco">
                                 <option value="">— Elegí el banco —</option>
@@ -566,8 +566,15 @@
                         <div style="display:flex; justify-content:space-between; opacity:.75;"><span>· Transferencia</span><span>L. {{ number_format($rt['transferencia'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between;"><span>Fondo inicial</span><span>L. {{ number_format($rt['fondo'], 2) }}</span></div>
                         <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px solid rgba(128,128,128,.25); padding-top:.3rem;"><span>Efectivo esperado en caja</span><span>L. {{ number_format($rt['esperado'], 2) }}</span></div>
-                        <div style="display:flex; justify-content:space-between; font-weight:700;"><span>Nuevo saldo en terminal POS</span><span>L. {{ number_format($rt['terminal_final'], 2) }}</span></div>
-                        <div style="display:flex; justify-content:space-between; opacity:.6; font-size:.8rem;"><span>(Saldo inicial L. {{ number_format($rt['terminal_inicial'], 2) }} + tarjeta + transferencia)</span><span></span></div>
+
+                        {{-- Terminal POS: desglose explícito, mismo formato que el efectivo --}}
+                        <div style="border-top:1px solid rgba(128,128,128,.25); margin-top:.4rem; padding-top:.4rem;">
+                            <div style="font-size:.72rem; font-weight:700; opacity:.55; text-transform:uppercase; letter-spacing:.03em; margin-bottom:.2rem;">Terminal POS</div>
+                            <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Saldo inicial del terminal</span><span>L. {{ number_format($rt['terminal_inicial'], 2) }}</span></div>
+                            <div style="display:flex; justify-content:space-between; opacity:.75;"><span>+ Tarjeta del turno</span><span>L. {{ number_format($rt['tarjeta'], 2) }}</span></div>
+                            <div style="display:flex; justify-content:space-between; opacity:.75;"><span>+ Transferencias del turno</span><span>L. {{ number_format($rt['transferencia'], 2) }}</span></div>
+                            <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px dashed rgba(128,128,128,.25); margin-top:.2rem; padding-top:.2rem;"><span>Nuevo saldo en terminal POS</span><span>L. {{ number_format($rt['terminal_final'], 2) }}</span></div>
+                        </div>
 
                         @if (count($rt['tarjeta_banco']) || count($rt['transfer_banco']))
                             <div style="border-top:1px dashed rgba(128,128,128,.25); margin-top:.3rem; padding-top:.3rem;">
@@ -644,11 +651,11 @@
                                     <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                                 @endforeach
                             </div>
-                            @if (in_array($formaPago, ['tarjeta', 'transferencia'], true))
+                            @if ($formaPago === 'transferencia')
                                 <div style="margin-top:.5rem;">
                                     <x-filament::input.wrapper>
                                         <x-filament::input.select wire:model="banco">
-                                            <option value="">— {{ $formaPago === 'tarjeta' ? 'Banco de la tarjeta' : 'Banco de la transferencia' }} —</option>
+                                            <option value="">— Banco de la transferencia —</option>
                                             @foreach (config('empresa.bancos', []) as $b)
                                                 <option value="{{ $b }}">{{ $b }}</option>
                                             @endforeach

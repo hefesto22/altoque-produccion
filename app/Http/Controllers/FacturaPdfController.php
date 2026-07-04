@@ -37,4 +37,22 @@ class FacturaPdfController extends Controller
             'Content-Type' => 'text/html; charset=utf-8',
         ]);
     }
+
+    /**
+     * Factura + comanda en UN documento (dos páginas): una sola ventana de
+     * impresión cuando la orden va a cocina (llevar/domicilio pagados de una).
+     * Si la venta no tiene comanda, degrada al ticket de factura solo.
+     */
+    public function documentos(Factura $factura, FacturaPdfService $service): Response
+    {
+        $comanda = $factura->venta?->comanda;
+
+        $html = $comanda !== null
+            ? $service->htmlConComanda($factura, $comanda)
+            : $service->html($factura);
+
+        return response($html, 200, [
+            'Content-Type' => 'text/html; charset=utf-8',
+        ]);
+    }
 }

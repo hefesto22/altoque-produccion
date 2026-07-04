@@ -100,6 +100,12 @@ class Factura extends Model
         return URL::signedRoute('facturas.ticket', ['factura' => $this->id]);
     }
 
+    /** Factura + comanda en un solo documento imprimible (una sola ventana). */
+    public function urlDocumentos(): string
+    {
+        return URL::signedRoute('facturas.documentos', ['factura' => $this->id]);
+    }
+
     /** Link de WhatsApp con el mensaje y la URL del PDF para el cliente. */
     public function urlWhatsApp(): string
     {
