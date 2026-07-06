@@ -4,9 +4,12 @@
 
     {{-- ───── Número de orden interno (control diario) + nombre del cliente
          de la ORDEN (local/llevar/domicilio), arriba a la derecha ───── --}}
-    @php($nombreOrden = $f->venta?->nombre_orden ?: $f->venta?->comanda?->cliente_nombre)
+    @php
+        $nombreOrden = $f->venta?->nombre_orden ?: $f->venta?->comanda?->cliente_nombre;
+        $pagosVenta = $f->venta?->pagos ?? collect();
+    @endphp
     @if ($f->venta?->numero_orden)
-        <div class="orden">{{ $f->venta->numero_orden }}@if($nombreOrden) · {{ $nombreOrden }}@endif</div>
+        <div class="orden">{{ $f->venta->numero_orden }}{{ $nombreOrden ? ' · '.$nombreOrden : '' }}</div>
     @endif
 
     {{-- ───── Emisor ───── --}}
@@ -142,14 +145,13 @@
 
     <div class="hr"></div>
     <div class="sm bold">Son: {{ \App\Support\NumeroALetras::convertir((float) $f->total) }}</div>
-    @php($pagosVenta = $f->venta?->pagos ?? collect())
     @if ($pagosVenta->count() > 1)
         <div class="sm" style="margin-top:2px;">Forma de pago: MIXTO</div>
         @foreach ($pagosVenta as $p)
-            <div class="sm">&nbsp;&nbsp;{{ mb_strtoupper($p->metodo) }}@if($p->banco) ({{ $p->banco }})@endif: L. {{ number_format((float) $p->monto, 2) }}</div>
+            <div class="sm">&nbsp;&nbsp;{{ mb_strtoupper($p->metodo).($p->banco ? ' ('.$p->banco.')' : '') }}: L. {{ number_format((float) $p->monto, 2) }}</div>
         @endforeach
     @else
-        <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($f->venta?->forma_pago ?? 'efectivo') }}@if($pagosVenta->first()?->banco) ({{ $pagosVenta->first()->banco }})@endif</div>
+        <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($f->venta?->forma_pago ?? 'efectivo').($pagosVenta->first()?->banco ? ' ('.$pagosVenta->first()->banco.')' : '') }}</div>
     @endif
 
     <div class="hr"></div>
