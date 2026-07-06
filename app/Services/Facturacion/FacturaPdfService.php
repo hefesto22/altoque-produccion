@@ -43,7 +43,7 @@ final class FacturaPdfService
     /** @return array<string, mixed> Datos comunes de las vistas de factura. */
     private function datosVista(Factura $factura): array
     {
-        $factura->loadMissing(['venta.items', 'cai']);
+        $factura->loadMissing(['venta.items', 'venta.pagos', 'venta.comanda', 'cai']);
 
         $e = EmpresaSetting::actual();
 

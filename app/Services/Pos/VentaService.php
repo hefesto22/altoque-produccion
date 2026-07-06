@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Pos;
 
 use App\Domain\Contracts\CalculaImpuestos;
+use App\Domain\Exceptions\PagosNoCuadranException;
 use App\Domain\Exceptions\VentaSinLineasException;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
@@ -35,15 +36,16 @@ final class VentaService
      * Venta no fiscal: recibo interno con su propio correlativo.
      *
      * @param array<int, LineaVenta> $lineas
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
      *
      * @throws VentaSinLineasException
      */
-    public function registrarRecibo(array $lineas, int $cajeroId, string $formaPago = 'efectivo', ?string $banco = null, string $tipoOrden = 'local'): Venta
+    public function registrarRecibo(array $lineas, int $cajeroId, string $formaPago = 'efectivo', ?string $banco = null, string $tipoOrden = 'local', ?array $pagos = null, ?string $nombreOrden = null): Venta
     {
         $this->guardarContraVacio($lineas);
 
-        return DB::transaction(function () use ($lineas, $cajeroId, $formaPago, $banco, $tipoOrden): Venta {
-            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'recibo', formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden);
+        return DB::transaction(function () use ($lineas, $cajeroId, $formaPago, $banco, $tipoOrden, $pagos, $nombreOrden): Venta {
+            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'recibo', formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, pagos: $pagos, nombreOrden: $nombreOrden);
 
             // Correlativo interno desde la secuencia Postgres (atómico).
             $correlativo = (int) DB::selectOne(
@@ -62,15 +64,16 @@ final class VentaService
      * y la caja puede ofrecer recibo en su lugar.
      *
      * @param array<int, LineaVenta> $lineas
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
      *
      * @throws VentaSinLineasException
      */
-    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0): Factura
+    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null): Factura
     {
         $this->guardarContraVacio($lineas);
 
-        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje): Factura {
-            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje);
+        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden): Factura {
+            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden);
 
             return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
         });
@@ -102,6 +105,7 @@ final class VentaService
                 tipoOrden: $tipoOrden,
                 pagada: false,
                 costoViaje: $costoViaje,
+                nombreOrden: $nombreCliente,
             );
 
             $correlativo = (int) DB::selectOne("SELECT nextval('recibos_correlativo_seq') AS n")->n;
@@ -116,26 +120,35 @@ final class VentaService
      * existente (no crea otra), la marca pagada y la engancha al turno
      * abierto en que se cobra. La comanda ya se creó al dejarlo pendiente.
      *
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
+     *
      * @throws VentaSinLineasException
      */
-    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null): Factura
+    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null): Factura
     {
-        return DB::transaction(function () use ($venta, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco): Factura {
+        return DB::transaction(function () use ($venta, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
             $corteId = CorteCaja::query()
                 ->where('cajero_id', $cajeroId)
                 ->where('estado', 'abierto')
                 ->value('id');
 
+            // El pago real se define al COBRAR (no al dejar pendiente).
+            $normalizado = $this->normalizarPagos((float) $venta->total, $formaPago, $banco, $pagos);
+
             $venta->update([
                 'tipo'           => 'factura',
-                'forma_pago'     => $formaPago,
-                'banco'          => in_array($formaPago, ['tarjeta', 'transferencia'], true) ? $banco : null,
+                'forma_pago'     => $normalizado['forma'],
+                'banco'          => $normalizado['forma'] === 'mixto' ? null : $normalizado['filas'][0]['banco'],
                 'rtn_cliente'    => $rtn !== null ? (string) $rtn : null,
                 'nombre_cliente' => $nombre,
                 'pagada'         => true,
                 'pagada_at'      => now(),
                 'corte_caja_id'  => $corteId,   // entra al turno donde se cobra
             ]);
+
+            // Snapshot de pagos del cobro (el corte de caja suma de aquí).
+            $venta->pagos()->delete();
+            $venta->pagos()->createMany($normalizado['filas']);
 
             // Pagado = entregado: la comanda sale de la cola de cocina.
             Comanda::query()
@@ -153,6 +166,7 @@ final class VentaService
      * Crea la venta y sus items (snapshots) con el desglose calculado.
      *
      * @param array<int, LineaVenta> $lineas
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos
      */
     private function crearVenta(
         array $lineas,
@@ -165,8 +179,16 @@ final class VentaService
         string $tipoOrden = 'local',
         bool $pagada = true,
         float $costoViaje = 0,
+        ?array $pagos = null,
+        ?string $nombreOrden = null,
     ): Venta {
         $resumen = $this->calculador->calcular($lineas);
+
+        // Los pagos se normalizan y validan ANTES de persistir nada:
+        // si no cuadran al centavo, la venta no se crea (fail fast).
+        $normalizado = $pagada
+            ? $this->normalizarPagos($resumen->total, $formaPago, $banco, $pagos)
+            : ['forma' => $formaPago, 'filas' => []];
 
         // Una venta pagada al momento entra al turno abierto. Una venta
         // PENDIENTE no se vincula a ningún turno todavía: entrará al corte
@@ -184,12 +206,16 @@ final class VentaService
             'tipo'          => $tipo,
             'tipo_orden'    => $tipoOrden,
             'numero_orden'  => $this->tickets->siguiente($tipoOrden),
-            'forma_pago'    => $formaPago,
+            'forma_pago'    => $normalizado['forma'],
             // El banco aplica a tarjeta y transferencia (el terminal recibe
             // tarjetas de varios bancos; se concilia por banco en el corte).
-            'banco'          => in_array($formaPago, ['tarjeta', 'transferencia'], true) ? $banco : null,
+            // En mixto el banco vive en cada fila de venta_pagos.
+            'banco' => $normalizado['forma'] === 'mixto' || $normalizado['filas'] === []
+                ? null
+                : $normalizado['filas'][0]['banco'],
             'rtn_cliente'    => $rtn !== null ? (string) $rtn : null,
             'nombre_cliente' => $nombre,
+            'nombre_orden'   => $nombreOrden !== null && trim($nombreOrden) !== '' ? mb_strtoupper(trim($nombreOrden)) : null,
             'gravado'        => $resumen->gravado,
             'exento'         => $resumen->exento,
             'subtotal_lista' => $resumen->subtotalLista,
@@ -221,7 +247,67 @@ final class VentaService
             $lineas,
         ));
 
+        if ($normalizado['filas'] !== []) {
+            $venta->pagos()->createMany($normalizado['filas']);
+        }
+
         return $venta;
+    }
+
+    /**
+     * Normaliza los pagos de una venta y garantiza que cuadren con el total.
+     *
+     * - $pagos null/vacío → un solo pago por el total con $formaPago.
+     * - $pagos con filas  → se descartan montos en cero, se valida que la
+     *   suma sea exacta (al centavo) y forma_pago resume: 'mixto' si quedan
+     *   2+ métodos, o el método único si al final fue uno solo.
+     *
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos
+     *
+     * @return array{forma: string, filas: array<int, array{metodo: string, banco: string|null, monto: float}>}
+     *
+     * @throws PagosNoCuadranException
+     */
+    private function normalizarPagos(float $total, string $formaPago, ?string $banco, ?array $pagos): array
+    {
+        $total = round($total, 2);
+
+        if ($pagos === null || $pagos === []) {
+            return ['forma' => $formaPago, 'filas' => [[
+                'metodo' => $formaPago,
+                'banco'  => in_array($formaPago, ['tarjeta', 'transferencia'], true) ? $banco : null,
+                'monto'  => $total,
+            ]]];
+        }
+
+        $filas = [];
+        $suma = 0.0;
+
+        foreach ($pagos as $pago) {
+            $monto = round((float) ($pago['monto'] ?? 0), 2);
+
+            if ($monto <= 0) {
+                continue; // método sin monto: no participa
+            }
+
+            $filas[] = [
+                'metodo' => $pago['metodo'],
+                'banco'  => in_array($pago['metodo'], ['tarjeta', 'transferencia'], true)
+                    ? ($pago['banco'] ?? null)
+                    : null,
+                'monto' => $monto,
+            ];
+            $suma = round($suma + $monto, 2);
+        }
+
+        if ($filas === [] || abs($suma - $total) >= 0.01) {
+            throw new PagosNoCuadranException($suma, $total);
+        }
+
+        return [
+            'forma' => count($filas) > 1 ? 'mixto' : $filas[0]['metodo'],
+            'filas' => $filas,
+        ];
     }
 
     /**

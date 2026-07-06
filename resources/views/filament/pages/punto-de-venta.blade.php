@@ -403,12 +403,32 @@
 
                 <div style="display:flex; align-items:center; gap:.4rem; margin-top:.75rem; flex-wrap:wrap;">
                     <span style="font-size:.78rem; opacity:.6;">Pago:</span>
-                    @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.'] as $fp => $lbl)
+                    @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
                         <x-filament::button size="xs" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                     @endforeach
                 </div>
 
-                @if ($formaPago === 'transferencia')
+                @if ($formaPago === 'mixto')
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:.4rem; margin-top:.5rem;">
+                        @foreach (['mixtoEfectivo' => 'Efectivo', 'mixtoTarjeta' => 'Tarjeta', 'mixtoTransfer' => 'Transf.'] as $campo => $lbl)
+                            <div>
+                                <label style="display:block; font-size:.72rem; opacity:.6; margin-bottom:.15rem;">{{ $lbl }}</label>
+                                <x-filament::input.wrapper>
+                                    <x-filament::input type="number" step="0.01" min="0" wire:model.live="{{ $campo }}" placeholder="0.00" />
+                                </x-filament::input.wrapper>
+                            </div>
+                        @endforeach
+                    </div>
+                    @php($restante = $this->mixtoRestante)
+                    <div style="margin-top:.35rem; font-size:.8rem; font-weight:600; color: {{ abs($restante) < 0.01 ? '#16a34a' : ($restante < 0 ? '#dc2626' : '#d97706') }};">
+                        @if (abs($restante) < 0.01) ✓ Los montos cuadran con el total
+                        @elseif ($restante > 0) Falta L. {{ number_format($restante, 2) }}
+                        @else Se pasó por L. {{ number_format(abs($restante), 2) }}
+                        @endif
+                    </div>
+                @endif
+
+                @if ($formaPago === 'transferencia' || ($formaPago === 'mixto' && is_numeric($mixtoTransfer) && (float) $mixtoTransfer > 0))
                     <div style="margin-top:.5rem;">
                         <label style="display:block; font-size:.74rem; opacity:.6; margin-bottom:.2rem;">Banco de la transferencia</label>
                         <x-filament::input.wrapper>
@@ -647,11 +667,30 @@
                         <div>
                             <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Forma de pago</label>
                             <div style="display:flex; gap:.4rem; flex-wrap:wrap;">
-                                @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.'] as $fp => $lbl)
+                                @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
                                     <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                                 @endforeach
                             </div>
-                            @if ($formaPago === 'transferencia')
+                            @if ($formaPago === 'mixto')
+                                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:.4rem; margin-top:.5rem;">
+                                    @foreach (['mixtoEfectivo' => 'Efectivo', 'mixtoTarjeta' => 'Tarjeta', 'mixtoTransfer' => 'Transf.'] as $campo => $lbl)
+                                        <div>
+                                            <label style="display:block; font-size:.72rem; opacity:.6; margin-bottom:.15rem;">{{ $lbl }}</label>
+                                            <x-filament::input.wrapper>
+                                                <x-filament::input type="number" step="0.01" min="0" wire:model.live="{{ $campo }}" placeholder="0.00" />
+                                            </x-filament::input.wrapper>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                @php($restanteModal = $this->mixtoRestante)
+                                <div style="margin-top:.35rem; font-size:.8rem; font-weight:600; color: {{ abs($restanteModal) < 0.01 ? '#16a34a' : ($restanteModal < 0 ? '#dc2626' : '#d97706') }};">
+                                    @if (abs($restanteModal) < 0.01) ✓ Los montos cuadran con el total (L. {{ number_format($this->totalModal, 2) }})
+                                    @elseif ($restanteModal > 0) Falta L. {{ number_format($restanteModal, 2) }} de L. {{ number_format($this->totalModal, 2) }}
+                                    @else Se pasó por L. {{ number_format(abs($restanteModal), 2) }}
+                                    @endif
+                                </div>
+                            @endif
+                            @if ($formaPago === 'transferencia' || ($formaPago === 'mixto' && is_numeric($mixtoTransfer) && (float) $mixtoTransfer > 0))
                                 <div style="margin-top:.5rem;">
                                     <x-filament::input.wrapper>
                                         <x-filament::input.select wire:model="banco">

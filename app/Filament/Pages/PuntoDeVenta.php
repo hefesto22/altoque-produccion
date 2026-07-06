@@ -27,6 +27,7 @@ use Filament\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
@@ -197,6 +198,13 @@ class PuntoDeVenta extends Page
     /** Banco de la transferencia (solo si formaPago = transferencia). */
     public string $banco = '';
 
+    // ── Pago mixto: montos por método (solo si formaPago = 'mixto') ────
+    public string $mixtoEfectivo = '';
+
+    public string $mixtoTarjeta = '';
+
+    public string $mixtoTransfer = '';
+
     public function mount(): void
     {
         $this->servicios = Servicio::query()->activos()->get()->all();
@@ -317,38 +325,51 @@ class PuntoDeVenta extends Page
             return $vacio;
         }
 
-        $base = Venta::query()->where('corte_caja_id', $corte->id)->where('pagada', true);
-
-        $fila = (clone $base)
+        $fila = Venta::query()
+            ->where('corte_caja_id', $corte->id)->where('pagada', true)
             ->selectRaw("count(*) c, coalesce(sum(total),0) t,
-                coalesce(sum(total) filter (where forma_pago='efectivo'),0) ef,
-                coalesce(sum(total) filter (where forma_pago='tarjeta'),0) ta,
-                coalesce(sum(total) filter (where forma_pago='transferencia'),0) tr,
-                coalesce(sum(total) filter (where tipo_orden='domicilio' and forma_pago='efectivo'),0) dom_ef,
                 coalesce(sum(costo_viaje) filter (where tipo_orden='domicilio' and forma_pago='transferencia'),0) dom_vt")
             ->first();
 
-        $porBanco = static fn (string $forma): array => (clone $base)
-            ->where('forma_pago', $forma)->whereNotNull('banco')
-            ->selectRaw('banco, sum(total) as total')->groupBy('banco')->orderBy('banco')->get()
+        // Por método desde venta_pagos: el pago mixto reparte una venta
+        // entre varios métodos y la gaveta solo espera la porción efectivo.
+        $pagos = DB::selectOne("
+            SELECT
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS ef,
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS ta,
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS tr,
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo' AND v.tipo_orden = 'domicilio'), 0) AS dom_ef
+            FROM venta_pagos vp
+            JOIN ventas v ON v.id = vp.venta_id
+            WHERE v.corte_caja_id = ? AND v.pagada = true
+        ", [$corte->id]);
+
+        $porBanco = static fn (string $metodo): array => collect(DB::select('
+                SELECT vp.banco, sum(vp.monto) AS total
+                FROM venta_pagos vp
+                JOIN ventas v ON v.id = vp.venta_id
+                WHERE v.corte_caja_id = ? AND v.pagada = true
+                  AND vp.metodo = ? AND vp.banco IS NOT NULL
+                GROUP BY vp.banco ORDER BY vp.banco
+            ', [$corte->id, $metodo]))
             ->map(static fn ($r): array => ['banco' => (string) $r->banco, 'total' => (float) $r->total])
             ->all();
 
-        $efectivo = (float) $fila->ef;
+        $efectivo = (float) $pagos->ef;
 
         return [
             'ventas'             => (int) $fila->c,
             'total'              => (float) $fila->t,
             'efectivo'           => $efectivo,
-            'tarjeta'            => (float) $fila->ta,
-            'transferencia'      => (float) $fila->tr,
+            'tarjeta'            => (float) $pagos->ta,
+            'transferencia'      => (float) $pagos->tr,
             'fondo'              => (float) $corte->fondo_inicial,
             'esperado'           => (float) $corte->fondo_inicial + $efectivo,
             'terminal_inicial'   => (float) $corte->fondo_terminal,
-            'terminal_final'     => round((float) $corte->fondo_terminal + (float) $fila->ta + (float) $fila->tr, 2),
+            'terminal_final'     => round((float) $corte->fondo_terminal + (float) $pagos->ta + (float) $pagos->tr, 2),
             'tarjeta_banco'      => $porBanco('tarjeta'),
             'transfer_banco'     => $porBanco('transferencia'),
-            'dom_efectivo'       => (float) $fila->dom_ef,
+            'dom_efectivo'       => (float) $pagos->dom_ef,
             'dom_viaje_transfer' => (float) $fila->dom_vt,
         ];
     }
@@ -755,6 +776,9 @@ class PuntoDeVenta extends Page
         $this->tipoServicio = 'local';
         $this->formaPago = 'efectivo';
         $this->banco = '';
+        $this->mixtoEfectivo = '';
+        $this->mixtoTarjeta = '';
+        $this->mixtoTransfer = '';
         $this->rtnInput = '';
         $this->nombreInput = '';
         $this->facturaDetallada = false;
@@ -951,6 +975,73 @@ class PuntoDeVenta extends Page
             : 0.0;
     }
 
+    // ── Pago mixto ──────────────────────────────────────────────────────
+
+    /** Suma de los montos del pago mixto ingresados hasta ahora. */
+    public function getMixtoSumaProperty(): float
+    {
+        $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
+
+        return round($n($this->mixtoEfectivo) + $n($this->mixtoTarjeta) + $n($this->mixtoTransfer), 2);
+    }
+
+    /** Lo que falta por cubrir del total (negativo = se pasó). */
+    public function getMixtoRestanteProperty(): float
+    {
+        return round($this->getTotalModalProperty() - $this->getMixtoSumaProperty(), 2);
+    }
+
+    /**
+     * Filas de pago para el service: null si el cobro es de un solo método.
+     * El banco elegido aplica a la porción por transferencia.
+     *
+     * @return array<int, array{metodo: string, banco?: string|null, monto: float}>|null
+     */
+    private function pagosMixtos(): ?array
+    {
+        if ($this->formaPago !== 'mixto') {
+            return null;
+        }
+
+        $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
+
+        return [
+            ['metodo' => 'efectivo', 'monto' => $n($this->mixtoEfectivo)],
+            ['metodo' => 'tarjeta', 'banco' => trim($this->banco) !== '' ? trim($this->banco) : null, 'monto' => $n($this->mixtoTarjeta)],
+            ['metodo' => 'transferencia', 'banco' => trim($this->banco) !== '' ? trim($this->banco) : null, 'monto' => $n($this->mixtoTransfer)],
+        ];
+    }
+
+    /** Valida el pago mixto contra el total antes de cobrar. Notifica si falla. */
+    private function pagoMixtoValido(float $total): bool
+    {
+        if ($this->formaPago !== 'mixto') {
+            return true;
+        }
+
+        $suma = $this->getMixtoSumaProperty();
+
+        if (abs($suma - round($total, 2)) >= 0.01) {
+            Notification::make()
+                ->title('El pago mixto no cuadra')
+                ->body('Los montos suman L. '.number_format($suma, 2).' y el total es L. '.number_format($total, 2).'.')
+                ->warning()
+                ->send();
+
+            return false;
+        }
+
+        $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
+
+        if ($n($this->mixtoTransfer) > 0 && trim($this->banco) === '') {
+            Notification::make()->title('Elegí el banco de la transferencia')->warning()->send();
+
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * "Pagar después": manda el pedido a cocina como PENDIENTE de pago (sin
      * cobrar ni facturar), en cualquier tipo de orden (local, llevar,
@@ -1081,6 +1172,10 @@ class PuntoDeVenta extends Page
             return false;
         }
 
+        if ($formaPago === 'mixto' && ! $this->pagoMixtoValido((float) $venta->total)) {
+            return false;
+        }
+
         try {
             $factura = app(VentaService::class)->cobrarPendiente(
                 $venta,
@@ -1090,6 +1185,7 @@ class PuntoDeVenta extends Page
                 $formaPago,
                 $detallada,
                 $formaPago === 'transferencia' ? $banco : null,
+                $formaPago === 'mixto' ? $this->pagosMixtos() : null,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->send();
@@ -1243,6 +1339,10 @@ class PuntoDeVenta extends Page
             return false;
         }
 
+        if (! $this->pagoMixtoValido($this->getResumenProperty()['total'])) {
+            return false;
+        }
+
         try {
             $factura = app(VentaService::class)->registrarFactura(
                 $this->lineasDelCarrito(),
@@ -1254,6 +1354,8 @@ class PuntoDeVenta extends Page
                 $this->formaPago === 'transferencia' ? $this->banco : null,
                 $this->tipoServicio,
                 $this->costoViajeNumerico(),
+                $this->pagosMixtos(),
+                trim($this->domNombre) !== '' ? $this->domNombre : null,
             );
         } catch (RestauranteException $e) {
             Notification::make()

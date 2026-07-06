@@ -2,9 +2,11 @@
      vista standalone y por el documento combinado factura+comanda. --}}
 <div class="doc">
 
-    {{-- ───── Número de orden interno (control diario), arriba a la derecha ───── --}}
+    {{-- ───── Número de orden interno (control diario) + nombre del cliente
+         de la ORDEN (local/llevar/domicilio), arriba a la derecha ───── --}}
+    @php($nombreOrden = $f->venta?->nombre_orden ?: $f->venta?->comanda?->cliente_nombre)
     @if ($f->venta?->numero_orden)
-        <div class="orden">{{ $f->venta->numero_orden }}</div>
+        <div class="orden">{{ $f->venta->numero_orden }}@if($nombreOrden) · {{ $nombreOrden }}@endif</div>
     @endif
 
     {{-- ───── Emisor ───── --}}
@@ -45,7 +47,9 @@
     {{-- ───── Datos del documento y cliente ───── --}}
     <table>
         <tr><td>Fecha emisión:</td><td class="right">{{ $f->emitida_at->format('d/m/Y h:i A') }}</td></tr>
-        <tr><td>Cliente:</td><td class="right">{{ $f->nombre_cliente }}</td></tr>
+        {{-- Con RTN manda el nombre FISCAL; a Consumidor Final se muestra el
+             nombre de la orden si el cajero lo capturó. --}}
+        <tr><td>Cliente:</td><td class="right">{{ $f->rtn_cliente === null && $nombreOrden ? $nombreOrden : $f->nombre_cliente }}</td></tr>
         <tr><td>RTN / ID:</td><td class="right">{{ $f->rtn_cliente ?? 'C.F.' }}</td></tr>
     </table>
     <table class="sm">
@@ -138,7 +142,15 @@
 
     <div class="hr"></div>
     <div class="sm bold">Son: {{ \App\Support\NumeroALetras::convertir((float) $f->total) }}</div>
-    <div class="sm" style="margin-top:2px;">Forma de pago: EFECTIVO</div>
+    @php($pagosVenta = $f->venta?->pagos ?? collect())
+    @if ($pagosVenta->count() > 1)
+        <div class="sm" style="margin-top:2px;">Forma de pago: MIXTO</div>
+        @foreach ($pagosVenta as $p)
+            <div class="sm">&nbsp;&nbsp;{{ mb_strtoupper($p->metodo) }}@if($p->banco) ({{ $p->banco }})@endif: L. {{ number_format((float) $p->monto, 2) }}</div>
+        @endforeach
+    @else
+        <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($f->venta?->forma_pago ?? 'efectivo') }}@if($pagosVenta->first()?->banco) ({{ $pagosVenta->first()->banco }})@endif</div>
+    @endif
 
     <div class="hr"></div>
 

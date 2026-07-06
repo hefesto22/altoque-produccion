@@ -53,6 +53,7 @@ class Venta extends Model
         'numero_recibo',
         'rtn_cliente',
         'nombre_cliente',
+        'nombre_orden',
         'gravado',
         'exento',
         'subtotal_lista',
@@ -86,6 +87,17 @@ class Venta extends Model
     public function items(): HasMany
     {
         return $this->hasMany(VentaItem::class);
+    }
+
+    /**
+     * Pagos de la venta: 1 fila si es simple, 2–3 si es mixta.
+     * La suma de montos siempre cuadra con total.
+     *
+     * @return HasMany<VentaPago, $this>
+     */
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(VentaPago::class);
     }
 
     /** @return BelongsTo<User, $this> */

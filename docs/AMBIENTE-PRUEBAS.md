@@ -24,7 +24,7 @@ Esperar a que resuelva: `ping pruebas.altoque.cloud`.
 ## FASE 1 — Copiar la base de datos (en el VPS)
 
 ```bash
-sudo -u postgres psql -c "CREATE DATABASE altoque_pruebas OWNER altoque;"
+sudo -u postgres psql -c "CREATE DATABASE altoque_pruebas OWNER hefesto;"
 sudo -u postgres pg_dump sistema_altoque | sudo -u postgres psql altoque_pruebas
 # Resultado esperado: una lista larga de CREATE/ALTER/COPY sin errores.
 

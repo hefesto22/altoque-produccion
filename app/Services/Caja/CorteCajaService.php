@@ -57,23 +57,33 @@ final class CorteCajaService
             $fila = Venta::query()
                 ->where('corte_caja_id', $corte->id)
                 ->where('pagada', true)   // los pendientes por cobrar no cuentan
-                ->selectRaw("
+                ->selectRaw('
                     count(*) as cantidad,
                     coalesce(sum(total), 0) as total,
-                    coalesce(sum(isv), 0) as isv,
-                    coalesce(sum(total) filter (where forma_pago = 'efectivo'), 0) as efectivo,
-                    coalesce(sum(total) filter (where forma_pago = 'tarjeta'), 0) as tarjeta,
-                    coalesce(sum(total) filter (where forma_pago = 'transferencia'), 0) as transferencia
-                ")
+                    coalesce(sum(isv), 0) as isv
+                ')
                 ->first();
 
-            $totalEfectivo = (float) ($fila->efectivo ?? 0);
+            // Por método se suma desde venta_pagos: con pago mixto una venta
+            // reparte su total entre varios métodos y el efectivo esperado
+            // en gaveta debe contar SOLO la porción en efectivo.
+            $pagos = DB::selectOne("
+                SELECT
+                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS efectivo,
+                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS tarjeta,
+                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia
+                FROM venta_pagos vp
+                JOIN ventas v ON v.id = vp.venta_id
+                WHERE v.corte_caja_id = ? AND v.pagada = true
+            ", [$corte->id]);
+
+            $totalEfectivo = (float) ($pagos->efectivo ?? 0);
             $esperado = (float) $corte->fondo_inicial + $totalEfectivo;
 
             // Nuevo saldo del terminal POS: lo que traía al abrir + lo que
             // entró por tarjeta y transferencia en el turno.
             $terminalFinal = round(
-                (float) $corte->fondo_terminal + (float) ($fila->tarjeta ?? 0) + (float) ($fila->transferencia ?? 0),
+                (float) $corte->fondo_terminal + (float) ($pagos->tarjeta ?? 0) + (float) ($pagos->transferencia ?? 0),
                 2,
             );
 
@@ -84,8 +94,8 @@ final class CorteCajaService
                 'total_ventas'        => (float) ($fila->total ?? 0),
                 'total_isv'           => (float) ($fila->isv ?? 0),
                 'total_efectivo'      => $totalEfectivo,
-                'total_tarjeta'       => (float) ($fila->tarjeta ?? 0),
-                'total_transferencia' => (float) ($fila->transferencia ?? 0),
+                'total_tarjeta'       => (float) ($pagos->tarjeta ?? 0),
+                'total_transferencia' => (float) ($pagos->transferencia ?? 0),
                 'terminal_final'      => $terminalFinal,
                 'cierre_automatico'   => $automatico,
                 'efectivo_contado'    => $efectivoContado,
