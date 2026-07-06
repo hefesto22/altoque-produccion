@@ -80,13 +80,20 @@ final class FacturacionSarService
                 'hash_verificacion' => Factura::calcularHash($numero, $rtn !== null ? (string) $rtn : 'CF', $venta->total, $cai->id),
                 'rtn_cliente'       => $rtn !== null ? (string) $rtn : null,
                 'nombre_cliente'    => $nombreMayus,
-                'gravado'           => $venta->gravado,
-                'exento'            => $venta->exento,
-                'subtotal_lista'    => $venta->subtotal_lista,
-                'descuento'         => $venta->descuento,
-                'isv'               => $venta->isv,
-                'total'             => $venta->total,
-                'emitida_at'        => now(),
+                // Snapshot del pago AL EMITIR: la reimpresión siempre muestra
+                // esto, aunque después se corrija el pago interno de la venta.
+                'forma_pago'    => $venta->forma_pago,
+                'pagos_detalle' => $venta->pagos()
+                    ->get(['metodo', 'banco', 'monto'])
+                    ->map(static fn ($p): array => ['metodo' => $p->metodo, 'banco' => $p->banco, 'monto' => (float) $p->monto])
+                    ->all(),
+                'gravado'        => $venta->gravado,
+                'exento'         => $venta->exento,
+                'subtotal_lista' => $venta->subtotal_lista,
+                'descuento'      => $venta->descuento,
+                'isv'            => $venta->isv,
+                'total'          => $venta->total,
+                'emitida_at'     => now(),
             ]);
 
             // Marca el CAI como agotado si este fue el último número.

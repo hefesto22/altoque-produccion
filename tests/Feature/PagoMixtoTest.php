@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Exceptions\PagosNoCuadranException;
 use App\Domain\ValueObjects\LineaVenta;
+use App\Models\Cai;
 use App\Models\Producto;
 use App\Models\User;
 use App\Models\Venta;
@@ -110,6 +111,75 @@ it('el corte de caja espera en gaveta SOLO la porción en efectivo del mixto', f
         ->and((float) $cerrado->total_transferencia)->toBe(200.00)
         ->and((float) $cerrado->total_ventas)->toBe(500.00)
         ->and((float) $cerrado->diferencia)->toBe(0.00);            // 100 fondo + 300 efectivo = 400 contados
+});
+
+it('corrige la forma de pago sin tocar el desglose fiscal', function () {
+    $cajero = User::factory()->create();
+    $pollo = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 500.00]);
+
+    $venta = app(VentaService::class)->registrarRecibo(
+        [new LineaVenta($pollo->id, 'Pollo', 500.00, 1, gravaIsv: false)],
+        $cajero->id,
+        'efectivo',
+    );
+
+    $isvOriginal = (float) $venta->isv;
+
+    // De efectivo → mixto (300 tarjeta + 200 transferencia)
+    $corregida = app(VentaService::class)->corregirPago($venta, 'mixto', 'Banpaís', [
+        ['metodo' => 'tarjeta', 'banco' => 'Banpaís', 'monto' => 300.00],
+        ['metodo' => 'transferencia', 'banco' => 'Banpaís', 'monto' => 200.00],
+    ]);
+
+    expect($corregida->forma_pago)->toBe('mixto')
+        ->and($corregida->pagos()->count())->toBe(2)
+        ->and((float) $corregida->pagos()->sum('monto'))->toBe(500.00)
+        ->and((float) $corregida->total)->toBe(500.00)   // el desglose fiscal no cambia
+        ->and((float) $corregida->isv)->toBe($isvOriginal);
+});
+
+it('rechaza una corrección de pago que no cuadra con el total', function () {
+    $cajero = User::factory()->create();
+    $pollo = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 500.00]);
+
+    $venta = app(VentaService::class)->registrarRecibo(
+        [new LineaVenta($pollo->id, 'Pollo', 500.00, 1, gravaIsv: false)],
+        $cajero->id,
+        'efectivo',
+    );
+
+    expect(fn () => app(VentaService::class)->corregirPago($venta, 'mixto', null, [
+        ['metodo' => 'efectivo', 'monto' => 100.00],
+        ['metodo' => 'tarjeta', 'monto' => 100.00], // faltan 300
+    ]))->toThrow(PagosNoCuadranException::class);
+
+    // Rollback: el pago original queda intacto.
+    expect($venta->fresh()->forma_pago)->toBe('efectivo')
+        ->and($venta->pagos()->count())->toBe(1);
+});
+
+it('corregir el pago NO altera el snapshot de la factura (la reimpresión es idéntica al original)', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    $pollo = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 120.00]);
+
+    $factura = app(VentaService::class)->registrarFactura(
+        [new LineaVenta($pollo->id, 'Pollo', 120.00, 1, gravaIsv: false)],
+        $cajero->id,
+        null,
+        'Consumidor Final',
+        'efectivo',
+    );
+
+    expect($factura->forma_pago)->toBe('efectivo');
+
+    // Corrección interna: la venta cambia, la factura NO.
+    app(VentaService::class)->corregirPago($factura->venta, 'transferencia', 'Ficohsa');
+
+    $factura->refresh();
+
+    expect($factura->forma_pago)->toBe('efectivo')                    // snapshot congelado
+        ->and($factura->venta->fresh()->forma_pago)->toBe('transferencia'); // interno corregido
 });
 
 it('guarda el nombre de la orden en mayúsculas como snapshot', function () {

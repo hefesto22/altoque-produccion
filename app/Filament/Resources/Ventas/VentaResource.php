@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Ventas;
 
+use App\Domain\Exceptions\RestauranteException;
 use App\Filament\Pages\PuntoDeVenta;
 use App\Filament\Resources\Ventas\Pages\ListVentas;
 use App\Models\Venta;
 use App\Services\Facturacion\FacturacionSarService;
+use App\Services\Pos\VentaService;
 use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -54,8 +58,8 @@ class VentaResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->select(['id', 'tipo', 'forma_pago', 'banco', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'isv', 'total', 'cajero_id', 'vendida_at'])
-            ->with(['cajero:id,name', 'factura']);
+            ->select(['id', 'tipo', 'forma_pago', 'banco', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'isv', 'total', 'cajero_id', 'corte_caja_id', 'pagada', 'vendida_at'])
+            ->with(['cajero:id,name', 'factura', 'corte:id,estado']);
     }
 
     public static function table(Table $table): Table
@@ -74,6 +78,62 @@ class VentaResource extends Resource
                 TextColumn::make('forma_pago')->label('Pago')->badge()
                     ->formatStateUsing(fn (?string $state): string => ucfirst((string) $state))
                     ->description(fn (Venta $record): ?string => $record->banco)
+                    ->tooltip(fn (): ?string => Acceso::puede('CorregirPago') ? 'Clic para corregir (control interno)' : null)
+                    // Clic en el badge = corregir el método (control interno, auditado).
+                    // No altera la factura ni el desglose fiscal; el método elegido
+                    // asume el total completo. El pago mixto solo nace del POS.
+                    ->action(
+                        Action::make('corregir_pago')
+                            ->modalHeading('Corregir forma de pago (control interno)')
+                            ->modalDescription(fn (Venta $record): string => 'Total: L. '.number_format((float) $record->total, 2).' — el método elegido asume el total completo. La factura NO se altera; solo el registro interno.'
+                                .($record->corte?->estado === 'cerrado'
+                                    ? ' ⚠️ El turno de esta venta YA CERRÓ: el desglose de ese corte no se recalcula.'
+                                    : ''))
+                            ->fillForm(fn (Venta $record): array => [
+                                'forma_pago' => $record->forma_pago === 'mixto' ? null : $record->forma_pago,
+                                'banco'      => $record->banco,
+                            ])
+                            ->schema([
+                                Select::make('forma_pago')
+                                    ->label('Forma de pago')
+                                    ->options(['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia'])
+                                    ->required()
+                                    ->live(),
+                                Select::make('banco')
+                                    ->label('Banco')
+                                    ->options(array_combine(config('empresa.bancos', []), config('empresa.bancos', [])))
+                                    ->required(fn (Get $get): bool => $get('forma_pago') === 'transferencia')
+                                    ->visible(fn (Get $get): bool => in_array($get('forma_pago'), ['tarjeta', 'transferencia'], true)),
+                            ])
+                            ->visible(fn (Venta $record): bool => Acceso::puede('CorregirPago') && $record->pagada)
+                            ->action(function (Venta $record, array $data): void {
+                                abort_unless(Acceso::puede('CorregirPago'), 403);
+
+                                try {
+                                    app(VentaService::class)->corregirPago($record, $data['forma_pago'], $data['banco'] ?? null);
+                                } catch (RestauranteException $e) {
+                                    Notification::make()->title('No se pudo corregir')->body($e->getMessage())->danger()->send();
+
+                                    return;
+                                }
+
+                                Notification::make()->title('Forma de pago corregida')->body('El cambio quedó en el Registro de Actividad.')->success()->send();
+                            }),
+                    )
+                    ->toggleable(),
+                // Solo aparece cuando el pago fue corregido: muestra cómo se
+                // EMITIÓ la factura (snapshot); "Pago" muestra el interno actual.
+                TextColumn::make('pago_original')
+                    ->label('Pago original')
+                    ->badge()
+                    ->color('warning')
+                    ->state(fn (Venta $record): ?string => $record->factura?->forma_pago !== null
+                        && $record->factura->forma_pago !== $record->forma_pago
+                            ? $record->factura->forma_pago
+                            : null)
+                    ->formatStateUsing(fn (?string $state): string => ucfirst((string) $state))
+                    ->placeholder('—')
+                    ->tooltip('Forma de pago con la que se emitió la factura (la columna Pago muestra la corrección interna)')
                     ->toggleable(),
                 TextColumn::make('cajero.name')->label('Cajero')->placeholder('—'),
                 TextColumn::make('gravado')->label('Gravado')->money('HNL')->toggleable(),

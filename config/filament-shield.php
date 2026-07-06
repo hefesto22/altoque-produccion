@@ -248,6 +248,7 @@ return [
         'ExportVentas'   => 'Exportar reporte de ventas',
         'VerCortesTodos' => 'Ver cortes de otros cajeros',
         'AbrirTurno'     => 'Abrir turnos de caja',
+        'CorregirPago'   => 'Corregir forma de pago (interno)',
     ],
 
     /*

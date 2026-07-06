@@ -43,6 +43,8 @@ class Factura extends Model
         'correlativo',
         'numero',
         'detallada',
+        'forma_pago',
+        'pagos_detalle',
         'hash_verificacion',
         'rtn_cliente',
         'nombre_cliente',
@@ -64,6 +66,7 @@ class Factura extends Model
         return [
             'correlativo'    => 'integer',
             'detallada'      => 'boolean',
+            'pagos_detalle'  => 'array',
             'gravado'        => 'decimal:2',
             'exento'         => 'decimal:2',
             'subtotal_lista' => 'decimal:2',

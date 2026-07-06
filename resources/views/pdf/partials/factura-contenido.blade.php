@@ -6,7 +6,10 @@
          de la ORDEN (local/llevar/domicilio), arriba a la derecha ───── --}}
     @php
         $nombreOrden = $f->venta?->nombre_orden ?: $f->venta?->comanda?->cliente_nombre;
-        $pagosVenta = $f->venta?->pagos ?? collect();
+        // SNAPSHOT de la factura (congelado al emitir): la reimpresión es
+        // idéntica al original aunque el pago interno se corrija después.
+        $pagosFactura = collect($f->pagos_detalle ?? []);
+        $formaPagoFactura = $f->forma_pago ?? $f->venta?->forma_pago ?? 'efectivo';
     @endphp
     @if ($f->venta?->numero_orden)
         <div class="orden">{{ $f->venta->numero_orden }}{{ $nombreOrden ? ' · '.$nombreOrden : '' }}</div>
@@ -145,13 +148,13 @@
 
     <div class="hr"></div>
     <div class="sm bold">Son: {{ \App\Support\NumeroALetras::convertir((float) $f->total) }}</div>
-    @if ($pagosVenta->count() > 1)
+    @if ($pagosFactura->count() > 1)
         <div class="sm" style="margin-top:2px;">Forma de pago: MIXTO</div>
-        @foreach ($pagosVenta as $p)
-            <div class="sm">&nbsp;&nbsp;{{ mb_strtoupper($p->metodo).($p->banco ? ' ('.$p->banco.')' : '') }}: L. {{ number_format((float) $p->monto, 2) }}</div>
+        @foreach ($pagosFactura as $p)
+            <div class="sm">&nbsp;&nbsp;{{ mb_strtoupper($p['metodo']).(! empty($p['banco']) ? ' ('.$p['banco'].')' : '') }}: L. {{ number_format((float) $p['monto'], 2) }}</div>
         @endforeach
     @else
-        <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($f->venta?->forma_pago ?? 'efectivo').($pagosVenta->first()?->banco ? ' ('.$pagosVenta->first()->banco.')' : '') }}</div>
+        <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($formaPagoFactura).(! empty($pagosFactura->first()['banco'] ?? null) ? ' ('.$pagosFactura->first()['banco'].')' : '') }}</div>
     @endif
 
     <div class="hr"></div>

@@ -77,6 +77,7 @@ class RestauranteAccessSeeder extends Seeder
         'VerCortesTodos', // ver cortes de otros cajeros (supervisión)
         'AbrirTurno',     // abrir turno de caja (quien entrega el fondo)
         'AnularFactura',  // anular factura SAR (queda registrada, no se borra)
+        'CorregirPago',   // corregir forma de pago de una venta (control interno, auditado)
     ];
 
     /**

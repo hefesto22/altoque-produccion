@@ -163,6 +163,52 @@ final class VentaService
     }
 
     /**
+     * Corrige la forma de pago de una venta YA registrada (control interno).
+     *
+     * NO toca el documento fiscal: gravado/exento/ISV/total y el correlativo
+     * SAR quedan intactos — por eso no requiere anulación. Reemplaza el
+     * snapshot de venta_pagos validando que la suma cuadre al centavo, y
+     * deja rastro completo en Activity Log (quién, de qué, a qué).
+     *
+     * OJO: si el corte de caja de la venta ya está cerrado, su snapshot
+     * congelado NO se recalcula (quedó conciliado con los números del
+     * momento del cierre). La UI lo advierte antes de confirmar.
+     *
+     * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
+     *
+     * @throws PagosNoCuadranException
+     */
+    public function corregirPago(Venta $venta, string $formaPago, ?string $banco = null, ?array $pagos = null): Venta
+    {
+        return DB::transaction(function () use ($venta, $formaPago, $banco, $pagos): Venta {
+            $anterior = [
+                'forma_pago' => $venta->forma_pago,
+                'pagos'      => $venta->pagos()->get(['metodo', 'banco', 'monto'])->toArray(),
+            ];
+
+            $normalizado = $this->normalizarPagos((float) $venta->total, $formaPago, $banco, $pagos);
+
+            $venta->pagos()->delete();
+            $venta->pagos()->createMany($normalizado['filas']);
+
+            $venta->update([
+                'forma_pago' => $normalizado['forma'],
+                'banco'      => $normalizado['forma'] === 'mixto' ? null : $normalizado['filas'][0]['banco'],
+            ]);
+
+            activity()
+                ->performedOn($venta)
+                ->withProperties(['antes' => $anterior, 'despues' => [
+                    'forma_pago' => $normalizado['forma'],
+                    'pagos'      => $normalizado['filas'],
+                ]])
+                ->log('Corrigió la forma de pago (control interno)');
+
+            return $venta;
+        });
+    }
+
+    /**
      * Crea la venta y sus items (snapshots) con el desglose calculado.
      *
      * @param array<int, LineaVenta> $lineas
