@@ -18,10 +18,14 @@ final class ComandaService
      * Crea la comanda a partir de una venta ya registrada. Solo recibe los
      * items que van a cocina (subconjunto de la venta, para pedidos mixtos).
      *
+     * $entregada = true → nace ya ENTREGADA (buffet de local cobrado al
+     * momento): el ticket se imprime igual pero no aparece en el KDS de
+     * cocina, que a 500+ ventas/día se inundaría de comandas sin marcar.
+     *
      * @param array<int, array{nombre: string, cantidad: int, detalle: array<int, string>}> $items
      * @param array{nombre?: string, telefono?: string, identidad?: string, direccion?: string} $domicilio
      */
-    public function crear(Venta $venta, string $tipo, array $items, array $domicilio = []): Comanda
+    public function crear(Venta $venta, string $tipo, array $items, array $domicilio = [], bool $entregada = false): Comanda
     {
         $correlativo = (int) DB::selectOne("SELECT nextval('comandas_correlativo_seq') AS n")->n;
 
@@ -30,7 +34,9 @@ final class ComandaService
             'numero'   => sprintf('C-%05d', $correlativo),
             'tipo'     => $tipo,
             // Nace en "preparando": la cocina empieza al toque, sin paso previo.
-            'estado'            => 'preparando',
+            'estado'            => $entregada ? 'entregado' : 'preparando',
+            'listo_at'          => $entregada ? now() : null,
+            'entregado_at'      => $entregada ? now() : null,
             'items'             => $items,
             'cliente_nombre'    => $domicilio['nombre'] ?? null,
             'cliente_telefono'  => $domicilio['telefono'] ?? null,

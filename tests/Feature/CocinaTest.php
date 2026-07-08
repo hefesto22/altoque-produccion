@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\AlertaReposicion;
+use App\Models\Comanda;
+use App\Models\EmpresaSetting;
 use App\Models\Producto;
 use App\Models\User;
 use App\Models\Venta;
@@ -95,4 +97,42 @@ it('repone y limpia la alerta del complemento', function () {
 
     expect($svc->productosConAlerta())->toBe([])
         ->and(AlertaReposicion::where('estado', 'activa')->count())->toBe(0);
+});
+
+// ── Comanda de local cobrado (nace entregada, imprime sin pasar por el KDS) ──
+
+it('una comanda entregada de local imprime su ticket pero no aparece en cocina', function () {
+    $comanda = app(ComandaService::class)->crear(
+        ventaSimple(),
+        'local',
+        [['nombre' => 'Desayuno típico', 'cantidad' => 1, 'detalle' => ['Frijoles', 'Huevo rebuelto']]],
+        entregada: true,
+    );
+
+    expect($comanda->estado)->toBe('entregado')
+        ->and($comanda->entregado_at)->not->toBeNull()
+        ->and($comanda->listo_at)->not->toBeNull()
+        // El KDS no la muestra: nació resuelta, nadie tiene que marcarla.
+        ->and(Comanda::enCocina()->pluck('id')->all())->not->toContain($comanda->id);
+
+    // El ticket firmado imprime normal (es lo que sale junto a la factura).
+    $this->get($comanda->urlTicket())
+        ->assertOk()
+        ->assertSee('Desayuno típico');
+});
+
+it('una comanda normal sigue naciendo en preparando y visible en cocina', function () {
+    $comanda = app(ComandaService::class)->crear(
+        ventaSimple(),
+        'llevar',
+        [['nombre' => 'Pollo', 'cantidad' => 1, 'detalle' => []]],
+    );
+
+    expect($comanda->estado)->toBe('preparando')
+        ->and($comanda->entregado_at)->toBeNull()
+        ->and(Comanda::enCocina()->pluck('id')->all())->toContain($comanda->id);
+});
+
+it('el flag comanda_en_local viene activado por defecto (lo pidió el negocio)', function () {
+    expect(EmpresaSetting::actual()->imprimeComandaEnLocal())->toBeTrue();
 });

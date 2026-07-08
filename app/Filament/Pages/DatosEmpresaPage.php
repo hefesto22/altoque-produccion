@@ -94,6 +94,8 @@ class DatosEmpresaPage extends Page
                         Toggle::make('factura_detallada')->label('Detallar productos por defecto')->inline(false),
                         TextInput::make('dia_limite_anulacion')->label('Día límite de anulación')->numeric()->minValue(1)->maxValue(28)
                             ->helperText('Día del mes siguiente hasta el cual se puede anular.'),
+                        Toggle::make('comanda_en_local')->label('Imprimir comanda en ventas de local')->inline(false)
+                            ->helperText('Al cobrar en el local, la comanda sale junto a la factura en la misma impresión. No aparece en la pantalla de cocina.'),
                     ])->columns(3),
             ]);
     }

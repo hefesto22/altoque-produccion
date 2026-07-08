@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $formas_pago_texto
  * @property string $factura_concepto
  * @property bool $factura_detallada
+ * @property bool $comanda_en_local
  * @property int $dia_limite_anulacion
  */
 class EmpresaSetting extends Model
@@ -39,6 +40,7 @@ class EmpresaSetting extends Model
     {
         return [
             'factura_detallada'    => 'boolean',
+            'comanda_en_local'     => 'boolean',
             'dia_limite_anulacion' => 'integer',
         ];
     }
@@ -70,5 +72,15 @@ class EmpresaSetting extends Model
     public function nombreMostrar(): string
     {
         return $this->nombre_comercial ?: $this->razon_social;
+    }
+
+    /**
+     * ¿Las ventas de local imprimen comanda al cobrar? Default true (lo pidió
+     * el negocio). El `?? true` cubre una instancia cacheada anterior a la
+     * migración que agregó la columna.
+     */
+    public function imprimeComandaEnLocal(): bool
+    {
+        return (bool) ($this->comanda_en_local ?? true);
     }
 }

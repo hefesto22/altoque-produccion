@@ -12,6 +12,7 @@ use App\Models\Cliente;
 use App\Models\Comanda;
 use App\Models\ComboEspecial;
 use App\Models\CorteCaja;
+use App\Models\EmpresaSetting;
 use App\Models\Producto;
 use App\Models\Servicio;
 use App\Models\Venta;
@@ -840,14 +841,17 @@ class PuntoDeVenta extends Page
      *  - domicilio: toda la orden a cocina; la lleva un repartidor (con dirección).
      */
     /**
-     * @param bool $incluirLocal El buffet servido y cobrado al momento no
-     *                           genera comanda; un "pagar después" en el
-     *                           local SÍ (la cocina prepara con su ticket).
+     * @param bool $incluirLocal ¿Las ventas de local generan comanda? Un
+     *                           "pagar después" siempre (la cocina prepara
+     *                           con su ticket); el buffet cobrado al momento
+     *                           según el flag de Datos de la Empresa.
+     * @param bool $entregada La comanda nace ya entregada (local cobrado):
+     *                        imprime su ticket pero no ensucia el KDS.
      */
-    private function enviarAComanda(Venta $venta, bool $incluirLocal = false): ?Comanda
+    private function enviarAComanda(Venta $venta, bool $incluirLocal = false, bool $entregada = false): ?Comanda
     {
         if ($this->tipoServicio === 'local' && ! $incluirLocal) {
-            return null; // el buffet servido en el local no genera comanda
+            return null; // ventas de local sin comanda (flag desactivado)
         }
 
         $datos = $this->tipoServicio === 'domicilio'
@@ -866,7 +870,7 @@ class PuntoDeVenta extends Page
             'nota'     => $i['nota'] ?? '',
         ], array_values($this->carrito));
 
-        $comanda = app(ComandaService::class)->crear($venta, $this->tipoServicio, $items, $datos);
+        $comanda = app(ComandaService::class)->crear($venta, $this->tipoServicio, $items, $datos, $entregada);
 
         $etiquetaTipo = match ($this->tipoServicio) {
             'domicilio' => 'Domicilio',
@@ -875,7 +879,7 @@ class PuntoDeVenta extends Page
         };
 
         Notification::make()
-            ->title('Enviado a cocina')
+            ->title($entregada ? 'Comanda impresa' : 'Enviado a cocina')
             ->body("Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
             ->success()
             ->send();
@@ -1367,11 +1371,17 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        // Cocina necesita su ticket físico: si la orden genera comanda
-        // (llevar/domicilio), factura + comanda salen en UNA sola ventana
-        // de impresión como documento de dos páginas (la térmica corta
-        // entre una y otra). En el local solo sale la factura.
-        $comanda = $this->enviarAComanda($factura->venta);
+        // Factura + comanda salen en UNA sola ventana de impresión como
+        // documento de dos páginas (la térmica corta entre una y otra).
+        // El local también saca comanda (lo pidió el negocio, configurable
+        // en Datos de la Empresa), pero nace ENTREGADA: imprime su ticket
+        // sin aparecer en el KDS de cocina.
+        $esLocal = $this->tipoServicio === 'local';
+        $comanda = $this->enviarAComanda(
+            $factura->venta,
+            incluirLocal: EmpresaSetting::actual()->imprimeComandaEnLocal(),
+            entregada: $esLocal,
+        );
 
         $this->dispatch(
             'imprimir-factura',

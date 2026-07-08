@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\URL;
 
 /**
  * Comanda de cocina para pedidos 'para llevar', 'a domicilio' o 'en el
- * local' pendiente de pago (pagar después). El buffet servido y cobrado
- * al momento no genera comanda.
+ * local'. El buffet de local cobrado al momento también genera comanda
+ * (configurable en Datos de la Empresa), pero nace ya ENTREGADA: se
+ * imprime su ticket junto a la factura sin pasar por el KDS.
  *
  * Flujo de estado: pendiente → preparando → listo → entregado.
  *
