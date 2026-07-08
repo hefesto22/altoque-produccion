@@ -13,7 +13,9 @@
             color: #000;
             font-size: 12px;
             line-height: 1.35;
-            /* Trazo engrosado para térmicas que imprimen tenue. */
+            /* TODO en negrita (pedido del cliente) + trazo engrosado
+               para térmicas que imprimen tenue. */
+            font-weight: 700;
             -webkit-text-stroke: 0.25px #000;
         }
         .center { text-align: center; }

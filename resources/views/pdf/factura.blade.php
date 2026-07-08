@@ -8,10 +8,11 @@
            lo toma de @page. */
         @page { size: 80mm 250mm; margin: 3mm; }
         * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 10.5px; color: #000; line-height: 1.32; }
-        /* Térmicas que imprimen tenue (3nStar): engrosar el trazo de todas
-           las letras sin perder la jerarquía de negritas. Complementa el
-           ajuste de densidad del driver de la impresora. */
+        /* TODO el documento en negrita (pedido del cliente): en térmica la
+           letra normal sale tenue; el bold parejo se lee mejor. */
+        html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 10.5px; color: #000; line-height: 1.32; font-weight: 700; }
+        /* Térmicas que imprimen tenue (3nStar): engrosar además el trazo.
+           Complementa el ajuste de densidad del driver de la impresora. */
         body { -webkit-text-stroke: 0.25px #000; }
         .doc { width: 74mm; text-transform: uppercase; }
         .preserve { text-transform: none; }
