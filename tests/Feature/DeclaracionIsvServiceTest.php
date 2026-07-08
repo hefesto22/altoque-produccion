@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Domain\Exceptions\PeriodoNoFinalizadoException;
 use App\Domain\Exceptions\PeriodoYaDeclaradoException;
+use App\Models\Cai;
+use App\Models\Factura;
 use App\Models\User;
 use App\Models\Venta;
 use App\Services\Fiscal\DeclaracionIsvService;
@@ -74,4 +76,34 @@ it('reabre un período declarado para rectificativa', function () {
 
     expect($periodo->estado)->toBe('abierto')
         ->and($periodo->declarado_at)->toBeNull();
+});
+
+it('una venta con factura anulada no suma en la declaración del período', function () {
+    // Escenario real: factura con error → se anula → se emite la corregida.
+    // La declaración solo debe sumar la corregida; el ISV no se declara doble.
+    $vAnulada = ventaEn($this->cajero->id, 'factura', 86.96, 0, 13.04, 100, $this->mp->copy()->startOfMonth()->addDay());
+    $vCorregida = ventaEn($this->cajero->id, 'factura', 86.96, 0, 13.04, 100, $this->mp->copy()->startOfMonth()->addDay());
+
+    $cai = Cai::factory()->create();
+
+    Factura::create([
+        'venta_id'   => $vAnulada->id, 'cai_id' => $cai->id, 'correlativo' => 1,
+        'numero'     => '000-001-01-00000001', 'nombre_cliente' => 'X',
+        'gravado'    => 86.96, 'exento' => 0, 'isv' => 13.04, 'total' => 100,
+        'anulada'    => true, 'motivo_anulacion' => 'Corregida', 'anulada_at' => now(),
+        'emitida_at' => $vAnulada->vendida_at,
+    ]);
+    Factura::create([
+        'venta_id'   => $vCorregida->id, 'cai_id' => $cai->id, 'correlativo' => 2,
+        'numero'     => '000-001-01-00000002', 'nombre_cliente' => 'X',
+        'gravado'    => 86.96, 'exento' => 0, 'isv' => 13.04, 'total' => 100,
+        'emitida_at' => $vCorregida->vendida_at,
+    ]);
+
+    $r = $this->service->calcular($this->mp->year, $this->mp->month);
+
+    expect($r->cantidadVentas)->toBe(1)
+        ->and($r->isv)->toBe(13.04)      // solo la corregida — no 26.08
+        ->and($r->total)->toBe(100.0)
+        ->and($r->facturasTotal)->toBe(100.0);
 });

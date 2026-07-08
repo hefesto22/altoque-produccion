@@ -168,4 +168,20 @@ class Venta extends Model
     {
         return $query->where('pagada', false);
     }
+
+    /**
+     * Ventas que cuentan para caja y corte: cobradas y sin factura anulada.
+     * Una anulación ("anular y corregir" o "solo anular") saca la venta del
+     * conteo — el dinero se devolvió o se recobró en la venta corregida;
+     * dejarla sumaría doble el efectivo esperado del turno.
+     *
+     * @param Builder<Venta> $query
+     *
+     * @return Builder<Venta>
+     */
+    public function scopeCuentaEnCaja(Builder $query): Builder
+    {
+        return $query->where('pagada', true)
+            ->whereDoesntHave('factura', fn (Builder $q) => $q->where('anulada', true));
+    }
 }

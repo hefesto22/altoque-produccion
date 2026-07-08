@@ -326,8 +326,9 @@ class PuntoDeVenta extends Page
             return $vacio;
         }
 
+        // cuentaEnCaja: excluye pendientes Y ventas con factura anulada.
         $fila = Venta::query()
-            ->where('corte_caja_id', $corte->id)->where('pagada', true)
+            ->where('corte_caja_id', $corte->id)->cuentaEnCaja()
             ->selectRaw("count(*) c, coalesce(sum(total),0) t,
                 coalesce(sum(costo_viaje) filter (where tipo_orden='domicilio' and forma_pago='transferencia'),0) dom_vt")
             ->first();
@@ -343,6 +344,7 @@ class PuntoDeVenta extends Page
             FROM venta_pagos vp
             JOIN ventas v ON v.id = vp.venta_id
             WHERE v.corte_caja_id = ? AND v.pagada = true
+              AND NOT EXISTS (SELECT 1 FROM facturas f WHERE f.venta_id = v.id AND f.anulada = true)
         ", [$corte->id]);
 
         $porBanco = static fn (string $metodo): array => collect(DB::select('
@@ -350,6 +352,7 @@ class PuntoDeVenta extends Page
                 FROM venta_pagos vp
                 JOIN ventas v ON v.id = vp.venta_id
                 WHERE v.corte_caja_id = ? AND v.pagada = true
+                  AND NOT EXISTS (SELECT 1 FROM facturas f WHERE f.venta_id = v.id AND f.anulada = true)
                   AND vp.metodo = ? AND vp.banco IS NOT NULL
                 GROUP BY vp.banco ORDER BY vp.banco
             ', [$corte->id, $metodo]))

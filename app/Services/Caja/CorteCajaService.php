@@ -54,9 +54,11 @@ final class CorteCajaService
     public function cerrar(CorteCaja $corte, ?float $efectivoContado, ?string $notas = null, bool $automatico = false): CorteCaja
     {
         return DB::transaction(function () use ($corte, $efectivoContado, $notas, $automatico): CorteCaja {
+            // cuentaEnCaja: fuera pendientes por cobrar Y ventas con factura
+            // anulada (su dinero se devolvió o se recobró en la corregida).
             $fila = Venta::query()
                 ->where('corte_caja_id', $corte->id)
-                ->where('pagada', true)   // los pendientes por cobrar no cuentan
+                ->cuentaEnCaja()
                 ->selectRaw('
                     count(*) as cantidad,
                     coalesce(sum(total), 0) as total,
@@ -75,6 +77,7 @@ final class CorteCajaService
                 FROM venta_pagos vp
                 JOIN ventas v ON v.id = vp.venta_id
                 WHERE v.corte_caja_id = ? AND v.pagada = true
+                  AND NOT EXISTS (SELECT 1 FROM facturas f WHERE f.venta_id = v.id AND f.anulada = true)
             ", [$corte->id]);
 
             $totalEfectivo = (float) ($pagos->efectivo ?? 0);

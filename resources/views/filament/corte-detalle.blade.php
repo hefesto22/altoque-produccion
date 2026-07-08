@@ -1,16 +1,18 @@
 @php
-    // Totales EN VIVO desde las ventas del turno (las ventas no cambian una vez
-    // dentro del corte, así que esto vale tanto para turnos abiertos como cerrados).
-    $cantidad   = $corte->ventas()->count();
-    $totalVentas = (float) $corte->ventas()->sum('total');
-    $totalIsv   = (float) $corte->ventas()->sum('isv');
-    $efectivo   = (float) $corte->ventas()->where('forma_pago', 'efectivo')->sum('total');
-    $tarjeta    = (float) $corte->ventas()->where('forma_pago', 'tarjeta')->sum('total');
-    $transfer   = (float) $corte->ventas()->where('forma_pago', 'transferencia')->sum('total');
-    $porBanco   = $corte->ventas()->where('forma_pago', 'transferencia')->whereNotNull('banco')
+    // Totales EN VIVO desde las ventas del turno. cuentaEnCaja() excluye las
+    // ventas con factura ANULADA: su dinero se devolvió o se recobró en la
+    // venta corregida, sumarlas duplicaría el efectivo esperado.
+    $caja       = fn () => $corte->ventas()->cuentaEnCaja();
+    $cantidad   = $caja()->count();
+    $totalVentas = (float) $caja()->sum('total');
+    $totalIsv   = (float) $caja()->sum('isv');
+    $efectivo   = (float) $caja()->where('forma_pago', 'efectivo')->sum('total');
+    $tarjeta    = (float) $caja()->where('forma_pago', 'tarjeta')->sum('total');
+    $transfer   = (float) $caja()->where('forma_pago', 'transferencia')->sum('total');
+    $porBanco   = $caja()->where('forma_pago', 'transferencia')->whereNotNull('banco')
         ->selectRaw('banco, sum(total) as total')->groupBy('banco')->orderBy('banco')->get();
-    $sinBanco   = (float) $corte->ventas()->where('forma_pago', 'transferencia')->whereNull('banco')->sum('total');
-    $tarjetaBanco = $corte->ventas()->where('forma_pago', 'tarjeta')->whereNotNull('banco')
+    $sinBanco   = (float) $caja()->where('forma_pago', 'transferencia')->whereNull('banco')->sum('total');
+    $tarjetaBanco = $caja()->where('forma_pago', 'tarjeta')->whereNotNull('banco')
         ->selectRaw('banco, sum(total) as total')->groupBy('banco')->orderBy('banco')->get();
 
     $fondo      = (float) $corte->fondo_inicial;
@@ -21,7 +23,7 @@
 
     // Lo que la empresa le debe a los repartidores: viaje de los domicilios
     // pagados por transferencia (el efectivo el repartidor ya lo entrega).
-    $domViajeTransfer = (float) $corte->ventas()->where('tipo_orden', 'domicilio')->where('forma_pago', 'transferencia')->sum('costo_viaje');
+    $domViajeTransfer = (float) $caja()->where('tipo_orden', 'domicilio')->where('forma_pago', 'transferencia')->sum('costo_viaje');
 @endphp
 
 <div style="display:flex; flex-direction:column; gap:1rem; font-size:.9rem;">
@@ -135,12 +137,19 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse ($corte->ventas()->orderBy('vendida_at')->get() as $v)
-                    <tr style="border-top:1px solid rgba(128,128,128,.12);">
-                        <td style="padding:.35rem .2rem;">{{ $v->vendida_at->format('h:i A') }}</td>
-                        <td style="padding:.35rem .2rem;">{{ ucfirst($v->tipo) }}{{ $v->numero_recibo ? ' '.$v->numero_recibo : '' }}</td>
-                        <td style="padding:.35rem .2rem;">{{ ucfirst($v->forma_pago) }}{{ $v->banco ? ' · '.$v->banco : '' }}</td>
-                        <td style="padding:.35rem .2rem; text-align:right; font-weight:600;">L. {{ number_format((float) $v->total, 2) }}</td>
+                {{-- Las anuladas se listan tachadas (transparencia para auditar) pero NO suman en los totales de arriba. --}}
+                @forelse ($corte->ventas()->with('factura:id,venta_id,anulada')->orderBy('vendida_at')->get() as $v)
+                    @php $anulada = (bool) ($v->factura->anulada ?? false); @endphp
+                    <tr style="border-top:1px solid rgba(128,128,128,.12); {{ $anulada ? 'opacity:.45;' : '' }}">
+                        <td style="padding:.35rem .2rem; {{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ $v->vendida_at->format('h:i A') }}</td>
+                        <td style="padding:.35rem .2rem;">
+                            <span style="{{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ ucfirst($v->tipo) }}{{ $v->numero_recibo ? ' '.$v->numero_recibo : '' }}</span>
+                            @if ($anulada)
+                                <span style="margin-left:.35rem; padding:.05rem .45rem; border-radius:999px; font-size:.62rem; font-weight:700; text-transform:uppercase; background:rgba(239,68,68,.15); color:#ef4444;">Anulada</span>
+                            @endif
+                        </td>
+                        <td style="padding:.35rem .2rem; {{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ ucfirst($v->forma_pago) }}{{ $v->banco ? ' · '.$v->banco : '' }}</td>
+                        <td style="padding:.35rem .2rem; text-align:right; font-weight:600; {{ $anulada ? 'text-decoration:line-through;' : '' }}">L. {{ number_format((float) $v->total, 2) }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="4" style="padding:.6rem; opacity:.55; text-align:center;">Sin ventas en este turno.</td></tr>

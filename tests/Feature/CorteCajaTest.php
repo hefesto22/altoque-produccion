@@ -3,12 +3,15 @@
 declare(strict_types=1);
 
 use App\Domain\ValueObjects\LineaVenta;
+use App\Domain\ValueObjects\RTN;
+use App\Models\Cai;
 use App\Models\CorteCaja;
 use App\Models\Producto;
 use App\Models\User;
 use App\Models\Venta;
 use App\Services\Caja\CorteCajaService;
 use App\Services\Cocina\ComandaService;
+use App\Services\Facturacion\FacturacionSarService;
 use App\Services\Pos\VentaService;
 
 it('abre un turno y vincula las ventas a ese corte', function () {
@@ -112,4 +115,63 @@ it('el cierre manual NO queda marcado como automático', function () {
 
     expect($cerrado->cierre_automatico)->toBeFalse()
         ->and((float) $cerrado->diferencia)->toBe(0.00);
+});
+
+it('una venta con factura anulada no cuenta en el corte ni en el efectivo esperado', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    $producto = Producto::factory()->proteina()->create(['precio' => 100]);
+    $ventas = app(VentaService::class);
+    $caja = app(CorteCajaService::class);
+
+    $corte = $caja->abrir($cajero->id, 200.00);
+
+    // Dos facturas en efectivo; se anula una (ej: "anular y corregir").
+    $f1 = $ventas->registrarFactura(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        new RTN('08011985012345'),
+        'Cliente Uno',
+        'efectivo',
+    );
+    $ventas->registrarFactura(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        new RTN('08011985012345'),
+        'Cliente Dos',
+        'efectivo',
+    );
+
+    app(FacturacionSarService::class)
+        ->anular($f1, 'Error de digitación', $cajero->id);
+
+    $cerrado = $caja->cerrar($corte, 300.00); // fondo 200 + solo la venta viva 100
+
+    expect($cerrado->cantidad_ventas)->toBe(1)
+        ->and((float) $cerrado->total_ventas)->toBe(100.00)
+        ->and((float) $cerrado->total_efectivo)->toBe(100.00)
+        ->and((float) $cerrado->diferencia)->toBe(0.00); // la anulada NO infló el esperado
+});
+
+it('el scope cuentaEnCaja excluye anuladas y pendientes', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    $producto = Producto::factory()->proteina()->create(['precio' => 100]);
+    $ventas = app(VentaService::class);
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $factura = $ventas->registrarFactura(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        new RTN('08011985012345'),
+        'Cliente',
+        'efectivo',
+    );
+    $ventas->registrarPendiente([new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)], $cajero->id, 'local');
+
+    expect(Venta::cuentaEnCaja()->count())->toBe(1); // la viva; el pendiente no
+
+    app(FacturacionSarService::class)->anular($factura, 'Prueba', $cajero->id);
+
+    expect(Venta::cuentaEnCaja()->count())->toBe(0); // anulada: fuera de caja
 });

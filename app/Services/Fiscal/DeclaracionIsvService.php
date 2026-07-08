@@ -23,6 +23,11 @@ use Illuminate\Support\Facades\DB;
  *
  * El ISV del período es el de TODAS las ventas (recibo o factura), ya
  * que toda venta guarda su desglose para que el contador declare.
+ *
+ * EXCEPTO las ventas con factura ANULADA: su corrección emitió una
+ * factura nueva que sí suma; incluir ambas declararía el ISV dos veces.
+ * (En el Libro de Ventas la anulada SÍ se lista, marcada "ANULADA" —
+ * el SAR exige la continuidad del correlativo; aquí solo no suma.)
  */
 final class DeclaracionIsvService
 {
@@ -35,8 +40,10 @@ final class DeclaracionIsvService
         [$desde, $hasta] = $this->rango($anio, $mes);
 
         // Agregación en SQL, una sola query, columnas explícitas.
+        // Las ventas con factura anulada no suman (ver docblock de la clase).
         $fila = Venta::query()
             ->whereBetween('vendida_at', [$desde, $hasta])
+            ->whereDoesntHave('factura', fn ($q) => $q->where('anulada', true))
             ->selectRaw('
                 count(*) as cantidad,
                 coalesce(sum(gravado), 0) as gravado,
