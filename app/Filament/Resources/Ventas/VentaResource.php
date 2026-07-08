@@ -15,10 +15,12 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -59,7 +61,9 @@ class VentaResource extends Resource
     {
         return parent::getEloquentQuery()
             ->select(['id', 'tipo', 'forma_pago', 'banco', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'isv', 'total', 'cajero_id', 'corte_caja_id', 'pagada', 'vendida_at'])
-            ->with(['cajero:id,name', 'factura', 'corte:id,estado']);
+            // comanda va sin restricción de columnas: es latestOfMany() y su
+            // JOIN interno hace ambiguo un "venta_id" sin prefijo de tabla.
+            ->with(['cajero:id,name', 'factura', 'comanda', 'corte:id,estado']);
     }
 
     public static function table(Table $table): Table
@@ -149,10 +153,50 @@ class VentaResource extends Resource
                 Action::make('pdf')
                     ->label('Factura')
                     ->icon('heroicon-o-printer')
+                    // Reimpresión (pedido del cliente): si la venta tiene
+                    // comanda, pregunta qué imprimir — factura, comanda o
+                    // ambas. Si no tiene (ventas viejas o flag apagado), va
+                    // directo sin modal. Acá el modal no estorba: reimprimir
+                    // es poco frecuente, a diferencia del cobro en el POS.
+                    ->modalHeading('Reimprimir documentos')
+                    ->modalDescription(fn (Venta $record): string => 'Factura '.($record->factura->numero ?? '').' · L. '.number_format((float) $record->total, 2))
+                    ->modalIcon('heroicon-o-printer')
+                    ->modalWidth(Width::Medium)
+                    ->modalSubmitActionLabel('Imprimir')
+                    ->schema(fn (Venta $record): array => $record->comanda === null ? [] : [
+                        ToggleButtons::make('documento')
+                            ->hiddenLabel()
+                            ->options([
+                                'factura' => 'Factura',
+                                'comanda' => 'Comanda',
+                                'ambas'   => 'Factura + comanda',
+                            ])
+                            ->icons([
+                                'factura' => 'heroicon-o-document-text',
+                                'comanda' => 'heroicon-o-fire',
+                                'ambas'   => 'heroicon-o-document-duplicate',
+                            ])
+                            ->colors([
+                                'factura' => 'primary',
+                                'comanda' => 'warning',
+                                'ambas'   => 'success',
+                            ])
+                            ->inline()
+                            ->default('factura')
+                            ->required(),
+                    ])
                     // Imprime directo (HTML instantáneo por iframe, igual que el
                     // POS) — sin pestaña nueva ni esperar a Chromium. El PDF
                     // sigue disponible vía WhatsApp.
-                    ->action(fn (Venta $record, $livewire) => $livewire->dispatch('imprimir-factura', url: $record->factura?->urlTicket()))
+                    ->action(function (Venta $record, array $data, $livewire): void {
+                        $url = match ($data['documento'] ?? 'factura') {
+                            'comanda' => $record->comanda?->urlTicket(),
+                            'ambas'   => $record->factura?->urlDocumentos(),
+                            default   => $record->factura?->urlTicket(),
+                        };
+
+                        $livewire->dispatch('imprimir-factura', url: $url);
+                    })
                     ->visible(fn (Venta $record): bool => $record->factura !== null),
                 Action::make('whatsapp')
                     ->label('WhatsApp')
