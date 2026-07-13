@@ -71,6 +71,19 @@
                 {{-- La sección se oculta si ningún producto coincide con el filtro --}}
                 <x-filament::section x-show="{{ json_encode(array_map(static fn ($p) => $p['nombre'], $productosPorCategoria[$cat])) }}.some(n => coincide(n))">
                     <x-slot name="heading">{{ $titulo }}</x-slot>
+
+                    {{-- Marcar / desmarcar toda la categoría de un clic (ej. bebidas: casi siempre están todas) --}}
+                    <x-slot name="afterHeader">
+                        <x-filament::button
+                            color="gray"
+                            size="sm"
+                            icon="{{ $this->categoriaCompleta($cat) ? 'heroicon-o-minus-circle' : 'heroicon-o-check-circle' }}"
+                            wire:click="alternarCategoria('{{ $cat }}')"
+                        >
+                            {{ $this->categoriaCompleta($cat) ? 'Quitar todo' : 'Seleccionar todo' }}
+                        </x-filament::button>
+                    </x-slot>
+
                     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
                         @foreach ($productosPorCategoria[$cat] as $p)
                             <label
@@ -93,6 +106,19 @@
             <x-filament::section x-show="{{ json_encode(array_map(static fn ($c) => $c['nombre'], $combos)) }}.some(n => coincide(n))">
                 <x-slot name="heading">Combos en la pantalla</x-slot>
                 <x-slot name="description">Marcá qué combos se anuncian en la pantalla del menú para este servicio. Si no marcás ninguno en todo el día, se muestran todos.</x-slot>
+
+                {{-- Marcar / desmarcar todos los combos de un clic --}}
+                <x-slot name="afterHeader">
+                    <x-filament::button
+                        color="gray"
+                        size="sm"
+                        icon="{{ $this->combosCompletos() ? 'heroicon-o-minus-circle' : 'heroicon-o-check-circle' }}"
+                        wire:click="alternarCombos"
+                    >
+                        {{ $this->combosCompletos() ? 'Quitar todo' : 'Seleccionar todo' }}
+                    </x-filament::button>
+                </x-slot>
+
                 <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem;">
                     @foreach ($combos as $c)
                         <label

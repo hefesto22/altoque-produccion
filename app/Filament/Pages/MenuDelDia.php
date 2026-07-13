@@ -64,6 +64,9 @@ class MenuDelDia extends Page
     /** @var array<string, array<int, Producto>> */
     public array $productosPorCategoria = [];
 
+    /** @var array<string, array<int, string>> ids por categoría, como string igual que los checkboxes */
+    public array $idsPorCategoria = [];
+
     /** @var array<int, array<string, mixed>> */
     public array $combos = [];
 
@@ -107,6 +110,14 @@ class MenuDelDia extends Page
             'extra'       => $productos->where('categoria', 'extra')->values()->all(),
             'combo'       => $productos->where('categoria', 'combo')->values()->all(),
         ];
+
+        $this->idsPorCategoria = array_map(
+            static fn (array $items): array => array_map(
+                static fn (Producto $p): string => (string) $p->id,
+                $items,
+            ),
+            $this->productosPorCategoria,
+        );
     }
 
     public function cargarSeleccion(): void
@@ -130,6 +141,60 @@ class MenuDelDia extends Page
             static fn (int $id): string => (string) $id,
             $servicio->seleccionCombosActual($fecha, $this->servicioId),
         );
+    }
+
+    /** True si todos los productos de la categoría ya están marcados. */
+    public function categoriaCompleta(string $categoria): bool
+    {
+        $ids = $this->idsPorCategoria[$categoria] ?? [];
+
+        return $ids !== [] && array_diff($ids, $this->seleccionados) === [];
+    }
+
+    /**
+     * Marca todos los productos de la categoría de un solo clic; si ya
+     * estaban todos marcados, los desmarca. Pensado para categorías que
+     * suelen estar disponibles completas (ej. bebidas).
+     */
+    public function alternarCategoria(string $categoria): void
+    {
+        $ids = $this->idsPorCategoria[$categoria] ?? [];
+
+        if ($ids === []) {
+            return;
+        }
+
+        $this->seleccionados = $this->categoriaCompleta($categoria)
+            ? array_values(array_diff($this->seleccionados, $ids))
+            : array_values(array_unique(array_merge($this->seleccionados, $ids)));
+    }
+
+    /** True si todos los combos de la pantalla ya están marcados. */
+    public function combosCompletos(): bool
+    {
+        $ids = $this->idsDeCombos();
+
+        return $ids !== [] && array_diff($ids, $this->combosSeleccionados) === [];
+    }
+
+    /** Marca todos los combos de un solo clic; si ya estaban todos, los desmarca. */
+    public function alternarCombos(): void
+    {
+        $ids = $this->idsDeCombos();
+
+        if ($ids === []) {
+            return;
+        }
+
+        $this->combosSeleccionados = $this->combosCompletos()
+            ? array_values(array_diff($this->combosSeleccionados, $ids))
+            : array_values(array_unique(array_merge($this->combosSeleccionados, $ids)));
+    }
+
+    /** @return array<int, string> */
+    private function idsDeCombos(): array
+    {
+        return array_map(static fn (array $c): string => (string) $c['id'], $this->combos);
     }
 
     public function updatedFecha(): void
