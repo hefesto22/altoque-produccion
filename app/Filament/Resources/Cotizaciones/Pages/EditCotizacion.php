@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Cotizaciones\Pages;
 
 use App\Filament\Resources\Cotizaciones\CotizacionResource;
+use App\Models\Cliente;
 use App\Services\Eventos\CotizadorEventos;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
@@ -24,6 +25,10 @@ class EditCotizacion extends EditRecord
     protected function afterSave(): void
     {
         CotizadorEventos::make()->recalcular($this->record);
+
+        if ($this->record->cliente_rtn !== null && $this->record->cliente_rtn !== '') {
+            Cliente::registrar($this->record->cliente_rtn, $this->record->cliente_nombre);
+        }
     }
 
     protected function getRedirectUrl(): string
