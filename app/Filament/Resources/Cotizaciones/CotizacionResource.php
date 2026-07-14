@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Cotizaciones;
 
+use App\Domain\Exceptions\RestauranteException;
 use App\Filament\Resources\Cotizaciones\Pages\CreateCotizacion;
 use App\Filament\Resources\Cotizaciones\Pages\EditCotizacion;
 use App\Filament\Resources\Cotizaciones\Pages\ListCotizaciones;
@@ -12,7 +13,10 @@ use App\Filament\Schemas\Components\RTNField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
+use App\Models\CotizacionPago;
 use App\Models\EventoArticulo;
+use App\Services\Eventos\FacturadorEvento;
+use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -35,6 +39,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -225,7 +231,9 @@ class CotizacionResource extends Resource
                             );
                         }),
                     ToggleButtons::make('estado')->label('Estado')
-                        ->options(Cotizacion::ESTADOS)
+                        // Solo estados manuales: 'completada' lo asigna la
+                        // facturación del evento, nunca la mano.
+                        ->options(Cotizacion::ESTADOS_MANUALES)
                         ->colors(Cotizacion::ESTADO_COLORES)
                         ->icons([
                             'borrador'  => 'heroicon-o-pencil',
@@ -256,6 +264,12 @@ class CotizacionResource extends Resource
                     ->placeholder('—')->sortable(),
                 TextColumn::make('personas')->label('Personas')->placeholder('—')->toggleable(),
                 TextColumn::make('total')->label('Total')->money('HNL')->weight('bold')->sortable(),
+                TextColumn::make('pagado')->label('Pagado')
+                    ->state(fn (Cotizacion $record): string => 'L. '.number_format($record->pagado(), 2))
+                    ->description(fn (Cotizacion $record): ?string => $record->saldo() > 0.009
+                        ? 'Saldo: L. '.number_format($record->saldo(), 2)
+                        : null)
+                    ->color(fn (Cotizacion $record): string => $record->saldo() > 0.009 ? 'warning' : 'success'),
                 TextColumn::make('estado')->label('Estado')->badge()
                     ->formatStateUsing(fn (string $state): string => Cotizacion::ESTADOS[$state] ?? $state)
                     ->color(fn (string $state): string => Cotizacion::ESTADO_COLORES[$state] ?? 'gray'),
@@ -275,6 +289,136 @@ class CotizacionResource extends Resource
                     ->icon('heroicon-o-chat-bubble-left-right')
                     ->color('success')
                     ->url(fn (Cotizacion $record): string => $record->urlWhatsApp(), shouldOpenInNewTab: true),
+                // Abonos internos (anticipo hoy, resto después). NO son
+                // documento fiscal: la factura sale al completar el evento.
+                Action::make('abonar')
+                    ->label('Abono')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('warning')
+                    ->modalHeading('Registrar abono')
+                    ->modalIcon('heroicon-o-banknotes')
+                    ->modalDescription(fn (Cotizacion $record): string => $record->numero.' — '.$record->cliente_nombre
+                        .' · Total L. '.number_format((float) $record->total, 2)
+                        .' · Abonado L. '.number_format($record->pagado(), 2)
+                        .' · Saldo L. '.number_format($record->saldo(), 2))
+                    ->modalContent(fn (Cotizacion $record) => view('filament.cotizaciones.abonos', [
+                        'pagos' => $record->pagos()->with('receptor')->get(),
+                    ]))
+                    ->schema(fn (Cotizacion $record): array => [
+                        MontoField::make('monto', 'Monto del abono')
+                            ->maxValue($record->saldo())
+                            ->helperText('Máximo el saldo pendiente: L. '.number_format($record->saldo(), 2)),
+                        ToggleButtons::make('forma_pago')->label('Forma de pago')
+                            ->options(['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia'])
+                            ->icons([
+                                'efectivo'      => 'heroicon-o-banknotes',
+                                'tarjeta'       => 'heroicon-o-credit-card',
+                                'transferencia' => 'heroicon-o-building-library',
+                            ])
+                            ->inline()
+                            ->default('efectivo')
+                            ->required()
+                            ->live(),
+                        Select::make('banco')->label('Banco')
+                            ->options(array_combine(config('empresa.bancos', []), config('empresa.bancos', [])))
+                            ->visible(fn (Get $get): bool => in_array($get('forma_pago'), ['tarjeta', 'transferencia'], true))
+                            ->required(fn (Get $get): bool => in_array($get('forma_pago'), ['tarjeta', 'transferencia'], true)),
+                        TextInput::make('notas')->label('Nota (opcional)')->maxLength(255),
+                    ])
+                    ->visible(fn (Cotizacion $record): bool => ! in_array($record->estado, ['completada', 'rechazada'], true)
+                        && $record->saldo() > 0.009)
+                    ->action(function (Cotizacion $record, array $data): void {
+                        CotizacionPago::create([
+                            'cotizacion_id' => $record->id,
+                            'monto'         => round((float) $data['monto'], 2),
+                            'forma_pago'    => $data['forma_pago'],
+                            'banco'         => in_array($data['forma_pago'], ['tarjeta', 'transferencia'], true) ? ($data['banco'] ?? null) : null,
+                            'notas'         => $data['notas'] ?? null,
+                            'recibido_por'  => Auth::id(),
+                            'recibido_at'   => now(),
+                        ]);
+
+                        Notification::make()
+                            ->title('Abono registrado')
+                            ->body('L. '.number_format((float) $data['monto'], 2).' — saldo restante: L. '.number_format($record->fresh()->saldo(), 2))
+                            ->success()
+                            ->send();
+                    }),
+                // Completar el evento: emite LA factura SAR por el total vía
+                // el flujo normal de ventas (corte del turno, correlativo,
+                // libros y declaración solitas). Si queda saldo, se cobra acá.
+                Action::make('facturar')
+                    ->label('Facturar')
+                    ->icon('heroicon-o-document-check')
+                    ->color('primary')
+                    ->modalHeading('Completar y facturar evento')
+                    ->modalIcon('heroicon-o-document-check')
+                    ->modalDescription(fn (Cotizacion $record): string => $record->numero.' — '.$record->cliente_nombre
+                        .' · Total L. '.number_format((float) $record->total, 2)
+                        .' · Abonado L. '.number_format($record->pagado(), 2)
+                        .($record->saldo() > 0.009
+                            ? ' · Se cobrará el saldo de L. '.number_format($record->saldo(), 2).' y se emitirá la factura SAR por el total.'
+                            : ' · Saldo en cero: se emitirá la factura SAR por el total.'))
+                    ->schema(fn (Cotizacion $record): array => $record->saldo() <= 0.009 ? [] : [
+                        ToggleButtons::make('forma_pago_saldo')->label('Forma de pago del saldo (L. '.number_format($record->saldo(), 2).')')
+                            ->options(['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia'])
+                            ->icons([
+                                'efectivo'      => 'heroicon-o-banknotes',
+                                'tarjeta'       => 'heroicon-o-credit-card',
+                                'transferencia' => 'heroicon-o-building-library',
+                            ])
+                            ->inline()
+                            ->default('efectivo')
+                            ->required()
+                            ->live(),
+                        Select::make('banco_saldo')->label('Banco')
+                            ->options(array_combine(config('empresa.bancos', []), config('empresa.bancos', [])))
+                            ->visible(fn (Get $get): bool => in_array($get('forma_pago_saldo'), ['tarjeta', 'transferencia'], true))
+                            ->required(fn (Get $get): bool => in_array($get('forma_pago_saldo'), ['tarjeta', 'transferencia'], true)),
+                    ])
+                    ->visible(fn (Cotizacion $record): bool => $record->estado === 'aceptada'
+                        && $record->venta_id === null
+                        && Acceso::puede('FacturarEvento'))
+                    ->action(function (Cotizacion $record, array $data): void {
+                        abort_unless(Acceso::puede('FacturarEvento'), 403);
+
+                        try {
+                            $factura = DB::transaction(function () use ($record, $data) {
+                                // El pago del saldo y la factura son atómicos:
+                                // si la factura falla, el pago no queda registrado.
+                                if ($record->saldo() > 0.009) {
+                                    CotizacionPago::create([
+                                        'cotizacion_id' => $record->id,
+                                        'monto'         => $record->saldo(),
+                                        'forma_pago'    => $data['forma_pago_saldo'],
+                                        'banco'         => in_array($data['forma_pago_saldo'], ['tarjeta', 'transferencia'], true) ? ($data['banco_saldo'] ?? null) : null,
+                                        'notas'         => 'Pago del saldo al facturar el evento',
+                                        'recibido_por'  => Auth::id(),
+                                        'recibido_at'   => now(),
+                                    ]);
+                                }
+
+                                return app(FacturadorEvento::class)->facturar($record->fresh(), (int) Auth::id());
+                            });
+                        } catch (RestauranteException $e) {
+                            Notification::make()->title('No se pudo facturar')->body($e->getMessage())->danger()->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Evento facturado')
+                            ->body('Factura '.$factura->numero.' — L. '.number_format((float) $factura->total, 2).'. Entró al corte de tu turno y a los libros.')
+                            ->success()
+                            ->persistent()
+                            ->actions([
+                                Action::make('imprimir')
+                                    ->label('Imprimir factura')
+                                    ->icon('heroicon-o-printer')
+                                    ->url($factura->urlTicket(), shouldOpenInNewTab: true),
+                            ])
+                            ->send();
+                    }),
                 Action::make('estado')
                     ->label('Estado')
                     ->icon('heroicon-o-arrow-path')
@@ -284,7 +428,8 @@ class CotizacionResource extends Resource
                     ->fillForm(fn (Cotizacion $record): array => ['estado' => $record->estado])
                     ->schema([
                         ToggleButtons::make('estado')->hiddenLabel()
-                            ->options(Cotizacion::ESTADOS)
+                            // Sin 'completada': ese estado solo lo pone la facturación.
+                            ->options(Cotizacion::ESTADOS_MANUALES)
                             ->colors(Cotizacion::ESTADO_COLORES)
                             ->icons([
                                 'borrador'  => 'heroicon-o-pencil',
@@ -295,6 +440,7 @@ class CotizacionResource extends Resource
                             ->inline()
                             ->required(),
                     ])
+                    ->visible(fn (Cotizacion $record): bool => $record->estado !== 'completada')
                     ->action(function (Cotizacion $record, array $data): void {
                         $record->update(['estado' => $data['estado']]);
 
@@ -303,8 +449,14 @@ class CotizacionResource extends Resource
                             ->success()
                             ->send();
                     }),
-                EditAction::make(),
-                DeleteAction::make(),
+                // Una cotización COMPLETADA tiene factura SAR emitida: queda
+                // congelada (ni editar ni borrar). Con abonos registrados
+                // tampoco se borra: primero se resuelve la plata.
+                EditAction::make()
+                    ->visible(fn (Cotizacion $record): bool => $record->estado !== 'completada'),
+                DeleteAction::make()
+                    ->visible(fn (Cotizacion $record): bool => $record->estado !== 'completada'
+                        && $record->pagos()->doesntExist()),
             ]);
     }
 

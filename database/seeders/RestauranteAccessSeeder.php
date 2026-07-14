@@ -78,6 +78,7 @@ class RestauranteAccessSeeder extends Seeder
         'AbrirTurno',     // abrir turno de caja (quien entrega el fondo)
         'AnularFactura',  // anular factura SAR (queda registrada, no se borra)
         'CorregirPago',   // corregir forma de pago de una venta (control interno, auditado)
+        'FacturarEvento', // emitir la factura SAR de un evento desde su cotización
     ];
 
     /**

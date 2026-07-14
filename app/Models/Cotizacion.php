@@ -37,6 +37,7 @@ use Illuminate\Support\Facades\URL;
  * @property float|null $anticipo
  * @property string|null $notas
  * @property int|null $creado_por
+ * @property int|null $venta_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read string $numero
@@ -47,6 +48,21 @@ class Cotizacion extends Model
 
     /** @var array<string, string> Estados del ciclo de vida de la cotización. */
     public const ESTADOS = [
+        'borrador'   => 'Borrador',
+        'enviada'    => 'Enviada',
+        'aceptada'   => 'Aceptada',
+        'rechazada'  => 'Rechazada',
+        'completada' => 'Completada',
+    ];
+
+    /**
+     * Estados que se pueden elegir A MANO. `completada` NO está: solo lo
+     * asigna FacturadorEvento al emitir la factura — así nunca existe una
+     * cotización "completada" sin su factura (cero margen de error).
+     *
+     * @var array<string, string>
+     */
+    public const ESTADOS_MANUALES = [
         'borrador'  => 'Borrador',
         'enviada'   => 'Enviada',
         'aceptada'  => 'Aceptada',
@@ -55,10 +71,11 @@ class Cotizacion extends Model
 
     /** @var array<string, string> Color Filament por estado (badges y botones). */
     public const ESTADO_COLORES = [
-        'borrador'  => 'gray',
-        'enviada'   => 'info',
-        'aceptada'  => 'success',
-        'rechazada' => 'danger',
+        'borrador'   => 'gray',
+        'enviada'    => 'info',
+        'aceptada'   => 'success',
+        'rechazada'  => 'danger',
+        'completada' => 'primary',
     ];
 
     /** @var array<int, string> */
@@ -80,6 +97,7 @@ class Cotizacion extends Model
         'anticipo',
         'notas',
         'creado_por',
+        'venta_id',
     ];
 
     /** @return array<string, string> */
@@ -115,6 +133,30 @@ class Cotizacion extends Model
     public function creador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creado_por');
+    }
+
+    /** @return HasMany<CotizacionPago, $this> Abonos internos (no fiscales). */
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(CotizacionPago::class)->orderBy('recibido_at');
+    }
+
+    /** @return BelongsTo<Venta, $this> La venta/factura emitida al completar el evento. */
+    public function venta(): BelongsTo
+    {
+        return $this->belongsTo(Venta::class);
+    }
+
+    /** Total abonado hasta ahora (suma de pagos internos). */
+    public function pagado(): float
+    {
+        return round((float) $this->pagos()->sum('monto'), 2);
+    }
+
+    /** Saldo pendiente de cobro (total − abonado). */
+    public function saldo(): float
+    {
+        return round((float) $this->total - $this->pagado(), 2);
     }
 
     /** Fecha límite de validez de los precios cotizados. */

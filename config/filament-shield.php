@@ -249,6 +249,7 @@ return [
         'VerCortesTodos' => 'Ver cortes de otros cajeros',
         'AbrirTurno'     => 'Abrir turnos de caja',
         'CorregirPago'   => 'Corregir forma de pago (interno)',
+        'FacturarEvento' => 'Facturar eventos (desde cotización)',
     ],
 
     /*
