@@ -1,4 +1,33 @@
 <x-filament-panels::page>
+    {{--
+        Colores que dependen del tema (modo día / noche): Filament pone la
+        clase .dark en <html>, así la barra de armado y el dropdown de
+        clientes se leen bien en ambos modos en vez de quedar fijos en oscuro.
+    --}}
+    <style>
+        .pos-barra-armado {
+            display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
+            padding: .7rem .9rem; border: 2px solid #d946ef; border-radius: .7rem;
+            background: #ffffff;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
+        }
+        .dark .pos-barra-armado {
+            background: rgba(24, 24, 32, .97);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+        }
+        .pos-sugerencias {
+            position: absolute; z-index: 60; left: 0; right: 0; margin-top: .25rem;
+            border-radius: .5rem; overflow: hidden;
+            background: #ffffff; border: 1px solid #cbd5e1;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+        }
+        .dark .pos-sugerencias {
+            background: #1b2740; border-color: #2b3a59; box-shadow: none;
+        }
+        .pos-sugerencias button { color: #111827; }
+        .dark .pos-sugerencias button { color: #e7ecf3; }
+    </style>
+
     {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja --}}
     <div style="text-transform:uppercase;">
     {{-- Turno de caja --}}
@@ -217,7 +246,7 @@
             @if ($proteinaId)
                 @php($prev = $this->platoPreview)
                 <div style="position:sticky; top:.5rem; z-index:30;">
-                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.7rem .9rem; border:2px solid #d946ef; border-radius:.7rem; background:rgba(24,24,32,.97); box-shadow:0 6px 20px rgba(0,0,0,.35);">
+                    <div class="pos-barra-armado">
                         {{-- Plato en construcción: nombre + precio en vivo --}}
                         <div style="flex:1 1 12rem; min-width:11rem;">
                             <div style="font-weight:700;">{{ $prev['nombre'] }}</div>
@@ -652,10 +681,10 @@
                             </x-filament::input.wrapper>
 
                             @if (count($sugerencias))
-                                <div style="position:absolute; z-index:60; left:0; right:0; margin-top:.25rem; background:#1b2740; border:1px solid #2b3a59; border-radius:.5rem; overflow:hidden;">
+                                <div class="pos-sugerencias">
                                     @foreach ($sugerencias as $s)
                                         <button type="button" wire:click="elegirCliente('{{ $s['rtn'] }}', @js($s['nombre']))"
-                                            style="display:block; width:100%; text-align:left; padding:.5rem .6rem; background:none; border:none; cursor:pointer; color:#e7ecf3; border-bottom:1px solid rgba(128,128,128,.15);">
+                                            style="display:block; width:100%; text-align:left; padding:.5rem .6rem; background:none; border:none; cursor:pointer; border-bottom:1px solid rgba(128,128,128,.15);">
                                             <span style="font-weight:600;">{{ $s['nombre'] }}</span>
                                             <span style="display:block; font-size:.72rem; opacity:.7;">RTN: {{ $s['rtn'] }}</span>
                                         </button>
