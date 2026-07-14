@@ -53,7 +53,7 @@
 
         {{-- Combos --}}
         @if (count($combos))
-            <div class="combo-h">🟢 PRECIOS EN COMBO</div>
+            <div class="combo-h">🟢 PRECIOS EN DESCUENTO</div>
             @foreach ($combos as $combo)
                 <div class="combo">{{ $combo }}</div>
             @endforeach
