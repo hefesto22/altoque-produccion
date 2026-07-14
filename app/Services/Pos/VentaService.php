@@ -126,9 +126,10 @@ final class VentaService
      */
     public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null): Factura
     {
-        return DB::transaction(function () use ($venta, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
+        return DB::transaction(function () use ($venta, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
+            // UNA sola caja: la venta entra al turno abierto del sistema
+            // (quién cobró queda en cajero_id).
             $corteId = CorteCaja::query()
-                ->where('cajero_id', $cajeroId)
                 ->where('estado', 'abierto')
                 ->value('id');
 
@@ -236,12 +237,12 @@ final class VentaService
             ? $this->normalizarPagos($resumen->total, $formaPago, $banco, $pagos)
             : ['forma' => $formaPago, 'filas' => []];
 
-        // Una venta pagada al momento entra al turno abierto. Una venta
+        // Una venta pagada al momento entra al turno abierto de LA caja
+        // (una sola gaveta física; la autoría queda en cajero_id). Una venta
         // PENDIENTE no se vincula a ningún turno todavía: entrará al corte
         // del turno en que efectivamente se cobre (ver cobrarPendiente).
         $corteId = $pagada
             ? CorteCaja::query()
-                ->where('cajero_id', $cajeroId)
                 ->where('estado', 'abierto')
                 ->value('id')
             : null;

@@ -384,18 +384,17 @@ class CotizacionResource extends Resource
                     ->action(function (Cotizacion $record, array $data): void {
                         abort_unless(Acceso::puede('FacturarEvento'), 403);
 
-                        // Sin turno abierto no hay nada que intentar: el aviso
-                        // te lleva directo a abrirlo (el cobro del evento entra
-                        // al corte del turno de quien factura).
+                        // Con la caja cerrada no hay nada que intentar: el aviso
+                        // te lleva directo a abrir el turno (una sola caja; el
+                        // cobro del evento entra a ese corte).
                         $turnoAbierto = CorteCaja::query()
-                            ->where('cajero_id', Auth::id())
                             ->where('estado', 'abierto')
                             ->exists();
 
                         if (! $turnoAbierto) {
                             Notification::make()
-                                ->title('Abrí tu turno de caja primero')
-                                ->body('El cobro del evento entra al corte del turno de quien factura. Abrí tu turno y volvé a darle Facturar — la cotización sigue lista.')
+                                ->title('La caja está cerrada — abrí el turno primero')
+                                ->body('El cobro del evento entra al corte del turno abierto. Abrí el turno y volvé a darle Facturar — la cotización sigue lista.')
                                 ->warning()
                                 ->persistent()
                                 ->actions([

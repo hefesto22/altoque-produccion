@@ -13,22 +13,38 @@ use Illuminate\Support\Facades\DB;
  * Apertura y cierre de turno de caja. El cierre concilia el efectivo
  * contado contra el esperado (fondo + ventas en efectivo) y congela el
  * snapshot del turno por agregación SQL.
+ *
+ * UNA SOLA CAJA (decisión de Mauricio, 2026-07-14): el local tiene una
+ * sola gaveta física, así que solo puede existir UN turno abierto en
+ * todo el sistema. Abrirlo desde el POS o desde Cortes De Caja es
+ * exactamente lo mismo, y todas las ventas del período entran a ese
+ * turno (la autoría de quién cobró queda en ventas.cajero_id).
  */
 final class CorteCajaService
 {
-    /** Turno abierto del cajero, o null si no tiene. */
-    public function abierto(int $cajeroId): ?CorteCaja
+    /**
+     * El turno abierto de LA caja, sin importar quién lo abrió.
+     * Null si la caja está cerrada.
+     */
+    public function abiertoGlobal(): ?CorteCaja
     {
         return CorteCaja::query()
-            ->where('cajero_id', $cajeroId)
             ->where('estado', 'abierto')
+            ->orderByDesc('abierto_at')
             ->first();
     }
 
-    /** Abre un turno con su fondo de efectivo y el saldo inicial del terminal POS. */
+    /**
+     * Abre el turno de la caja con su fondo de efectivo y el saldo
+     * inicial del terminal POS.
+     *
+     * Si YA hay un turno abierto (de quien sea), NO se abre otro: se
+     * devuelve el existente (wasRecentlyCreated = false) y la UI avisa
+     * de quién es — una sola caja, un solo turno.
+     */
     public function abrir(int $cajeroId, float $fondoInicial, float $fondoTerminal = 0): CorteCaja
     {
-        $existente = $this->abierto($cajeroId);
+        $existente = $this->abiertoGlobal();
 
         if ($existente !== null) {
             return $existente;

@@ -63,8 +63,8 @@ class ListCorteCajas extends ListRecords
 
                     if (! $corte->wasRecentlyCreated) {
                         Notification::make()
-                            ->title('Ese cajero ya tiene un turno abierto')
-                            ->body('Abierto desde '.$corte->abierto_at?->format('d/m/Y h:i A').'. No se creó uno nuevo.')
+                            ->title('Ya hay un turno abierto — la caja es una sola')
+                            ->body('Turno de '.($corte->cajero?->name ?? '—').' abierto desde '.$corte->abierto_at?->format('d/m/Y h:i A').'. Cerralo antes de abrir otro.')
                             ->warning()
                             ->send();
 

@@ -176,6 +176,9 @@ class PuntoDeVenta extends Page
     // ── Turno de caja ───────────────────────────────────────────────────
     public bool $turnoAbierto = false;
 
+    /** Nombre de quien abrió el turno (la caja es una sola). */
+    public ?string $turnoDe = null;
+
     public ?int $corteId = null;
 
     public ?string $turnoDesde = null;
@@ -273,10 +276,13 @@ class PuntoDeVenta extends Page
 
     private function cargarTurno(): void
     {
-        $corte = app(CorteCajaService::class)->abierto((int) Auth::id());
+        // UNA sola caja física: el turno abierto es del sistema, no de cada
+        // usuario. Quien esté en el POS cobra hacia ese turno.
+        $corte = app(CorteCajaService::class)->abiertoGlobal();
         $this->turnoAbierto = $corte !== null;
         $this->corteId = $corte?->id;
         $this->turnoDesde = $corte?->abierto_at?->format('d/m/Y h:i A');
+        $this->turnoDe = $corte?->cajero?->name;
     }
 
     /**
@@ -296,11 +302,23 @@ class PuntoDeVenta extends Page
         $fondo = is_numeric($this->fondoInicial) ? (float) $this->fondoInicial : 0.0;
         $terminal = is_numeric($this->fondoTerminal) ? (float) $this->fondoTerminal : 0.0;
 
-        app(CorteCajaService::class)->abrir((int) Auth::id(), $fondo, $terminal);
+        $corte = app(CorteCajaService::class)->abrir((int) Auth::id(), $fondo, $terminal);
         $this->fondoInicial = '';
         $this->fondoTerminal = '';
         $this->mostrarApertura = false;
         $this->cargarTurno();
+
+        // Una sola caja: si ya había un turno abierto (de quien sea), no se
+        // creó otro — se avisa de quién es y se cobra hacia ese.
+        if (! $corte->wasRecentlyCreated) {
+            Notification::make()
+                ->title('La caja ya tiene un turno abierto')
+                ->body('Turno de '.($corte->cajero?->name ?? '—').' abierto desde '.($corte->abierto_at?->format('d/m/Y h:i A') ?? '—').'. Se cobra hacia ese turno.')
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         Notification::make()->title('Turno abierto')->body('Ya podés cobrar.')->success()->send();
     }

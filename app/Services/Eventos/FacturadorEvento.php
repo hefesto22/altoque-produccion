@@ -62,13 +62,14 @@ final class FacturadorEvento
             );
         }
 
+        // UNA sola caja: basta con que EL turno del sistema esté abierto
+        // (la venta entra a ese corte; la autoría queda en cajero_id).
         $turnoAbierto = CorteCaja::query()
-            ->where('cajero_id', $cajeroId)
             ->where('estado', 'abierto')
             ->exists();
 
         if (! $turnoAbierto) {
-            throw new EventoNoFacturableException('Abrí tu turno de caja: el cobro del evento entra al corte del turno.');
+            throw new EventoNoFacturableException('La caja está cerrada: abrí el turno para que el cobro del evento entre a su corte.');
         }
 
         $lineas = $this->lineas($cotizacion);

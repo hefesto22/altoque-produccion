@@ -45,7 +45,7 @@
         {{-- Turno abierto: línea fina para no ocupar espacio --}}
         <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; font-size:.76rem;">
             <span style="color:#10b981; font-weight:700;">● Turno abierto</span>
-            <span style="opacity:.55;">desde {{ $turnoDesde }}</span>
+            <span style="opacity:.55;">desde {{ $turnoDesde }}@if ($turnoDe) · {{ $turnoDe }}@endif</span>
             <x-filament::button size="xs" color="danger" outlined wire:click="$set('mostrarCierre', true)" style="margin-left:auto;">Cerrar turno</x-filament::button>
         </div>
     @endif
