@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Cotizaciones;
 
 use App\Domain\Exceptions\RestauranteException;
+use App\Filament\Resources\CorteCajas\CorteCajaResource;
 use App\Filament\Resources\Cotizaciones\Pages\CreateCotizacion;
 use App\Filament\Resources\Cotizaciones\Pages\EditCotizacion;
 use App\Filament\Resources\Cotizaciones\Pages\ListCotizaciones;
@@ -12,6 +13,7 @@ use App\Filament\Schemas\Components\MontoField;
 use App\Filament\Schemas\Components\RTNField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Cliente;
+use App\Models\CorteCaja;
 use App\Models\Cotizacion;
 use App\Models\CotizacionPago;
 use App\Models\EventoArticulo;
@@ -381,6 +383,31 @@ class CotizacionResource extends Resource
                         && Acceso::puede('FacturarEvento'))
                     ->action(function (Cotizacion $record, array $data): void {
                         abort_unless(Acceso::puede('FacturarEvento'), 403);
+
+                        // Sin turno abierto no hay nada que intentar: el aviso
+                        // te lleva directo a abrirlo (el cobro del evento entra
+                        // al corte del turno de quien factura).
+                        $turnoAbierto = CorteCaja::query()
+                            ->where('cajero_id', Auth::id())
+                            ->where('estado', 'abierto')
+                            ->exists();
+
+                        if (! $turnoAbierto) {
+                            Notification::make()
+                                ->title('Abrí tu turno de caja primero')
+                                ->body('El cobro del evento entra al corte del turno de quien factura. Abrí tu turno y volvé a darle Facturar — la cotización sigue lista.')
+                                ->warning()
+                                ->persistent()
+                                ->actions([
+                                    Action::make('abrir_turno')
+                                        ->label('Ir a abrir turno')
+                                        ->icon('heroicon-o-play')
+                                        ->url(CorteCajaResource::getUrl('index')),
+                                ])
+                                ->send();
+
+                            return;
+                        }
 
                         try {
                             $factura = DB::transaction(function () use ($record, $data) {
