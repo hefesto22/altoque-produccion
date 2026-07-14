@@ -98,6 +98,7 @@ class CotizacionResource extends Resource
                         ->columnSpanFull(),
                     TextInput::make('cliente_nombre')->label('Cliente / Empresa')->required()
                         ->placeholder('Nombre del cliente o empresa')
+                        ->extraInputAttributes(['style' => 'text-transform:uppercase'])
                         ->dehydrateStateUsing(fn (string $state): string => mb_strtoupper(trim($state))),
                     TelefonoHondurasField::make('cliente_telefono', 'Teléfono'),
                     RTNField::make('cliente_rtn'),
@@ -127,18 +128,41 @@ class CotizacionResource extends Resource
                                 ->live()
                                 ->dehydrated(false)
                                 // Busca en el catálogo PROPIO de eventos (precios
-                                // personalizados, no los del menú) y prellena;
-                                // todo queda editable por si este evento va distinto.
-                                ->getSearchResultsUsing(fn (string $search): array => EventoArticulo::query()
-                                    ->activos()
-                                    ->where('nombre', 'ilike', "%{$search}%")
-                                    ->orderBy('nombre')
-                                    ->limit(15)
-                                    ->pluck('nombre', 'id')
-                                    ->all())
-                                ->getOptionLabelUsing(fn ($value): ?string => EventoArticulo::query()->find($value)?->nombre)
+                                // personalizados, no los del menú) y prellena.
+                                // Si lo buscado no existe, el mismo dropdown ofrece
+                                // agregarlo como personalizado: pone la descripción
+                                // en MAYÚSCULAS y solo falta escribirle el precio —
+                                // al guardar la cotización entra al catálogo.
+                                ->getSearchResultsUsing(function (string $search): array {
+                                    $resultados = EventoArticulo::query()
+                                        ->activos()
+                                        ->where('nombre', 'ilike', "%{$search}%")
+                                        ->orderBy('nombre')
+                                        ->limit(15)
+                                        ->pluck('nombre', 'id')
+                                        ->all();
+
+                                    $termino = mb_strtoupper(trim($search));
+
+                                    if ($termino !== '' && ! in_array($termino, $resultados, true)) {
+                                        $resultados["nuevo:{$termino}"] = "➕ Agregar \"{$termino}\" (nuevo)";
+                                    }
+
+                                    return $resultados;
+                                })
+                                ->getOptionLabelUsing(fn ($value): ?string => str_starts_with((string) $value, 'nuevo:')
+                                    ? mb_substr((string) $value, 6)
+                                    : EventoArticulo::query()->find($value)?->nombre)
                                 ->afterStateUpdated(function (Set $set, ?string $state): void {
                                     if ($state === null || $state === '') {
+                                        return;
+                                    }
+
+                                    // Artículo nuevo: descripción lista, el precio lo
+                                    // escribe el usuario (personalizado por definición).
+                                    if (str_starts_with($state, 'nuevo:')) {
+                                        $set('descripcion', mb_substr($state, 6));
+
                                         return;
                                     }
 
@@ -153,7 +177,10 @@ class CotizacionResource extends Resource
                                     $set('grava_isv', (bool) $a->grava_isv);
                                 }),
                             TextInput::make('descripcion')->required()
-                                ->placeholder('Ej: Pana de arroz imperial para 50 personas'),
+                                ->placeholder('Ej: Pana de arroz imperial para 50 personas')
+                                // Todo en MAYÚSCULAS: visual al escribir y real al guardar.
+                                ->extraInputAttributes(['style' => 'text-transform:uppercase'])
+                                ->dehydrateStateUsing(fn (string $state): string => mb_strtoupper(trim($state))),
                             TextInput::make('cantidad')->numeric()->required()
                                 ->default(1)->minValue(0.01)
                                 ->live(onBlur: true),
