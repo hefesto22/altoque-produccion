@@ -20,6 +20,7 @@ declare(strict_types=1);
 */
 
 use App\Http\Controllers\ComandaTicketController;
+use App\Http\Controllers\CotizacionPdfController;
 use App\Http\Controllers\FacturaPdfController;
 use App\Http\Controllers\VerificacionController;
 use App\Livewire\MenuPantalla;
@@ -54,4 +55,9 @@ Route::get('/facturas/{factura}/documentos', [FacturaPdfController::class, 'docu
 // Ticket de comanda (80mm, HTML) — ruta FIRMADA: lo imprime el POS para cocina.
 Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'])
     ->name('comandas.ticket')
+    ->middleware('signed');
+
+// PDF de cotización de evento — ruta pública FIRMADA (compartible por WhatsApp).
+Route::get('/cotizaciones/{cotizacion}/pdf', [CotizacionPdfController::class, 'show'])
+    ->name('cotizaciones.pdf')
     ->middleware('signed');
