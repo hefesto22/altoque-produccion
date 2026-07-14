@@ -6,6 +6,7 @@ namespace App\Services\Eventos;
 
 use App\Models\Cotizacion;
 use App\Models\CotizacionItem;
+use App\Models\EventoArticulo;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -79,5 +80,21 @@ final class CotizadorEventos
             'isv'       => round($isv, 2),
             'total'     => round($gravadoBase + $isv + $exento, 2),
         ])->save();
+    }
+
+    /**
+     * El catálogo de eventos se alimenta solo: cada ítem cotizado se
+     * registra/actualiza por nombre con su último precio, para que la
+     * próxima cotización lo autocomplete (mismo criterio que Clientes).
+     */
+    public function aprenderCatalogo(Cotizacion $cotizacion): void
+    {
+        foreach ($cotizacion->items()->get() as $item) {
+            EventoArticulo::registrar(
+                $item->descripcion,
+                (float) $item->precio_unitario,
+                $item->grava_isv,
+            );
+        }
     }
 }

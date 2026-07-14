@@ -12,7 +12,7 @@ use App\Filament\Schemas\Components\RTNField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Cliente;
 use App\Models\Cotizacion;
-use App\Models\Producto;
+use App\Models\EventoArticulo;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -108,13 +108,13 @@ class CotizacionResource extends Resource
 
             Section::make('Ítems de la cotización')
                 ->icon('heroicon-o-clipboard-document-list')
-                ->description('Escribí lo que sea con su precio personalizado (panas, cazuelas, carnes…), o elegí del catálogo para autocompletar y ajustá el precio del evento.')
+                ->description('Escribí lo que sea con su precio personalizado (panas, cazuelas, carnes…). Cada ítem nuevo se guarda solo en el catálogo de eventos con su precio, para autocompletarlo la próxima vez.')
                 ->schema([
                     Repeater::make('items')
                         ->relationship()
                         ->hiddenLabel()
                         ->table([
-                            TableColumn::make('Del catálogo (opcional)'),
+                            TableColumn::make('Del catálogo de eventos (opcional)'),
                             TableColumn::make('Descripción')->markAsRequired(),
                             TableColumn::make('Cant.')->markAsRequired(),
                             TableColumn::make('Precio unit.')->markAsRequired(),
@@ -123,27 +123,34 @@ class CotizacionResource extends Resource
                         ->schema([
                             Select::make('catalogo')
                                 ->placeholder('Buscar…')
-                                ->options(fn (): array => Producto::query()->activos()
-                                    ->orderBy('nombre')->pluck('nombre', 'id')->all())
                                 ->searchable()
                                 ->live()
                                 ->dehydrated(false)
-                                // Prellena descripción, precio e ISV; todo queda
-                                // editable: el precio del evento es personalizado.
+                                // Busca en el catálogo PROPIO de eventos (precios
+                                // personalizados, no los del menú) y prellena;
+                                // todo queda editable por si este evento va distinto.
+                                ->getSearchResultsUsing(fn (string $search): array => EventoArticulo::query()
+                                    ->activos()
+                                    ->where('nombre', 'ilike', "%{$search}%")
+                                    ->orderBy('nombre')
+                                    ->limit(15)
+                                    ->pluck('nombre', 'id')
+                                    ->all())
+                                ->getOptionLabelUsing(fn ($value): ?string => EventoArticulo::query()->find($value)?->nombre)
                                 ->afterStateUpdated(function (Set $set, ?string $state): void {
                                     if ($state === null || $state === '') {
                                         return;
                                     }
 
-                                    $p = Producto::query()->find((int) $state);
+                                    $a = EventoArticulo::query()->find((int) $state);
 
-                                    if ($p === null) {
+                                    if ($a === null) {
                                         return;
                                     }
 
-                                    $set('descripcion', $p->nombre);
-                                    $set('precio_unitario', (float) $p->precio);
-                                    $set('grava_isv', (bool) $p->grava_isv);
+                                    $set('descripcion', $a->nombre);
+                                    $set('precio_unitario', (float) $a->precio);
+                                    $set('grava_isv', (bool) $a->grava_isv);
                                 }),
                             TextInput::make('descripcion')->required()
                                 ->placeholder('Ej: Pana de arroz imperial para 50 personas'),

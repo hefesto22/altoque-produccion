@@ -24,7 +24,9 @@ class EditCotizacion extends EditRecord
     /** Los totales se recalculan del lado del servidor en cada guardado. */
     protected function afterSave(): void
     {
-        CotizadorEventos::make()->recalcular($this->record);
+        $cotizador = CotizadorEventos::make();
+        $cotizador->recalcular($this->record);
+        $cotizador->aprenderCatalogo($this->record);
 
         if ($this->record->cliente_rtn !== null && $this->record->cliente_rtn !== '') {
             Cliente::registrar($this->record->cliente_rtn, $this->record->cliente_nombre);

@@ -52,8 +52,8 @@ class RestauranteAccessSeeder extends Seeder
      */
     private const MODELOS = [
         'Activity', 'Cai', 'Cliente', 'Combo', 'ComboEspecial', 'Compra',
-        'CorteCaja', 'Cotizacion', 'PedidoOnline', 'PeriodoFiscal', 'Producto',
-        'Tier', 'User', 'Venta',
+        'CorteCaja', 'Cotizacion', 'EventoArticulo', 'PedidoOnline',
+        'PeriodoFiscal', 'Producto', 'Tier', 'User', 'Venta',
     ];
 
     /**
@@ -126,6 +126,7 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->crud('Cliente'),
             ...$this->crud('Compra'),
             ...$this->crud('Cotizacion'), // cotizaciones de eventos (no fiscal)
+            ...$this->crud('EventoArticulo'), // catálogo propio de eventos
             ...$this->lectura('Venta'), // las ventas nacen del POS y no se editan
             'ViewAny:Cai', 'View:Cai', 'Create:Cai', 'Update:Cai', // sin Delete: un rango CAI no se borra
             'ViewAny:CorteCaja', 'View:CorteCaja', 'Update:CorteCaja', // Update = acción "corregir"
@@ -144,6 +145,7 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->crud('Cliente'),
             ...$this->crud('Compra'),
             ...$this->crud('Cotizacion'), // cotizaciones de eventos (no fiscal)
+            ...$this->crud('EventoArticulo'), // catálogo propio de eventos
             ...$this->lectura('Venta'),
             ...$this->lectura('Cai'),
             ...$this->lectura('CorteCaja'), // sin Update: corregir cortes es del administrador

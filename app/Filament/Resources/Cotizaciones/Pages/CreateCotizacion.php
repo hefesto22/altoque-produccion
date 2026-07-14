@@ -30,7 +30,9 @@ class CreateCotizacion extends CreateRecord
      */
     protected function afterCreate(): void
     {
-        CotizadorEventos::make()->recalcular($this->record);
+        $cotizador = CotizadorEventos::make();
+        $cotizador->recalcular($this->record);
+        $cotizador->aprenderCatalogo($this->record);
 
         if ($this->record->cliente_rtn !== null && $this->record->cliente_rtn !== '') {
             Cliente::registrar($this->record->cliente_rtn, $this->record->cliente_nombre);
