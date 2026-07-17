@@ -4,6 +4,24 @@
 --}}
 <div style="display:flex; flex-direction:column; gap:1rem;">
 
+@if ($facturaVista !== null)
+    {{-- Visor inline: la factura se ve aquí mismo, sin salir del modal.
+         El iframe carga el HTML instantáneo del ticket (sin Chromium). --}}
+    <div wire:key="visor-{{ $facturaVista }}" style="display:flex; flex-direction:column; gap:.75rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+            <x-filament::button color="gray" size="sm" icon="heroicon-o-arrow-left" wire:click="cerrarVisor">
+                Volver al historial
+            </x-filament::button>
+            <span style="font-size:.8rem; font-weight:700; opacity:.75;">Factura {{ $facturaVistaNumero }}</span>
+        </div>
+
+        {{-- Fondo blanco fijo: el ticket está pensado para papel; así se lee igual en modo noche. --}}
+        <div style="border:1px solid rgba(128,128,128,.25); border-radius:.6rem; overflow:hidden; background:#fff;">
+            <iframe src="{{ $facturaVistaUrl }}" title="Factura {{ $facturaVistaNumero }}"
+                style="display:block; width:100%; height:62vh; border:0; background:#fff;"></iframe>
+        </div>
+    </div>
+@else
     {{-- Resumen de TODO el historial (calculado una vez, en SQL) --}}
     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
         <div style="padding:.6rem .75rem; border:1px solid rgba(128,128,128,.25); border-radius:.6rem;">
@@ -38,7 +56,8 @@
                     </div>
 
                     @foreach ($grupo as $f)
-                        <div style="display:flex; align-items:center; gap:.75rem; padding:.45rem .2rem; border-bottom:1px solid rgba(128,128,128,.14); {{ $f->anulada ? 'opacity:.55;' : '' }}">
+                        <div wire:key="fac-{{ $f->id }}" wire:click="ver({{ $f->id }})" role="button" title="Ver factura {{ $f->numero }}"
+                            style="display:flex; align-items:center; gap:.75rem; padding:.45rem .2rem; border-bottom:1px solid rgba(128,128,128,.14); cursor:pointer; {{ $f->anulada ? 'opacity:.55;' : '' }}">
                             <div style="flex:1 1 auto; min-width:0;">
                                 <div style="font-weight:600; font-size:.86rem;">{{ $f->emitida_at->format('d/m/Y H:i') }}</div>
                                 <div style="font-size:.72rem; opacity:.65;">Factura {{ $f->numero }}</div>
@@ -50,6 +69,7 @@
                             <div style="font-weight:700; min-width:6.5rem; text-align:right; {{ $f->anulada ? 'text-decoration:line-through;' : '' }}">
                                 L. {{ number_format((float) $f->total, 2) }}
                             </div>
+                            <span style="opacity:.4; font-size:.9rem;" aria-hidden="true">›</span>
                         </div>
                     @endforeach
                 </div>
@@ -75,4 +95,5 @@
             </div>
         @endif
     @endif
+@endif
 </div>

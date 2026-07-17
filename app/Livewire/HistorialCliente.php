@@ -40,6 +40,13 @@ class HistorialCliente extends Component
 
     public int $totalRegistros = 0;
 
+    /** Factura abierta en el visor inline (null = se muestra la lista). */
+    public ?int $facturaVista = null;
+
+    public string $facturaVistaNumero = '';
+
+    public string $facturaVistaUrl = '';
+
     public function mount(Cliente $cliente): void
     {
         $this->rtn = $cliente->rtn;
@@ -75,6 +82,31 @@ class HistorialCliente extends Component
     public function siguiente(): void
     {
         $this->pagina = min($this->paginas(), $this->pagina + 1);
+    }
+
+    /**
+     * Abre una factura en el visor inline del modal (sin cambiar de
+     * pestaña): el iframe carga el HTML instantáneo del ticket — el mismo
+     * que usa la impresión de caja, sin pasar por Chromium. El scope por
+     * RTN evita ver facturas de otro cliente manipulando el id.
+     */
+    public function ver(int $facturaId): void
+    {
+        $factura = Factura::query()
+            ->where('rtn_cliente', $this->rtn)
+            ->findOrFail($facturaId);
+
+        $this->facturaVista = $factura->id;
+        $this->facturaVistaNumero = $factura->numero;
+        $this->facturaVistaUrl = $factura->urlTicket();
+    }
+
+    /** Vuelve del visor a la lista (conserva la página en la que estaba). */
+    public function cerrarVisor(): void
+    {
+        $this->facturaVista = null;
+        $this->facturaVistaNumero = '';
+        $this->facturaVistaUrl = '';
     }
 
     public function render(): View

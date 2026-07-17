@@ -26,7 +26,26 @@
     $domViajeTransfer = (float) $caja()->where('tipo_orden', 'domicilio')->where('forma_pago', 'transferencia')->sum('costo_viaje');
 @endphp
 
-<div style="display:flex; flex-direction:column; gap:1rem; font-size:.9rem;">
+{{-- x-data: visor de factura en overlay (Alpine puro, sin roundtrip al servidor).
+     Clic en "Factura" de la tabla de abajo → iframe con el HTML instantáneo
+     del ticket, encima del modal del corte, sin salir de Cortes de Caja. --}}
+<div x-data="{ facturaUrl: null, facturaNumero: '' }" style="display:flex; flex-direction:column; gap:1rem; font-size:.9rem;">
+
+    {{-- ───── Visor de factura (overlay sobre el modal del corte) ───── --}}
+    <template x-if="facturaUrl">
+        <div style="position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); padding:1rem;"
+            @click.self="facturaUrl = null">
+            <div style="width:100%; max-width:26rem; display:flex; flex-direction:column; background:#fff; border-radius:.75rem; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,.45);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.6rem .9rem; border-bottom:1px solid rgba(0,0,0,.08); color:#111;">
+                    <strong style="font-size:.85rem;" x-text="'Factura ' + facturaNumero"></strong>
+                    <button type="button" @click="facturaUrl = null" title="Cerrar"
+                        style="border:0; background:transparent; cursor:pointer; font-size:1.05rem; line-height:1; color:#111; padding:.15rem;">✕</button>
+                </div>
+                {{-- Fondo blanco fijo: el ticket está diseñado para papel. --}}
+                <iframe :src="facturaUrl" style="display:block; width:100%; height:68vh; border:0; background:#fff;"></iframe>
+            </div>
+        </div>
+    </template>
 
     {{-- ───── Encabezado ───── --}}
     <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap;">
@@ -138,12 +157,19 @@
             </thead>
             <tbody>
                 {{-- Las anuladas se listan tachadas (transparencia para auditar) pero NO suman en los totales de arriba. --}}
-                @forelse ($corte->ventas()->with('factura:id,venta_id,anulada')->orderBy('vendida_at')->get() as $v)
+                @forelse ($corte->ventas()->with('factura:id,venta_id,numero,anulada')->orderBy('vendida_at')->get() as $v)
                     @php $anulada = (bool) ($v->factura->anulada ?? false); @endphp
                     <tr style="border-top:1px solid rgba(128,128,128,.12); {{ $anulada ? 'opacity:.45;' : '' }}">
                         <td style="padding:.35rem .2rem; {{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ $v->vendida_at->format('h:i A') }}</td>
                         <td style="padding:.35rem .2rem;">
-                            <span style="{{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ ucfirst($v->tipo) }}{{ $v->numero_recibo ? ' '.$v->numero_recibo : '' }}</span>
+                            @if ($v->factura !== null)
+                                {{-- Clickeable: abre el visor de factura de arriba (subrayado punteado = se puede tocar). --}}
+                                <span role="button" title="Ver factura {{ $v->factura->numero }}"
+                                    @click="facturaUrl = '{{ $v->factura->urlTicket() }}'; facturaNumero = '{{ $v->factura->numero }}'"
+                                    style="cursor:pointer; text-decoration:{{ $anulada ? 'line-through' : 'underline dotted' }}; text-underline-offset:3px;">{{ ucfirst($v->tipo) }}{{ $v->numero_recibo ? ' '.$v->numero_recibo : '' }}</span>
+                            @else
+                                <span style="{{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ ucfirst($v->tipo) }}{{ $v->numero_recibo ? ' '.$v->numero_recibo : '' }}</span>
+                            @endif
                             @if ($anulada)
                                 <span style="margin-left:.35rem; padding:.05rem .45rem; border-radius:999px; font-size:.62rem; font-weight:700; text-transform:uppercase; background:rgba(239,68,68,.15); color:#ef4444;">Anulada</span>
                             @endif

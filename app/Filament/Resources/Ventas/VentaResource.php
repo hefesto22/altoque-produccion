@@ -13,8 +13,10 @@ use App\Services\Pos\VentaService;
 use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -84,37 +86,101 @@ class VentaResource extends Resource
                     ->description(fn (Venta $record): ?string => $record->banco)
                     ->tooltip(fn (): ?string => Acceso::puede('CorregirPago') ? 'Clic para corregir (control interno)' : null)
                     // Clic en el badge = corregir el método (control interno, auditado).
-                    // No altera la factura ni el desglose fiscal; el método elegido
-                    // asume el total completo. El pago mixto solo nace del POS.
+                    // No altera la factura ni el desglose fiscal. Un solo método
+                    // asume el total completo; "Mixto" reparte el total entre
+                    // métodos (mismos tres montos + banco que el cobro del POS)
+                    // y el servicio valida que la suma cuadre al centavo.
                     ->action(
                         Action::make('corregir_pago')
                             ->modalHeading('Corregir forma de pago (control interno)')
-                            ->modalDescription(fn (Venta $record): string => 'Total: L. '.number_format((float) $record->total, 2).' — el método elegido asume el total completo. La factura NO se altera; solo el registro interno.'
+                            ->modalDescription(fn (Venta $record): string => 'Total: L. '.number_format((float) $record->total, 2).' — con un solo método, ese asume el total completo; con mixto, los montos deben sumar exactamente ese total. La factura NO se altera; solo el registro interno.'
                                 .($record->corte?->estado === 'cerrado'
                                     ? ' ⚠️ El turno de esta venta YA CERRÓ: el desglose de ese corte no se recalcula.'
                                     : ''))
-                            ->fillForm(fn (Venta $record): array => [
-                                'forma_pago' => $record->forma_pago === 'mixto' ? null : $record->forma_pago,
-                                'banco'      => $record->banco,
-                            ])
+                            ->fillForm(function (Venta $record): array {
+                                // Si ya es mixto, precarga los montos actuales para
+                                // ajustar sobre lo que hay (no arrancar de cero).
+                                $pagos = $record->forma_pago === 'mixto'
+                                    ? $record->pagos()->get(['metodo', 'banco', 'monto'])
+                                    : collect();
+
+                                return [
+                                    'forma_pago'          => $record->forma_pago,
+                                    'banco'               => $record->banco ?? $pagos->whereNotNull('banco')->first()?->banco,
+                                    'mixto_efectivo'      => $pagos->firstWhere('metodo', 'efectivo')?->monto,
+                                    'mixto_tarjeta'       => $pagos->firstWhere('metodo', 'tarjeta')?->monto,
+                                    'mixto_transferencia' => $pagos->firstWhere('metodo', 'transferencia')?->monto,
+                                ];
+                            })
                             ->schema([
                                 Select::make('forma_pago')
                                     ->label('Forma de pago')
-                                    ->options(['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia'])
+                                    ->options([
+                                        'efectivo'      => 'Efectivo',
+                                        'tarjeta'       => 'Tarjeta',
+                                        'transferencia' => 'Transferencia',
+                                        'mixto'         => 'Mixto (varios métodos)',
+                                    ])
                                     ->required()
                                     ->live(),
+                                // ── Montos del pago mixto (mismo esquema que el POS) ──
+                                TextInput::make('mixto_efectivo')
+                                    ->label('Efectivo')
+                                    ->numeric()->minValue(0)->prefix('L.')
+                                    ->live(debounce: 500)
+                                    ->visible(fn (Get $get): bool => $get('forma_pago') === 'mixto'),
+                                TextInput::make('mixto_tarjeta')
+                                    ->label('Tarjeta')
+                                    ->numeric()->minValue(0)->prefix('L.')
+                                    ->live(debounce: 500)
+                                    ->visible(fn (Get $get): bool => $get('forma_pago') === 'mixto'),
+                                TextInput::make('mixto_transferencia')
+                                    ->label('Transferencia')
+                                    ->numeric()->minValue(0)->prefix('L.')
+                                    ->live(debounce: 500)
+                                    ->visible(fn (Get $get): bool => $get('forma_pago') === 'mixto'),
+                                Placeholder::make('mixto_resumen')
+                                    ->hiddenLabel()
+                                    ->content(function (Get $get, Venta $record): string {
+                                        $suma = round((float) $get('mixto_efectivo') + (float) $get('mixto_tarjeta') + (float) $get('mixto_transferencia'), 2);
+                                        $total = round((float) $record->total, 2);
+                                        $resta = round($total - $suma, 2);
+
+                                        return match (true) {
+                                            abs($resta) < 0.01 => '✅ Asignado L. '.number_format($suma, 2).' — cuadra con el total.',
+                                            $resta > 0         => 'Asignado L. '.number_format($suma, 2).' — falta L. '.number_format($resta, 2),
+                                            default            => '⚠️ Asignado L. '.number_format($suma, 2).' — se pasa por L. '.number_format(abs($resta), 2),
+                                        };
+                                    })
+                                    ->visible(fn (Get $get): bool => $get('forma_pago') === 'mixto'),
                                 Select::make('banco')
                                     ->label('Banco')
+                                    ->helperText(fn (Get $get): ?string => $get('forma_pago') === 'mixto'
+                                        ? 'Aplica a la parte con tarjeta o transferencia.'
+                                        : null)
                                     ->options(array_combine(config('empresa.bancos', []), config('empresa.bancos', [])))
-                                    ->required(fn (Get $get): bool => $get('forma_pago') === 'transferencia')
-                                    ->visible(fn (Get $get): bool => in_array($get('forma_pago'), ['tarjeta', 'transferencia'], true)),
+                                    ->required(fn (Get $get): bool => $get('forma_pago') === 'transferencia'
+                                        || ($get('forma_pago') === 'mixto' && (float) $get('mixto_transferencia') > 0))
+                                    ->visible(fn (Get $get): bool => in_array($get('forma_pago'), ['tarjeta', 'transferencia', 'mixto'], true)),
                             ])
                             ->visible(fn (Venta $record): bool => Acceso::puede('CorregirPago') && $record->pagada)
                             ->action(function (Venta $record, array $data): void {
                                 abort_unless(Acceso::puede('CorregirPago'), 403);
 
+                                $banco = $data['banco'] ?? null;
+
+                                // En mixto, banco aplica a tarjeta/transferencia (igual
+                                // que el POS). normalizarPagos descarta montos en cero
+                                // y valida que la suma cuadre al centavo; si queda un
+                                // solo método con monto, colapsa a ese método simple.
+                                $pagos = $data['forma_pago'] === 'mixto' ? [
+                                    ['metodo' => 'efectivo', 'monto' => (float) ($data['mixto_efectivo'] ?? 0)],
+                                    ['metodo' => 'tarjeta', 'banco' => $banco, 'monto' => (float) ($data['mixto_tarjeta'] ?? 0)],
+                                    ['metodo' => 'transferencia', 'banco' => $banco, 'monto' => (float) ($data['mixto_transferencia'] ?? 0)],
+                                ] : null;
+
                                 try {
-                                    app(VentaService::class)->corregirPago($record, $data['forma_pago'], $data['banco'] ?? null);
+                                    app(VentaService::class)->corregirPago($record, $data['forma_pago'], $banco, $pagos);
                                 } catch (RestauranteException $e) {
                                     Notification::make()->title('No se pudo corregir')->body($e->getMessage())->danger()->send();
 

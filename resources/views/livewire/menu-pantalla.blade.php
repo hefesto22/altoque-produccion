@@ -1,4 +1,8 @@
-<div x-data="{
+{{-- wire:poll: la pantalla se refresca sola cada 15s — al guardar el Menú del Día
+     en el admin, la TV lo refleja sin tocar nada (es otro dispositivo, así que un
+     evento Livewire no la alcanzaría; el poll es el mismo patrón del listado POS). --}}
+<div wire:poll.15s
+    x-data="{
         locked: localStorage.getItem('menu_locked') === '1',
         toggle() { this.locked = !this.locked; localStorage.setItem('menu_locked', this.locked ? '1' : '0'); }
     }"

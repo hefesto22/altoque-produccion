@@ -625,6 +625,13 @@
                             <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px dashed rgba(128,128,128,.25); margin-top:.2rem; padding-top:.2rem;"><span>Nuevo saldo en terminal POS</span><span>L. {{ number_format($rt['terminal_final'], 2) }}</span></div>
                         </div>
 
+                        {{-- Gran total del turno (pedido del cliente): efectivo esperado
+                             en caja + nuevo saldo del terminal, todo en un solo número. --}}
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:1rem; border:1px solid rgba(34,197,94,.4); background:rgba(34,197,94,.07); border-radius:.5rem; margin-top:.5rem; padding:.5rem .6rem;">
+                            <span>Total caja + terminal</span>
+                            <span style="color:#16a34a;">L. {{ number_format($rt['esperado'] + $rt['terminal_final'], 2) }}</span>
+                        </div>
+
                         @if (count($rt['tarjeta_banco']) || count($rt['transfer_banco']))
                             <div style="border-top:1px dashed rgba(128,128,128,.25); margin-top:.3rem; padding-top:.3rem;">
                                 @foreach ($rt['tarjeta_banco'] as $tb)
