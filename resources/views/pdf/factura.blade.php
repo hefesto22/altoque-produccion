@@ -31,6 +31,14 @@
         .tot td { padding: 0; }
         .badge { display: inline-block; border: 1px solid #000; padding: 0 4px; font-weight: bold; }
         .anulada { color: #b00; border: 2px solid #b00; padding: 3px; text-align: center; font-weight: bold; margin: 5px 0; letter-spacing: 1px; }
+        /* SOLO pantalla — visores del admin (historial de cliente, detalle de
+           corte): ticket centrado con un respiro arriba. NO afecta la
+           impresión de caja ni el PDF de WhatsApp: ambos renderizan con
+           media print, que ignora esta regla. */
+        @media screen {
+            body { background: #fff; padding: 8px 0 16px; }
+            .doc { margin: 0 auto; }
+        }
     </style>
 </head>
 <body>
