@@ -55,5 +55,32 @@
 <body>
     {{ $slot }}
     @livewireScripts
+    <script>
+        // La TV queda abierta todo el día: cuando un poll de Livewire falla
+        // (419 sesión vencida, 500 por deploy nuevo, o red caída), en vez de
+        // quedar congelada, reintenta contra el server y se recarga sola en
+        // cuanto responde OK. Así el menú de la pantalla siempre es el vigente.
+        document.addEventListener('livewire:init', () => {
+            let recuperando = false;
+
+            const recuperar = () => {
+                if (recuperando) return;
+                recuperando = true;
+
+                const intentar = () => fetch(window.location.href, { cache: 'no-store' })
+                    .then((r) => r.ok ? window.location.reload() : setTimeout(intentar, 5000))
+                    .catch(() => setTimeout(intentar, 5000));
+
+                setTimeout(intentar, 2000);
+            };
+
+            Livewire.hook('request', ({ fail }) => {
+                fail(({ preventDefault }) => {
+                    preventDefault();
+                    recuperar();
+                });
+            });
+        });
+    </script>
 </body>
 </html>
