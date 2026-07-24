@@ -68,18 +68,36 @@
 
     <div class="sep"></div>
 
+    {{-- Totales por método desde venta_pagos: el mixto ya está repartido
+         acá (su porción efectivo suma en EFECTIVO, etc.). El conteo entre
+         paréntesis es de VENTAS enteras por forma de pago. --}}
     <div class="titulo">Recibido por forma de pago</div>
     <table>
-        <tr><td>EFECTIVO</td><td class="der">L. {{ number_format((float) $corte->total_efectivo, 2) }}</td></tr>
-        <tr><td>TARJETA</td><td class="der">L. {{ number_format((float) $corte->total_tarjeta, 2) }}</td></tr>
+        <tr><td>EFECTIVO ({{ (int) ($conteos['efectivo'] ?? 0) }} VENTAS)</td><td class="der">L. {{ number_format((float) $corte->total_efectivo, 2) }}</td></tr>
+        <tr><td>TARJETA ({{ (int) ($conteos['tarjeta'] ?? 0) }} VENTAS)</td><td class="der">L. {{ number_format((float) $corte->total_tarjeta, 2) }}</td></tr>
         @foreach ($tarjetaBanco as $b)
             <tr><td class="sub">· {{ mb_strtoupper($b['banco']) }}</td><td class="der chico">L. {{ number_format($b['total'], 2) }}</td></tr>
         @endforeach
-        <tr><td>TRANSFERENCIA</td><td class="der">L. {{ number_format((float) $corte->total_transferencia, 2) }}</td></tr>
+        <tr><td>TRANSFERENCIA ({{ (int) ($conteos['transferencia'] ?? 0) }} VENTAS)</td><td class="der">L. {{ number_format((float) $corte->total_transferencia, 2) }}</td></tr>
         @foreach ($transferBanco as $b)
             <tr><td class="sub">· {{ mb_strtoupper($b['banco']) }}</td><td class="der chico">L. {{ number_format($b['total'], 2) }}</td></tr>
         @endforeach
+        @if ($transferSinBanco > 0)
+            <tr><td class="sub">· SIN BANCO</td><td class="der chico">L. {{ number_format($transferSinBanco, 2) }}</td></tr>
+        @endif
     </table>
+
+    @if ((int) $mixto->ventas > 0)
+        <div class="sep"></div>
+        <div class="titulo">Pagos mixtos ({{ (int) $mixto->ventas }} {{ (int) $mixto->ventas === 1 ? 'venta' : 'ventas' }})</div>
+        <table>
+            <tr><td>TOTAL EN MIXTO</td><td class="der">L. {{ number_format((float) $mixto->total, 2) }}</td></tr>
+            <tr><td class="sub">· EFECTIVO</td><td class="der chico">L. {{ number_format((float) $mixto->efectivo, 2) }}</td></tr>
+            <tr><td class="sub">· TARJETA</td><td class="der chico">L. {{ number_format((float) $mixto->tarjeta, 2) }}</td></tr>
+            <tr><td class="sub">· TRANSFERENCIA</td><td class="der chico">L. {{ number_format((float) $mixto->transferencia, 2) }}</td></tr>
+        </table>
+        <div class="chico">Estas porciones ya están sumadas en los totales de arriba.</div>
+    @endif
 
     <div class="sep"></div>
 
