@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Corte de caja (turno) de un cajero. Mientras está 'abierto' las ventas
@@ -78,5 +79,11 @@ class CorteCaja extends Model
     public function efectivoEsperado(): float
     {
         return (float) $this->fondo_inicial + (float) $this->total_efectivo;
+    }
+
+    /** URL firmada del ticket imprimible del corte (80mm, para archivar con el conteo). */
+    public function urlTicket(): string
+    {
+        return URL::signedRoute('cortes.ticket', ['corte' => $this->id]);
     }
 }

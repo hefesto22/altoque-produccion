@@ -20,6 +20,7 @@ declare(strict_types=1);
 */
 
 use App\Http\Controllers\ComandaTicketController;
+use App\Http\Controllers\CorteTicketController;
 use App\Http\Controllers\CotizacionPdfController;
 use App\Http\Controllers\FacturaPdfController;
 use App\Http\Controllers\VerificacionController;
@@ -55,6 +56,12 @@ Route::get('/facturas/{factura}/documentos', [FacturaPdfController::class, 'docu
 // Ticket de comanda (80mm, HTML) — ruta FIRMADA: lo imprime el POS para cocina.
 Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'])
     ->name('comandas.ticket')
+    ->middleware('signed');
+
+// Ticket del corte de caja (80mm, HTML) — FIRMADA: se imprime solo al cerrar
+// el turno y se reimprime desde Cortes de Caja.
+Route::get('/cortes/{corte}/ticket', [CorteTicketController::class, 'show'])
+    ->name('cortes.ticket')
     ->middleware('signed');
 
 // PDF de cotización de evento — ruta pública FIRMADA (compartible por WhatsApp).

@@ -271,7 +271,7 @@ class PuntoDeVenta extends Page
             ->title('Pedido cargado para corregir')
             ->body($mensaje)
             ->warning()
-            ->send();
+            ->seconds(3)->send();
     }
 
     private function cargarTurno(): void
@@ -315,12 +315,12 @@ class PuntoDeVenta extends Page
                 ->title('La caja ya tiene un turno abierto')
                 ->body('Turno de '.($corte->cajero?->name ?? '—').' abierto desde '.($corte->abierto_at?->format('d/m/Y h:i A') ?? '—').'. Se cobra hacia ese turno.')
                 ->warning()
-                ->send();
+                ->seconds(3)->send();
 
             return;
         }
 
-        Notification::make()->title('Turno abierto')->body('Ya podés cobrar.')->success()->send();
+        Notification::make()->title('Turno abierto')->body('Ya podés cobrar.')->success()->seconds(3)->send();
     }
 
     /**
@@ -399,7 +399,7 @@ class PuntoDeVenta extends Page
     public function confirmarCierre(): void
     {
         if (! is_numeric($this->efectivoContado)) {
-            Notification::make()->title('Ingresá el efectivo contado')->warning()->send();
+            Notification::make()->title('Ingresá el efectivo contado')->warning()->seconds(3)->send();
 
             return;
         }
@@ -415,7 +415,11 @@ class PuntoDeVenta extends Page
         $dif = (float) $cerrado->diferencia;
         $msg = $dif === 0.0 ? 'Caja cuadrada.' : ($dif > 0 ? 'Sobrante de L. '.number_format($dif, 2) : 'Faltante de L. '.number_format(abs($dif), 2));
 
-        Notification::make()->title('Turno cerrado')->body($msg)->{$dif === 0.0 ? 'success' : 'warning'}()->send();
+        Notification::make()->title('Turno cerrado')->body($msg)->{$dif === 0.0 ? 'success' : 'warning'}()->seconds(3)->send();
+
+        // El ticket del corte sale solo en la térmica al cerrar (reimprimible
+        // desde Cortes de Caja). Usa la cola de impresión del script global.
+        $this->dispatch('imprimir-factura', url: $cerrado->urlTicket());
 
         $this->mostrarCierre = false;
         $this->efectivoContado = '';
@@ -448,7 +452,7 @@ class PuntoDeVenta extends Page
 
         $this->productosBajos = $svc->productosConAlerta();
 
-        Notification::make()->title($titulo)->body($cuerpo)->success()->send();
+        Notification::make()->title($titulo)->body($cuerpo)->success()->seconds(3)->send();
     }
 
     /** Carga el menú del servicio actual (filtrado por el menú del día). */
@@ -498,7 +502,7 @@ class PuntoDeVenta extends Page
     public function platoRapido(int $n): void
     {
         if ($this->proteinaId === null) {
-            Notification::make()->title('Seleccioná una proteína primero')->warning()->send();
+            Notification::make()->title('Seleccioná una proteína primero')->warning()->seconds(3)->send();
 
             return;
         }
@@ -513,7 +517,7 @@ class PuntoDeVenta extends Page
                 ->title('No hay suficientes complementos en el menú del día')
                 ->body('Se agregaron los disponibles.')
                 ->warning()
-                ->send();
+                ->seconds(3)->send();
         }
 
         $this->complementoSel = $ids;
@@ -524,7 +528,7 @@ class PuntoDeVenta extends Page
     public function agregarSinComplementos(): void
     {
         if ($this->proteinaId === null) {
-            Notification::make()->title('Seleccioná una proteína primero')->warning()->send();
+            Notification::make()->title('Seleccioná una proteína primero')->warning()->seconds(3)->send();
 
             return;
         }
@@ -556,7 +560,7 @@ class PuntoDeVenta extends Page
     public function agregarPlato(): void
     {
         if ($this->proteinaId === null) {
-            Notification::make()->title('Seleccioná una proteína primero')->warning()->send();
+            Notification::make()->title('Seleccioná una proteína primero')->warning()->seconds(3)->send();
 
             return;
         }
@@ -830,7 +834,7 @@ class PuntoDeVenta extends Page
         if ($paraCocina && $this->tipoServicio === 'local' && trim($this->domNombre) === '') {
             Notification::make()->title('Falta el nombre del cliente')
                 ->body('Para mandar a cocina, poné el nombre: sale en la comanda para identificar el pedido.')
-                ->warning()->send();
+                ->warning()->seconds(3)->send();
 
             return false;
         }
@@ -838,7 +842,7 @@ class PuntoDeVenta extends Page
         if ($this->tipoServicio === 'llevar' && trim($this->domNombre) === '') {
             Notification::make()->title('Falta el nombre del cliente')
                 ->body('Para llevar, el nombre es obligatorio (para llamarlo cuando esté listo).')
-                ->warning()->send();
+                ->warning()->seconds(3)->send();
 
             return false;
         }
@@ -847,7 +851,7 @@ class PuntoDeVenta extends Page
             && (trim($this->domNombre) === '' || trim($this->domTelefono) === '')) {
             Notification::make()->title('Faltan datos de domicilio')
                 ->body('Nombre y teléfono son obligatorios. Dirección e identidad son opcionales.')
-                ->warning()->send();
+                ->warning()->seconds(3)->send();
 
             return false;
         }
@@ -903,7 +907,7 @@ class PuntoDeVenta extends Page
             ->title($entregada ? 'Comanda impresa' : 'Enviado a cocina')
             ->body("Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
             ->success()
-            ->send();
+            ->seconds(3)->send();
 
         return $comanda;
     }
@@ -1051,7 +1055,7 @@ class PuntoDeVenta extends Page
                 ->title('El pago mixto no cuadra')
                 ->body('Los montos suman L. '.number_format($suma, 2).' y el total es L. '.number_format($total, 2).'.')
                 ->warning()
-                ->send();
+                ->seconds(3)->send();
 
             return false;
         }
@@ -1059,7 +1063,7 @@ class PuntoDeVenta extends Page
         $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
 
         if ($n($this->mixtoTransfer) > 0 && trim($this->banco) === '') {
-            Notification::make()->title('Elegí el banco de la transferencia')->warning()->send();
+            Notification::make()->title('Elegí el banco de la transferencia')->warning()->seconds(3)->send();
 
             return false;
         }
@@ -1077,9 +1081,9 @@ class PuntoDeVenta extends Page
     {
         if ($this->carrito === [] || ! $this->turnoAbierto || ! $this->domicilioValido(paraCocina: true)) {
             if ($this->carrito === []) {
-                Notification::make()->title('El carrito está vacío')->warning()->send();
+                Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
             } elseif (! $this->turnoAbierto) {
-                Notification::make()->title('Abrí el turno de caja primero')->warning()->send();
+                Notification::make()->title('Abrí el turno de caja primero')->warning()->seconds(3)->send();
             }
 
             return;
@@ -1106,7 +1110,7 @@ class PuntoDeVenta extends Page
             ->title("Pedido en cocina · Orden {$venta->numero_orden}")
             ->body('Queda PENDIENTE de pago. Cobralo desde “Pedidos por cobrar” cuando esté listo.')
             ->success()
-            ->send();
+            ->seconds(3)->send();
 
         $this->limpiar();
     }
@@ -1180,19 +1184,19 @@ class PuntoDeVenta extends Page
         $venta = Venta::pendientes()->find($ventaId);
 
         if ($venta === null) {
-            Notification::make()->title('Ese pedido ya no está pendiente')->warning()->send();
+            Notification::make()->title('Ese pedido ya no está pendiente')->warning()->seconds(3)->send();
 
             return false;
         }
 
         if (! $this->turnoAbierto) {
-            Notification::make()->title('Abrí el turno de caja primero')->warning()->send();
+            Notification::make()->title('Abrí el turno de caja primero')->warning()->seconds(3)->send();
 
             return false;
         }
 
         if ($formaPago === 'transferencia' && trim((string) $banco) === '') {
-            Notification::make()->title('Elegí el banco')->warning()->send();
+            Notification::make()->title('Elegí el banco')->warning()->seconds(3)->send();
 
             return false;
         }
@@ -1213,7 +1217,7 @@ class PuntoDeVenta extends Page
                 $formaPago === 'mixto' ? $this->pagosMixtos() : null,
             );
         } catch (RestauranteException $e) {
-            Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->send();
+            Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->seconds(3)->send();
 
             return false;
         }
@@ -1224,7 +1228,7 @@ class PuntoDeVenta extends Page
             ->title("Cobrado · Orden {$factura->venta->numero_orden}")
             ->body("Factura {$factura->numero} · Total L. ".number_format((float) $factura->total, 2))
             ->success()
-            ->send();
+            ->seconds(3)->send();
 
         return true;
     }
@@ -1233,7 +1237,7 @@ class PuntoDeVenta extends Page
     public function abrirFactura(): void
     {
         if ($this->carrito === []) {
-            Notification::make()->title('El carrito está vacío')->warning()->send();
+            Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
 
             return;
         }
@@ -1298,13 +1302,13 @@ class PuntoDeVenta extends Page
         try {
             $rtn = new RTN(trim($this->rtnInput));
         } catch (Throwable) {
-            Notification::make()->title('RTN inválido')->body('Debe tener 14 dígitos numéricos.')->danger()->send();
+            Notification::make()->title('RTN inválido')->body('Debe tener 14 dígitos numéricos.')->danger()->seconds(3)->send();
 
             return;
         }
 
         if (trim($this->nombreInput) === '') {
-            Notification::make()->title('Falta el nombre del cliente')->warning()->send();
+            Notification::make()->title('Falta el nombre del cliente')->warning()->seconds(3)->send();
 
             return;
         }
@@ -1343,13 +1347,13 @@ class PuntoDeVenta extends Page
     private function procesarFactura(?RTN $rtn, string $nombre, ?bool $detallada = null): bool
     {
         if ($this->carrito === []) {
-            Notification::make()->title('El carrito está vacío')->warning()->send();
+            Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
 
             return false;
         }
 
         if (! $this->turnoAbierto) {
-            Notification::make()->title('Abrí el turno de caja primero')->warning()->send();
+            Notification::make()->title('Abrí el turno de caja primero')->warning()->seconds(3)->send();
 
             return false;
         }
@@ -1359,7 +1363,7 @@ class PuntoDeVenta extends Page
         }
 
         if ($this->formaPago === 'transferencia' && trim($this->banco) === '') {
-            Notification::make()->title('Elegí el banco')->warning()->send();
+            Notification::make()->title('Elegí el banco')->warning()->seconds(3)->send();
 
             return false;
         }
@@ -1387,7 +1391,7 @@ class PuntoDeVenta extends Page
                 ->title('No se pudo emitir la factura')
                 ->body($e->getMessage().' Verificá que haya un CAI activo.')
                 ->danger()
-                ->send();
+                ->seconds(3)->send();
 
             return false;
         }
@@ -1419,9 +1423,8 @@ class PuntoDeVenta extends Page
                     ->color('success')
                     ->url($factura->urlWhatsApp(), shouldOpenInNewTab: true),
             ])
-            ->persistent()
             ->success()
-            ->send();
+            ->seconds(3)->send();
 
         $this->limpiar();
 

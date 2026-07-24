@@ -20,6 +20,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\HtmlString;
+use Livewire\Component;
 
 class CorteCajaResource extends Resource
 {
@@ -86,6 +87,16 @@ class CorteCajaResource extends Resource
                     ->modalContent(fn (CorteCaja $record) => view('filament.corte-detalle', ['corte' => $record]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Cerrar'),
+                Action::make('imprimir')
+                    ->label('Imprimir')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->visible(fn (CorteCaja $record): bool => $record->estado === 'cerrado')
+                    // Reimpresión del ticket del corte por la misma cola de
+                    // impresión global (iframe oculto) que factura y comanda.
+                    ->action(function (CorteCaja $record, Component $livewire): void {
+                        $livewire->dispatch('imprimir-factura', url: $record->urlTicket());
+                    }),
                 Action::make('corregir')
                     ->label('Corregir')
                     ->icon('heroicon-o-pencil-square')
