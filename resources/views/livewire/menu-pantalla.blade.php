@@ -23,10 +23,10 @@
     </div>
 
     {{-- Botón discreto para desbloquear --}}
-    <button class="unlock" x-show="locked" x-cloak x-on:click="toggle()" title="Desbloquear">🔓</button>
+    <button class="unlock {{ $bebidas->isNotEmpty() ? 'sobre-cinta' : '' }}" x-show="locked" x-cloak x-on:click="toggle()" title="Desbloquear">🔓</button>
 
     {{-- Menú formato flyer, vertical para pantalla tótem (0.70 x 1.90) --}}
-    <div class="board" :class="locked ? '' : 'pushed'">
+    <div class="board {{ $bebidas->isNotEmpty() ? 'con-cinta' : '' }}" :class="locked ? '' : 'pushed'">
         <div class="head">
             @if ($logoUrl)
                 <img src="{{ $logoUrl }}" alt="logo">
@@ -75,6 +75,7 @@
         @endif
 
         {{-- Contacto al pie --}}
+
         <div class="pie-wrap">
             @if ($empresa['telefono'])<div class="pie">📲 {{ $empresa['telefono'] }}</div>@endif
             @if ($empresa['formas_pago_texto'])<div class="pie">💳 {{ $empresa['formas_pago_texto'] }}</div>@endif
@@ -82,4 +83,25 @@
             @if ($empresa['horario'])<div class="pie">🕐 {{ $empresa['horario'] }}</div>@endif
         </div>
     </div>
+
+    {{-- Cinta de bebidas en movimiento (marquee). La velocidad escala con la
+         cantidad de bebidas para que se lea igual con 5 que con 40. wire:ignore
+         NO hace falta: si el menú no cambió, Livewire no toca el DOM y la
+         animación sigue corriendo entre polls. --}}
+    @if ($bebidas->isNotEmpty())
+        <div class="cinta">
+            <div class="cinta-track" style="animation-duration: {{ max(18, $bebidas->count() * 3) }}s;">
+                @foreach ([0, 1] as $copia)
+                    <span class="cinta-grupo">
+                        <span class="cinta-item">🥤 BEBIDAS</span>
+                        <span class="cinta-sep">●</span>
+                        @foreach ($bebidas as $b)
+                            <span class="cinta-item">{{ mb_strtoupper($b->nombre) }}<span class="precio">L.{{ number_format((float) $b->precio, 0) }}</span></span>
+                            <span class="cinta-sep">●</span>
+                        @endforeach
+                    </span>
+                @endforeach
+            </div>
+        </div>
+    @endif
 </div>

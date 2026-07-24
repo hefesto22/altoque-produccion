@@ -34,6 +34,22 @@
         .btn.lock { background: #dc2626; }
         .unlock { position: fixed; bottom: 16px; right: 16px; z-index: 50; background: rgba(0,0,0,.2); color: #fff; border: none; border-radius: 999px; width: 56px; height: 56px; font-size: 1.6rem; cursor: pointer; }
         .pushed { padding-top: 4rem; }
+
+        /* Cinta de bebidas: marquee continuo fijo al pie de la pantalla.
+           Dos copias idénticas del contenido y translateX(-50%) → bucle
+           perfecto sin salto, todo en CSS (la TV no gasta en JS). */
+        .cinta { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: #1f9d3a; color: #fff; overflow: hidden; padding: 1.1vw 0; box-shadow: 0 -4px 14px rgba(0,0,0,.22); }
+        .cinta-track { display: inline-flex; align-items: center; white-space: nowrap; will-change: transform; animation: cinta-scroll linear infinite; }
+        .cinta-grupo { display: inline-flex; align-items: center; }
+        .cinta-item { font-size: 3.2vw; font-weight: 800; padding: 0 1.2vw; }
+        .cinta-item .precio { color: #ffe27a; margin-left: .6vw; }
+        .cinta-sep { font-size: 2.4vw; opacity: .65; }
+        @keyframes cinta-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+        /* Con cinta abajo: aire extra para que el pie no quede tapado, y el
+           botón de desbloquear sube por encima de la cinta. */
+        .con-cinta { padding-bottom: 12vw; }
+        .unlock.sobre-cinta { bottom: calc(6vw + 16px); }
     </style>
 </head>
 <body>

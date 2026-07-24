@@ -48,6 +48,7 @@ class MenuPantalla extends Component
 
         $proteinas = $disponibles->where('categoria', 'proteina')->values();
         $complementos = $disponibles->where('categoria', 'complemento')->values();
+        $bebidas = $disponibles->where('categoria', 'bebida')->values();
 
         // Combos especiales disponibles hoy, con su composición desglosada.
         $idsCombos = $disponibles->where('categoria', 'combo')->pluck('id')->all();
@@ -92,6 +93,7 @@ class MenuPantalla extends Component
         return view('livewire.menu-pantalla', [
             'proteinas'        => $proteinas,
             'complementos'     => $complementos,
+            'bebidas'          => $bebidas,
             'individuales'     => $individuales,
             'combos'           => $combos,
             'combosEspeciales' => $combosEspeciales,
