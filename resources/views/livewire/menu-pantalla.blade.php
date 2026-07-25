@@ -22,6 +22,13 @@
         <button class="btn lock" x-on:click="toggle()">🔒 Bloquear pantalla</button>
     </div>
 
+    {{-- Aviso de que el menú sigue más abajo (solo si no entra completo).
+         Lo muestra/oculta el script de ajuste del layout; al tocarlo, baja. --}}
+    <button type="button" class="mas-abajo"
+        onclick="window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' })">
+        Hay más menú ⌄
+    </button>
+
     {{-- Botón discreto para desbloquear --}}
     <button class="unlock" x-show="locked" x-cloak x-on:click="toggle()" title="Desbloquear">🔓</button>
 

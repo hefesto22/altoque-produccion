@@ -54,6 +54,19 @@
         .unlock { position: fixed; bottom: 16px; right: 16px; z-index: 50; background: rgba(0,0,0,.2); color: #fff; border: none; border-radius: 999px; width: 56px; height: 56px; font-size: 1.6rem; cursor: pointer; }
         .pushed { padding-top: 4rem; }
 
+        /* Aviso de que el menú sigue más abajo. Solo aparece los días de menú
+           cargado, cuando achicar más dejaría la letra ilegible y se prefiere
+           scroll. Se oculta al llegar al final. */
+        /* Abajo a la IZQUIERDA: el botón de desbloquear vive a la derecha y al
+           centro taparía el menú. Desaparece apenas el cliente desliza. */
+        .mas-abajo { position: fixed; left: 16px; bottom: 16px; z-index: 45; display: none; align-items: center; gap: .4rem;
+            padding: .45rem 1rem; border-radius: 999px; border: none; cursor: pointer;
+            background: rgba(31,157,58,.95); color: #fff; font-size: .95rem; font-weight: 800;
+            box-shadow: 0 6px 18px rgba(0,0,0,.28); animation: rebote 1.8s ease-in-out infinite; }
+        body.con-scroll .mas-abajo { display: flex; }
+        body.con-scroll.oculta-aviso .mas-abajo { display: none; }
+        @keyframes rebote { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+
         /* Cinta de bebidas: banda con marquee JUSTO DEBAJO del encabezado —
            ocupa el lugar de la línea verde separadora (la cinta ES la línea).
            Dos copias idénticas del contenido y translateX(-50%) → bucle
@@ -81,7 +94,10 @@
         // contenido todavía entra; con poco menú crece hasta llenar la pantalla
         // y con mucho se achica hasta que entra todo.
         (() => {
-            const MIN = 0.5;   // hasta la mitad del tamaño: días de menú muy cargado
+            // Piso LEGIBLE: por debajo de esto no se lee desde la fila, así que
+            // en vez de seguir achicando se deja que la pantalla haga scroll
+            // (es táctil) y se avisa con el botón "Hay más menú".
+            const MIN = 0.72;
             const MAX = 1.25;  // tope para que no se desfigure con poco contenido
             let pendiente = null;
 
@@ -121,6 +137,18 @@
                 }
 
                 board.style.setProperty('--esc', mejor);
+
+                // ¿Ni siquiera al tamaño mínimo entra? Entonces hay scroll:
+                // preferimos que se lea y se deslice, no letra de hormiga.
+                document.body.classList.toggle('con-scroll', medir(board) > disponible + 1);
+                actualizarAviso();
+            };
+
+            // El aviso solo sirve para quien no sabe que hay más: se va apenas
+            // desliza un poco, y también al llegar al final del menú.
+            const actualizarAviso = () => {
+                const resto = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+                document.body.classList.toggle('oculta-aviso', window.scrollY > 40 || resto <= 8);
             };
 
             const programar = () => { clearTimeout(pendiente); pendiente = setTimeout(ajustar, 60); };
@@ -129,6 +157,7 @@
             // si no se mide un alto que todavía no incluye la imagen.
             window.addEventListener('load', programar);
             window.addEventListener('resize', programar);
+            window.addEventListener('scroll', actualizarAviso, { passive: true });
 
             // Bloquear/desbloquear muestra u oculta la barra superior y cambia
             // el alto disponible (lo hace Alpine, sin pasar por el servidor).
