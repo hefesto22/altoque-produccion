@@ -247,11 +247,11 @@ class CompraResource extends Resource
                     // Lo que el usuario escribe: el monto CON impuesto, tal
                     // cual lo lee de la factura. No se guarda: de acá salen
                     // el gravado sin impuesto y el ISV (columnas reales).
-                    MontoField::make('gravado_bruto', 'Gravado (con ISV incluido)')
+                    MontoField::make('gravado_bruto', 'Gravado (con ISV)')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
                         ->dehydrated(false)
                         ->live(onBlur: true)
-                        ->helperText('Ej.: si la factura dice L. 1,000, escribí 1000 — el 15% ya va adentro.')
+                        ->helperText('La factura dice L. 1,000 → escribí 1000. El 15% ya va adentro.')
                         ->afterStateHydrated(function (TextInput $component, ?Compra $record): void {
                             // Al editar, se reconstruye desde lo guardado.
                             if ($record !== null) {
@@ -269,7 +269,6 @@ class CompraResource extends Resource
                     // En un recibo es el único campo: ocupa media fila para que
                     // no quede un cuadrito suelto contra el borde.
                     MontoField::make('total', 'Total pagado')
-                        ->columnSpan(fn (Get $get): int => self::esFactura($get) ? 1 : 2)
                         ->helperText(fn (Get $get): ?string => self::esFactura($get)
                             ? 'Gravado + exento. Debe cuadrar con la factura.'
                             : null),
@@ -277,21 +276,20 @@ class CompraResource extends Resource
                     // El desglose se muestra, no se escribe: así el cajero
                     // verifica de un vistazo contra la factura.
                     Placeholder::make('desglose_isv')
-                        ->label('ISV que se descuenta')
-                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Get $get): bool => self::esFactura($get) && self::num($get('gravado_bruto')) > 0)
                         ->content(function (Get $get): HtmlString {
-                            $bruto = self::num($get('gravado_bruto'));
-
-                            if ($bruto <= 0) {
-                                return new HtmlString('<span style="opacity:.55;">—</span>');
-                            }
-
-                            $d = self::desglosar($bruto);
+                            $d = self::desglosar(self::num($get('gravado_bruto')));
 
                             return new HtmlString(
-                                '<span style="color:#16a34a; font-weight:800; font-size:1.15rem;">L. '.number_format($d['isv'], 2).'</span>'
-                                .'<br><span style="font-size:.75rem; opacity:.7;">Base L. '.number_format($d['base'], 2)
-                                .' + ISV L. '.number_format($d['isv'], 2).'</span>'
+                                '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;'
+                                .' border:1px solid rgba(22,163,74,.35); background:rgba(22,163,74,.08); border-radius:.6rem; padding:.6rem .9rem;">'
+                                .'<span style="font-size:.85rem; opacity:.8;">De ese gravado: base <strong>L. '.number_format($d['base'], 2)
+                                .'</strong> + impuesto <strong>L. '.number_format($d['isv'], 2).'</strong></span>'
+                                .'<span style="font-size:.9rem;">ISV que se descuenta: '
+                                .'<strong style="color:#16a34a; font-size:1.15rem;">L. '.number_format($d['isv'], 2).'</strong></span>'
+                                .'</div>'
                             );
                         }),
 
@@ -315,7 +313,7 @@ class CompraResource extends Resource
                         ->label('Notas (opcional)')
                         ->maxLength(255)
                         ->columnSpanFull(),
-                ])->columns(4),
+                ])->columns(3),
         ]);
     }
 
