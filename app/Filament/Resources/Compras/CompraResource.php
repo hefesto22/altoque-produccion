@@ -7,18 +7,24 @@ namespace App\Filament\Resources\Compras;
 use App\Filament\Resources\Compras\Pages\ManageCompras;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\Compra;
+use App\Models\Proveedor;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 
 class CompraResource extends Resource
 {
@@ -37,38 +43,161 @@ class CompraResource extends Resource
         return 'Fiscal';
     }
 
+    /** ¿La compra del formulario es factura (y por tanto descuenta ISV)? */
+    private static function esFactura(Get $get): bool
+    {
+        return $get('tipo_documento') !== 'recibo';
+    }
+
+    /** Total = exento + gravado + ISV. Se recalcula al tocar cualquiera. */
+    private static function recalcularTotal(Get $get, Set $set): void
+    {
+        $n = static fn ($v): float => is_numeric($v) ? (float) $v : 0.0;
+
+        $set('total', round($n($get('exento')) + $n($get('gravado')) + $n($get('isv')), 2));
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Datos de la factura de compra')
+            // ── Paso 1: qué documento entregó el proveedor ──────────────
+            Section::make('1 · ¿Qué te dio el proveedor?')
+                ->description('De esto depende si el ISV se puede descontar o no.')
                 ->schema([
-                    DatePicker::make('fecha')->label('Fecha de compra')->required()->native(false)->default(now()),
-                    TextInput::make('numero_factura')->label('N° de factura')->required()->maxLength(50),
-                    TextInput::make('proveedor_nombre')->label('Proveedor (empresa)')->required(),
-                    TextInput::make('proveedor_rtn')->label('RTN del proveedor')->maxLength(14)->helperText('Necesario para acreditar el ISV.'),
-                    Select::make('categoria')->label('Categoría')->required()->default('otros')->options([
-                        'insumos'   => 'Insumos',
-                        'empaques'  => 'Empaques / descartables',
-                        'equipo'    => 'Equipo / utensilios',
-                        'servicios' => 'Servicios',
-                        'limpieza'  => 'Limpieza',
-                        'otros'     => 'Otros',
-                    ]),
-                ])->columns(2),
+                    ToggleButtons::make('tipo_documento')
+                        ->hiddenLabel()
+                        ->required()
+                        ->default('factura')
+                        ->inline()
+                        ->live()
+                        ->options([
+                            'factura' => 'Factura',
+                            'recibo'  => 'Recibo de compra',
+                        ])
+                        ->icons([
+                            'factura' => 'heroicon-o-document-text',
+                            'recibo'  => 'heroicon-o-receipt-percent',
+                        ])
+                        ->colors([
+                            'factura' => 'success',
+                            'recibo'  => 'warning',
+                        ]),
 
-            Section::make('Desglose')
-                ->description('El ISV de la compra es el crédito fiscal que se resta del ISV de ventas.')
+                    Placeholder::make('explicacion_tipo')
+                        ->hiddenLabel()
+                        ->content(fn (Get $get): HtmlString => new HtmlString(
+                            self::esFactura($get)
+                                ? '<span style="font-size:.85rem;">Factura del proveedor: su <strong>ISV se descuenta</strong> del ISV de tus ventas y entra al Libro de Compras del SAR.</span>'
+                                : '<span style="font-size:.85rem; color:#d97706;">Compra sin factura: queda registrada como gasto, pero <strong>no descuenta ISV</strong> ni entra al Libro de Compras. Solo se te pide el total.</span>'
+                        )),
+                ]),
+
+            // ── Paso 2: de quién y cuándo ───────────────────────────────
+            Section::make('2 · Proveedor')
                 ->schema([
-                    MontoField::make('exento', 'Importe exento')->default(0),
-                    MontoField::make('gravado', 'Importe gravado 15%')
+                    DatePicker::make('fecha')
+                        ->label('Fecha de compra')
+                        ->required()
+                        ->native(false)
+                        ->default(now())
+                        ->maxDate(now()),
+
+                    TextInput::make('numero_factura')
+                        ->label(fn (Get $get): string => self::esFactura($get) ? 'N° de factura' : 'N° de recibo (si tiene)')
+                        ->required(fn (Get $get): bool => self::esFactura($get))
+                        ->maxLength(50),
+
+                    // Autocompletado: al escribir el nombre de un proveedor ya
+                    // registrado, su RTN se llena solo. El catálogo se alimenta
+                    // al guardar cada compra (ver Compra::booted).
+                    TextInput::make('proveedor_nombre')
+                        ->label('Proveedor (empresa)')
+                        ->required()
+                        ->maxLength(255)
+                        ->datalist(fn (): array => Proveedor::nombres())
+                        ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(trim((string) $state)))
                         ->live(onBlur: true)
-                        // Autocalcula el ISV (15%) al escribir el gravado.
-                        ->afterStateUpdated(fn ($state, $set, $get) => $set('isv', round((float) $state * 0.15, 2))),
-                    MontoField::make('isv', 'ISV (crédito fiscal)')->helperText('15% del gravado. Ajustable si la factura difiere.'),
-                    MontoField::make('total', 'Total de la factura'),
+                        ->afterStateUpdated(function (?string $state, Set $set): void {
+                            $rtn = Proveedor::rtnDe($state);
+
+                            if ($rtn !== null && $rtn !== '') {
+                                $set('proveedor_rtn', $rtn);
+                            }
+                        })
+                        ->helperText('Escribí las primeras letras: si ya lo registraste antes, aparece en la lista y su RTN se llena solo.'),
+
+                    TextInput::make('proveedor_rtn')
+                        ->label('RTN del proveedor')
+                        ->maxLength(14)
+                        ->live(onBlur: true)
+                        ->helperText(fn (Get $get): string => self::esFactura($get)
+                            ? 'Necesario para que el SAR acepte el descuento del ISV.'
+                            : 'Opcional en un recibo.'),
+
+                    Select::make('categoria')
+                        ->label('¿En qué se gastó?')
+                        ->required()
+                        ->default('otros')
+                        ->native(false)
+                        ->options([
+                            'insumos'   => 'Insumos',
+                            'empaques'  => 'Empaques / descartables',
+                            'equipo'    => 'Equipo / utensilios',
+                            'servicios' => 'Servicios',
+                            'limpieza'  => 'Limpieza',
+                            'otros'     => 'Otros',
+                        ])
+                        ->columnSpanFull(),
                 ])->columns(2),
 
-            TextInput::make('notas')->label('Notas')->maxLength(255)->columnSpanFull(),
+            // ── Paso 3: montos ──────────────────────────────────────────
+            Section::make('3 · Montos')
+                ->description(fn (Get $get): string => self::esFactura($get)
+                    ? 'Copiá los montos de la factura: al escribir el gravado, el ISV y el total se calculan solos.'
+                    : 'Solo el total de lo que pagaste.')
+                ->schema([
+                    MontoField::make('gravado', 'Importe gravado 15%')
+                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->live(onBlur: true)
+                        ->helperText('Lo que paga impuesto.')
+                        ->afterStateUpdated(function ($state, Get $get, Set $set): void {
+                            // El ISV se sugiere al 15%; queda editable por si la
+                            // factura del proveedor redondea distinto.
+                            $set('isv', round((is_numeric($state) ? (float) $state : 0.0) * 0.15, 2));
+                            self::recalcularTotal($get, $set);
+                        }),
+
+                    MontoField::make('exento', 'Importe exento')
+                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->live(onBlur: true)
+                        ->helperText('Lo que no paga impuesto (si la factura lo separa).')
+                        ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
+
+                    MontoField::make('isv', 'ISV que se descuenta')
+                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->live(onBlur: true)
+                        ->helperText('15% del gravado. Ajustalo si la factura dice otra cosa.')
+                        ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
+
+                    MontoField::make('total', 'Total pagado')
+                        ->helperText(fn (Get $get): ?string => self::esFactura($get)
+                            ? 'Debe cuadrar con el total de la factura.'
+                            : null),
+
+                    // Aviso sin bloquear: una factura con ISV pero sin RTN del
+                    // proveedor es un crédito que el SAR puede rechazar.
+                    Placeholder::make('aviso_rtn')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Get $get): bool => self::esFactura($get)
+                            && is_numeric($get('isv')) && (float) $get('isv') > 0
+                            && trim((string) $get('proveedor_rtn')) === '')
+                        ->content(new HtmlString(
+                            '<span style="font-size:.85rem; color:#d97706;">⚠ Estás descontando ISV sin el RTN del proveedor. Si el SAR audita, puede rechazar ese crédito.</span>'
+                        )),
+                ])->columns(2),
+
+            TextInput::make('notas')->label('Notas (opcional)')->maxLength(255)->columnSpanFull(),
         ]);
     }
 
@@ -77,17 +206,30 @@ class CompraResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('fecha')->label('Fecha')->date('d/m/Y')->sortable(),
-                TextColumn::make('numero_factura')->label('Factura')->searchable(),
+                TextColumn::make('tipo_documento')->label('Tipo')->badge()
+                    ->formatStateUsing(fn (Compra $record): string => $record->tipoLabel())
+                    ->color(fn (Compra $record): string => $record->esFactura() ? 'success' : 'warning'),
+                TextColumn::make('numero_factura')->label('N° documento')->searchable()->placeholder('—'),
                 TextColumn::make('proveedor_nombre')->label('Proveedor')->searchable()
-                    ->description(fn (Compra $r): ?string => $r->proveedor_rtn),
+                    ->description(fn (Compra $record): ?string => $record->proveedor_rtn),
                 TextColumn::make('categoria')->label('Categoría')->badge()
-                    ->formatStateUsing(fn (string $state): string => ucfirst($state)),
-                TextColumn::make('gravado')->label('Gravado')->money('HNL')->toggleable(),
-                TextColumn::make('isv')->label('ISV (crédito)')->money('HNL')->weight('bold')->color('success'),
+                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
+                    ->toggleable(),
+                TextColumn::make('gravado')->label('Gravado')->money('HNL')->toggleable(isToggledHiddenByDefault: true),
+                // En un recibo se muestra un guion, no "L. 0.00": se lee como
+                // "no aplica" y no como un dato en cero.
+                TextColumn::make('isv')->label('ISV que descuenta')
+                    ->money('HNL')->weight('bold')->color('success')
+                    ->state(fn (Compra $record): ?float => $record->esFactura() ? (float) $record->isv : null)
+                    ->placeholder('—'),
                 TextColumn::make('total')->label('Total')->money('HNL'),
             ])
             ->defaultSort('fecha', 'desc')
             ->filters([
+                SelectFilter::make('tipo_documento')->label('Tipo de documento')->options([
+                    'factura' => 'Facturas (descuentan ISV)',
+                    'recibo'  => 'Recibos (no descuentan)',
+                ]),
                 SelectFilter::make('categoria')->options([
                     'insumos'   => 'Insumos', 'empaques' => 'Empaques', 'equipo' => 'Equipo',
                     'servicios' => 'Servicios', 'limpieza' => 'Limpieza', 'otros' => 'Otros',

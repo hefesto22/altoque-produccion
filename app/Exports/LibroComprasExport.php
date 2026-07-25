@@ -14,7 +14,8 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 /**
  * Libro de Compras SAR: facturas de compra del período con su crédito
- * fiscal (ISV), para la declaración mensual.
+ * fiscal (ISV), para la declaración mensual. Los recibos de compra (sin
+ * factura del proveedor) NO se listan: no acreditan ISV.
  *
  * @implements FromQuery<Compra>
  * @implements WithMapping<Compra>
@@ -31,7 +32,10 @@ class LibroComprasExport implements FromQuery, ShouldAutoSize, WithHeadings, Wit
     /** @return Builder<Compra> */
     public function query(): Builder
     {
+        // Solo FACTURAS: el Libro de Compras respalda el crédito fiscal, y un
+        // recibo de compra no acredita ISV (queda como gasto en el panel).
         return Compra::query()
+            ->acreditaIsv()
             ->select(['id', 'fecha', 'numero_factura', 'proveedor_nombre', 'proveedor_rtn', 'exento', 'gravado', 'isv', 'total'])
             ->whereBetween('fecha', [$this->desde, $this->hasta])
             ->orderBy('fecha');
@@ -52,7 +56,7 @@ class LibroComprasExport implements FromQuery, ShouldAutoSize, WithHeadings, Wit
     {
         return [
             $compra->fecha->format('d/m/Y'),
-            $compra->numero_factura,
+            $compra->numero_factura ?? '—',
             $compra->proveedor_nombre,
             $compra->proveedor_rtn ?? '—',
             number_format((float) $compra->exento, 2),

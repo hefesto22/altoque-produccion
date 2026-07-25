@@ -55,8 +55,11 @@ final class DeclaracionIsvService
             ')
             ->first();
 
-        // Crédito fiscal: ISV de las compras gravadas del período.
+        // Crédito fiscal: ISV de las compras gravadas del período. Solo
+        // cuentan las que tienen FACTURA del proveedor — un recibo de compra
+        // no respalda el crédito ante el SAR (acreditaIsv()).
         $credito = (float) Compra::query()
+            ->acreditaIsv()
             ->whereBetween('fecha', [$desde, $hasta])
             ->sum('isv');
 
