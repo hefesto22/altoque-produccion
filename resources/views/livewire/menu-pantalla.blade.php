@@ -43,7 +43,7 @@
                 </div>
             @endif
             <div class="titulo">{{ $empresa['nombre'] }}</div>
-            <div class="sub">🟡 Menú {{ ucfirst($fecha) }}</div>
+            <div class="sub">🟡 Menú {{ ucfirst($fecha) }}@if ($servicioNombre)<span class="servicio">{{ mb_strtoupper($servicioNombre) }}</span>@endif</div>
         </div>
 
         {{-- Cinta de bebidas en movimiento (marquee). La velocidad escala con la
@@ -71,7 +71,7 @@
         @forelse ($proteinas as $p)
             <div class="item"><span class="ck">✔</span><span>{{ $p->nombre }}</span></div>
         @empty
-            <div class="item"><span>No hay menú cargado para este servicio.</span></div>
+            <div class="item"><span>No hay menú cargado para {{ $servicioNombre ? mb_strtoupper($servicioNombre) : 'este servicio' }}.</span></div>
         @endforelse
 
         {{-- Complementos --}}

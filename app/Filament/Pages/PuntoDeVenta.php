@@ -99,9 +99,6 @@ class PuntoDeVenta extends Page
 
     public string $platilloNota = '';
 
-    /** Búsqueda para filtrar productos en el modal de personalización. */
-    public string $platilloBuscar = '';
-
     // ── Modal de factura ────────────────────────────────────────────────
     public bool $mostrarFactura = false;
 
@@ -717,7 +714,6 @@ class PuntoDeVenta extends Page
         $this->platilloBase = ['carne' => 0, 'complemento' => 0, 'bebida' => 0];
         $this->platilloSel = [];
         $this->platilloNota = '';
-        $this->platilloBuscar = '';
     }
 
     private function pushLinea(LineaVenta $linea, string $tipo, ?int $cantidad = null, ?string $grupo = null): void
@@ -1271,13 +1267,23 @@ class PuntoDeVenta extends Page
         }
     }
 
-    /** Al escribir el nombre (en mayúsculas), sugiere clientes frecuentes. */
+    /**
+     * Al escribir el nombre, sugiere clientes frecuentes.
+     *
+     * ⚠️ NO reasignar aquí $this->nombreInput. Livewire devuelve el valor al
+     * input, y como entre la tecla y la respuesta pasa ~1 segundo (debounce +
+     * viaje al servidor), lo que el cajero escribió mientras tanto se pisaba:
+     * ese era el "escribo y no aparece lo que escribo" que reportó el local.
+     * El campo ya se ve en mayúsculas por CSS (text-transform) y se normaliza
+     * al emitir la factura.
+     *
+     * Se piden 3 letras (antes 2) para no disparar búsquedas de más.
+     */
     public function updatedNombreInput(string $value): void
     {
-        $this->nombreInput = mb_strtoupper($value);
-        $busqueda = trim($this->nombreInput);
+        $busqueda = trim($value);
 
-        $this->sugerencias = mb_strlen($busqueda) >= 2
+        $this->sugerencias = mb_strlen($busqueda) >= 3
             ? Cliente::query()
                 ->where('nombre', 'ilike', '%'.$busqueda.'%')
                 ->orWhere('rtn', 'like', $busqueda.'%')
@@ -1319,7 +1325,7 @@ class PuntoDeVenta extends Page
             $ok = $this->ejecutarCobroPendiente(
                 $this->cobrandoPendienteId,
                 $rtn,
-                trim($this->nombreInput),
+                mb_strtoupper(trim($this->nombreInput)),
                 $this->formaPago,
                 $this->facturaDetallada,
                 $this->banco,
@@ -1335,7 +1341,7 @@ class PuntoDeVenta extends Page
             return;
         }
 
-        if ($this->procesarFactura($rtn, trim($this->nombreInput), $this->facturaDetallada)) {
+        if ($this->procesarFactura($rtn, mb_strtoupper(trim($this->nombreInput)), $this->facturaDetallada)) {
             $this->mostrarFactura = false;
         }
     }

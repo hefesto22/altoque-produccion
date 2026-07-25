@@ -35,6 +35,10 @@
         @media (prefers-reduced-motion: reduce) { .moneda { animation: none; } }
         .head .titulo { font-size: calc(5.5vw * var(--esc)); font-weight: 800; line-height: 1.1; }
         .head .sub { font-size: calc(3vw * var(--esc)); color: #444; margin-top: .5vw; }
+        /* Servicio que se está mostrando: sin esto, con la pantalla bloqueada
+           no hay manera de saber si es Desayuno, Almuerzo o Cena. */
+        .head .sub .servicio { display: inline-block; margin-left: .8vw; padding: .15vw 1.2vw; border-radius: 999px;
+            background: #1f9d3a; color: #fff; font-weight: 800; letter-spacing: .03em; }
 
         .seccion { font-size: calc(4.4vw * var(--esc)); font-weight: 800; margin: calc(2vw * var(--esc)) 0 calc(.8vw * var(--esc)); color: #1f9d3a; }
         .item { display: flex; align-items: flex-start; gap: 1.2vw; font-size: calc(4vw * var(--esc)); line-height: 1.4; }
@@ -100,6 +104,23 @@
             const MIN = 0.72;
             const MAX = 1.25;  // tope para que no se desfigure con poco contenido
             let pendiente = null;
+            let ultimaFirma = '';
+
+            // Firma barata de todo lo que puede cambiar el ajuste. Si no cambió,
+            // NO se vuelve a medir.
+            //
+            // Sin esto, los días de menú largo (que no entra ni al mínimo) la
+            // salida temprana de abajo nunca se cumplía y la bisección corría
+            // ENTERA en cada refresco de 10 s: ~26 reflows forzados sobre un DOM
+            // grande. En un tótem con hardware flojo eso congela la pantalla y se
+            // come los toques — se sentía como que el candado no respondía.
+            const firma = (board) => [
+                board.textContent.length,
+                board.children.length,
+                board.className,
+                window.innerHeight,
+                window.innerWidth,
+            ].join('|');
 
             // Alto natural del contenido: sin el min-height de 100vh, que si no
             // siempre mediría "la pantalla completa" y nunca detectaría el sobrante.
@@ -115,16 +136,22 @@
                 const board = document.querySelector('.board');
                 if (! board) return;
 
+                // Nada cambió desde el último ajuste: ni una sola medición.
+                const actualFirma = firma(board);
+                if (actualFirma === ultimaFirma) return;
+                ultimaFirma = actualFirma;
+
                 const disponible = window.innerHeight;
                 const actual = medir(board);
 
                 // Ya está bien ajustado (entra y casi no sobra): no recalcular.
-                // Evita rehacer el cálculo en cada refresco de 10s sin cambios.
                 if (actual > 0 && actual <= disponible && actual >= disponible * 0.96) return;
 
+                // 8 pasos: precisión de ~0.2% del rango, de sobra, y un tercio
+                // menos de trabajo que 12 en pantallas lentas.
                 let bajo = MIN, alto = MAX, mejor = MIN;
 
-                for (let i = 0; i < 12; i++) {
+                for (let i = 0; i < 8; i++) {
                     const medio = (bajo + alto) / 2;
                     board.style.setProperty('--esc', medio);
 

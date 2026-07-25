@@ -90,7 +90,15 @@ class MenuPantalla extends Component
         $e = EmpresaSetting::actual();
         $logoPath = BrandingSetting::current()->logo_path;
 
+        // Qué servicio se está mostrando. La pantalla recuerda el último
+        // elegido (localStorage) y al bloquearla la barra desaparece: sin
+        // esto es imposible saber si estás viendo Desayuno o Almuerzo, y
+        // parece que "el menú no se actualiza" cuando en realidad se editó otro.
+        $servicioNombre = collect($this->servicios)
+            ->first(fn ($s): bool => (int) $s->id === $this->servicioId)?->nombre;
+
         return view('livewire.menu-pantalla', [
+            'servicioNombre'   => $servicioNombre,
             'proteinas'        => $proteinas,
             'complementos'     => $complementos,
             'bebidas'          => $bebidas,

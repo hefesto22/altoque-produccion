@@ -136,7 +136,10 @@
             {{-- Pedidos pendientes de pago: botón que se despliega, para no ocupar espacio --}}
             {{-- wire:poll: pendientes creados por otra caja o por pedidos online
                  aparecen solos, sin recargar la página (pedido del restaurante). --}}
-            <div wire:poll.15s>
+            {{-- El poll se PAUSA mientras hay un modal abierto: cada refresco
+                 re-renderiza el POS entero y, si cae mientras el cajero
+                 escribe, se siente como un tirón. --}}
+            <div @if (! $mostrarFactura && ! $personalizando && ! $mostrarCierre && ! $mostrarApertura) wire:poll.15s @endif>
             @php($pendientes = $this->pedidosPendientes)
             @if (count($pendientes))
                 <div>
@@ -443,7 +446,7 @@
                             <div>
                                 <label style="display:block; font-size:.72rem; opacity:.6; margin-bottom:.15rem;">{{ $lbl }}</label>
                                 <x-filament::input.wrapper>
-                                    <x-filament::input type="number" step="0.01" min="0" wire:model.live="{{ $campo }}" placeholder="0.00" />
+                                    <x-filament::input type="number" step="0.01" min="0" wire:model.live.debounce.600ms="{{ $campo }}" placeholder="0.00" />
                                 </x-filament::input.wrapper>
                             </div>
                         @endforeach
@@ -515,33 +518,44 @@
                         </div>
                     </div>
 
-                    {{-- Agregar / cambiar productos --}}
-                    <div style="border-top:1px solid rgba(128,128,128,.2); padding-top:.5rem;">
-                        <x-filament::input.wrapper>
-                            <x-filament::input type="text" wire:model.live.debounce.250ms="platilloBuscar" placeholder="🔍 Buscar producto…" />
-                        </x-filament::input.wrapper>
-                    </div>
-                    @php($q = mb_strtolower(trim($platilloBuscar)))
-                    <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.4rem; max-height:32vh; overflow-y:auto;">
-                        @foreach (['Proteínas' => $proteinas, 'Complementos' => $complementos, 'Bebidas' => $bebidas] as $titulo => $lista)
-                            @php($filtrados = $q === '' ? $lista : collect($lista)->filter(fn ($p) => str_contains(mb_strtolower((string) $p['nombre']), $q))->all())
-                            @if (count($filtrados))
-                                <div>
-                                    <div style="font-size:.72rem; opacity:.6; margin-bottom:.2rem;">{{ $titulo }}</div>
-                                    <div style="display:flex; flex-wrap:wrap; gap:.3rem;">
-                                        @foreach ($filtrados as $prod)
-                                            <button type="button" wire:click="platilloAgregar({{ $prod['id'] }})"
-                                                style="font-size:.76rem; padding:.25rem .5rem; border-radius:.4rem; border:1px solid rgba(128,128,128,.35); background:transparent; color:inherit; cursor:pointer;">
-                                                {{ $prod['nombre'] }} <span style="opacity:.5;">L.{{ number_format((float) $prod['precio'], 0) }}</span>
-                                            </button>
-                                        @endforeach
+                    {{-- Agregar / cambiar productos. El buscador filtra EN EL
+                         NAVEGADOR (mismo patrón que el buscador grande del menú).
+                         Antes iba al servidor en cada tecla y cada respuesta
+                         re-renderizaba el POS entero (~200 KB): eso se sentía
+                         como que la pantalla se traba al escribir. --}}
+                    <div x-data="{
+                            q: '',
+                            norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); },
+                            ver(n) { return this.q === '' || this.norm(n).includes(this.norm(this.q)); },
+                        }">
+                        <div style="border-top:1px solid rgba(128,128,128,.2); padding-top:.5rem;">
+                            <x-filament::input.wrapper>
+                                <x-filament::input type="text" x-model="q" placeholder="🔍 Buscar producto…" />
+                            </x-filament::input.wrapper>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.4rem; max-height:32vh; overflow-y:auto;">
+                            @foreach (['Proteínas' => $proteinas, 'Complementos' => $complementos, 'Bebidas' => $bebidas] as $titulo => $lista)
+                                @if (count($lista))
+                                    <div x-show="{{ \Illuminate\Support\Js::from(collect($lista)->pluck('nombre')) }}.some(n => ver(n))">
+                                        <div style="font-size:.72rem; opacity:.6; margin-bottom:.2rem;">{{ $titulo }}</div>
+                                        <div style="display:flex; flex-wrap:wrap; gap:.3rem;">
+                                            @foreach ($lista as $prod)
+                                                <button type="button" wire:click="platilloAgregar({{ $prod['id'] }})"
+                                                    x-show="ver({{ \Illuminate\Support\Js::from($prod['nombre']) }})"
+                                                    style="font-size:.76rem; padding:.25rem .5rem; border-radius:.4rem; border:1px solid rgba(128,128,128,.35); background:transparent; color:inherit; cursor:pointer;">
+                                                    {{ $prod['nombre'] }} <span style="opacity:.5;">L.{{ number_format((float) $prod['precio'], 0) }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
                                     </div>
-                                </div>
-                            @endif
-                        @endforeach
-                        @if ($q !== '' && collect($proteinas)->merge($complementos)->merge($bebidas)->filter(fn ($p) => str_contains(mb_strtolower((string) $p['nombre']), $q))->isEmpty())
-                            <div style="opacity:.55; font-size:.82rem; text-align:center; padding:.5rem;">Sin resultados para “{{ $platilloBuscar }}”.</div>
-                        @endif
+                                @endif
+                            @endforeach
+                            <div x-cloak
+                                x-show="q !== '' && ! {{ \Illuminate\Support\Js::from(collect($proteinas)->merge($complementos)->merge($bebidas)->pluck('nombre')) }}.some(n => ver(n))"
+                                style="opacity:.55; font-size:.82rem; text-align:center; padding:.5rem;">
+                                Sin resultados para “<span x-text="q"></span>”.
+                            </div>
+                        </div>
                     </div>
 
                     {{-- Nota --}}
@@ -684,7 +698,7 @@
                         <div style="position:relative;">
                             <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Nombre / Razón social</label>
                             <x-filament::input.wrapper>
-                                <x-filament::input type="text" wire:model.live.debounce.400ms="nombreInput" placeholder="Empezá a escribir el nombre…" style="text-transform:uppercase;" />
+                                <x-filament::input type="text" wire:model.live.debounce.700ms="nombreInput" placeholder="Empezá a escribir el nombre…" style="text-transform:uppercase;" />
                             </x-filament::input.wrapper>
 
                             @if (count($sugerencias))
@@ -713,7 +727,7 @@
                                         <div>
                                             <label style="display:block; font-size:.72rem; opacity:.6; margin-bottom:.15rem;">{{ $lbl }}</label>
                                             <x-filament::input.wrapper>
-                                                <x-filament::input type="number" step="0.01" min="0" wire:model.live="{{ $campo }}" placeholder="0.00" />
+                                                <x-filament::input type="number" step="0.01" min="0" wire:model.live.debounce.600ms="{{ $campo }}" placeholder="0.00" />
                                             </x-filament::input.wrapper>
                                         </div>
                                     @endforeach
