@@ -94,7 +94,7 @@
             @foreach ($combosEspeciales as $ce)
                 <div class="combo">
                     {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
-                    @if ($ce['desglose'])<span style="display:block; font-size:2.6vw; font-weight:500; opacity:.75;">{{ $ce['desglose'] }}</span>@endif
+                    @if ($ce['desglose'])<span style="display:block; font-size:calc(2.6vw * var(--esc)); font-weight:500; opacity:.75;">{{ $ce['desglose'] }}</span>@endif
                 </div>
             @endforeach
         @endif
