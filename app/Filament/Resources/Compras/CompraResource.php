@@ -59,7 +59,11 @@ class CompraResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([
+        // Una sola columna de secciones: cada paso ocupa el ancho completo del
+        // modal y acomoda sus campos adentro. Con secciones lado a lado (lo
+        // anterior) la más corta dejaba un hueco enorme al lado.
+        return $schema->columns(1)->components([
+
             // ── Paso 1: qué documento entregó el proveedor ──────────────
             Section::make('1 · ¿Qué te dio el proveedor?')
                 ->description('De esto depende si el ISV se puede descontar o no.')
@@ -83,6 +87,7 @@ class CompraResource extends Resource
                             'recibo'  => 'warning',
                         ]),
 
+                    // Al lado de los botones, no debajo: aprovecha el ancho.
                     Placeholder::make('explicacion_tipo')
                         ->hiddenLabel()
                         ->content(fn (Get $get): HtmlString => new HtmlString(
@@ -90,7 +95,7 @@ class CompraResource extends Resource
                                 ? '<span style="font-size:.85rem;">Factura del proveedor: su <strong>ISV se descuenta</strong> del ISV de tus ventas y entra al Libro de Compras del SAR.</span>'
                                 : '<span style="font-size:.85rem; color:#d97706;">Compra sin factura: queda registrada como gasto, pero <strong>no descuenta ISV</strong> ni entra al Libro de Compras. Solo se te pide el total.</span>'
                         )),
-                ]),
+                ])->columns(2),
 
             // ── Paso 2: de quién y cuándo ───────────────────────────────
             Section::make('2 · Proveedor')
@@ -107,6 +112,21 @@ class CompraResource extends Resource
                         ->required(fn (Get $get): bool => self::esFactura($get))
                         ->maxLength(50),
 
+                    Select::make('categoria')
+                        ->label('¿En qué se gastó?')
+                        ->required()
+                        ->default('otros')
+                        ->native(false)
+                        ->columnSpan(2)
+                        ->options([
+                            'insumos'   => 'Insumos',
+                            'empaques'  => 'Empaques / descartables',
+                            'equipo'    => 'Equipo / utensilios',
+                            'servicios' => 'Servicios',
+                            'limpieza'  => 'Limpieza',
+                            'otros'     => 'Otros',
+                        ]),
+
                     // Autocompletado: al escribir el nombre de un proveedor ya
                     // registrado, su RTN se llena solo. El catálogo se alimenta
                     // al guardar cada compra (ver Compra::booted).
@@ -114,6 +134,7 @@ class CompraResource extends Resource
                         ->label('Proveedor (empresa)')
                         ->required()
                         ->maxLength(255)
+                        ->columnSpan(2)
                         ->datalist(fn (): array => Proveedor::nombres())
                         ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(trim((string) $state)))
                         ->live(onBlur: true)
@@ -129,26 +150,12 @@ class CompraResource extends Resource
                     TextInput::make('proveedor_rtn')
                         ->label('RTN del proveedor')
                         ->maxLength(14)
+                        ->columnSpan(2)
                         ->live(onBlur: true)
                         ->helperText(fn (Get $get): string => self::esFactura($get)
                             ? 'Necesario para que el SAR acepte el descuento del ISV.'
                             : 'Opcional en un recibo.'),
-
-                    Select::make('categoria')
-                        ->label('¿En qué se gastó?')
-                        ->required()
-                        ->default('otros')
-                        ->native(false)
-                        ->options([
-                            'insumos'   => 'Insumos',
-                            'empaques'  => 'Empaques / descartables',
-                            'equipo'    => 'Equipo / utensilios',
-                            'servicios' => 'Servicios',
-                            'limpieza'  => 'Limpieza',
-                            'otros'     => 'Otros',
-                        ])
-                        ->columnSpanFull(),
-                ])->columns(2),
+                ])->columns(4),
 
             // ── Paso 3: montos ──────────────────────────────────────────
             Section::make('3 · Montos')
@@ -170,18 +177,21 @@ class CompraResource extends Resource
                     MontoField::make('exento', 'Importe exento')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
                         ->live(onBlur: true)
-                        ->helperText('Lo que no paga impuesto (si la factura lo separa).')
+                        ->helperText('Lo que no paga impuesto.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     MontoField::make('isv', 'ISV que se descuenta')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
                         ->live(onBlur: true)
-                        ->helperText('15% del gravado. Ajustalo si la factura dice otra cosa.')
+                        ->helperText('15% del gravado. Ajustalo si difiere.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
+                    // En un recibo es el único campo: ocupa media fila para que
+                    // no quede un cuadrito suelto contra el borde.
                     MontoField::make('total', 'Total pagado')
+                        ->columnSpan(fn (Get $get): int => self::esFactura($get) ? 1 : 2)
                         ->helperText(fn (Get $get): ?string => self::esFactura($get)
-                            ? 'Debe cuadrar con el total de la factura.'
+                            ? 'Debe cuadrar con la factura.'
                             : null),
 
                     // Aviso sin bloquear: una factura con ISV pero sin RTN del
@@ -195,9 +205,12 @@ class CompraResource extends Resource
                         ->content(new HtmlString(
                             '<span style="font-size:.85rem; color:#d97706;">⚠ Estás descontando ISV sin el RTN del proveedor. Si el SAR audita, puede rechazar ese crédito.</span>'
                         )),
-                ])->columns(2),
 
-            TextInput::make('notas')->label('Notas (opcional)')->maxLength(255)->columnSpanFull(),
+                    TextInput::make('notas')
+                        ->label('Notas (opcional)')
+                        ->maxLength(255)
+                        ->columnSpanFull(),
+                ])->columns(4),
         ]);
     }
 
