@@ -1,15 +1,22 @@
 {{-- wire:poll: la pantalla se refresca sola cada 15s — al guardar el Menú del Día
      en el admin, la TV lo refleja sin tocar nada (es otro dispositivo, así que un
      evento Livewire no la alcanzaría; el poll es el mismo patrón del listado POS). --}}
+{{-- El bloqueo se maneja con una clase en <html> (ver el layout), no con
+     x-show: Livewire re-agregaba x-cloak en cada refresco y la barra y el
+     candado parpadeaban. --}}
 <div wire:poll.10s
     x-data="{
-        locked: localStorage.getItem('menu_locked') === '1',
-        toggle() { this.locked = !this.locked; localStorage.setItem('menu_locked', this.locked ? '1' : '0'); }
+        toggle() {
+            const bloqueada = ! document.documentElement.classList.contains('pantalla-bloqueada');
+            document.documentElement.classList.toggle('pantalla-bloqueada', bloqueada);
+            localStorage.setItem('menu_locked', bloqueada ? '1' : '0');
+            window.dispatchEvent(new Event('resize')); // reajustar: cambió el alto útil
+        }
     }"
     x-init="$nextTick(() => { let s = localStorage.getItem('menu_servicio'); if (s) $wire.setServicio(parseInt(s)); })">
 
-    {{-- Barra de control (oculta cuando está bloqueada) --}}
-    <div class="bar" x-show="!locked" x-cloak>
+    {{-- Barra de control (la oculta el CSS cuando la pantalla está bloqueada) --}}
+    <div class="bar">
         <span style="font-weight:800;">{{ $empresa['nombre'] }}</span>
         @foreach ($servicios as $s)
             <button class="btn {{ $servicioId === $s['id'] ? 'on' : '' }}"
@@ -30,10 +37,10 @@
     </button>
 
     {{-- Botón discreto para desbloquear --}}
-    <button class="unlock" x-show="locked" x-cloak x-on:click="toggle()" title="Desbloquear">🔓</button>
+    <button class="unlock" x-on:click="toggle()" title="Desbloquear">🔓</button>
 
     {{-- Menú formato flyer, vertical para pantalla tótem (0.70 x 1.90) --}}
-    <div class="board" :class="locked ? '' : 'pushed'">
+    <div class="board">
         <div class="head {{ $bebidas->isNotEmpty() ? 'sin-linea' : '' }}">
             @if ($logoUrl)
                 {{-- Dos caras para que el giro de moneda nunca muestre el logo en espejo --}}

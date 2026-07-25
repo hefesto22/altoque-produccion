@@ -4,6 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Menú del día — {{ config('app.name') }}</title>
+    <script>
+        // Antes de pintar: si la pantalla quedó bloqueada, que no se vea la
+        // barra ni un fotograma. (Sustituye al x-cloak, que parpadeaba.)
+        document.documentElement.classList.toggle(
+            'pantalla-bloqueada',
+            localStorage.getItem('menu_locked') === '1',
+        );
+    </script>
     @livewireStyles
     <style>
         * { box-sizing: border-box; }
@@ -13,8 +21,12 @@
         /* Pantalla VERTICAL (tótem). Una sola columna a todo lo alto. */
         /* --esc: factor de ajuste que calcula el script del pie para que el
            menú SIEMPRE quepa en la pantalla (en una TV nadie hace scroll).
-           Vale 1 si el JS no corre, así el diseño queda igual que siempre. */
-        .board { --esc: 1; min-height: 100vh; display: flex; flex-direction: column; padding: 2.5vw 4vw 5vw; }
+           Vale 1 si el JS no corre, así el diseño queda igual que siempre.
+           Vive en <html> A PROPÓSITO: Livewire nunca morfea ese elemento. Cuando
+           estaba en .board, cada refresco de 10 s le borraba el estilo, el menú
+           saltaba a tamaño 1 por un instante y se veía como un parpadeo. */
+        :root { --esc: 1; }
+        .board { min-height: 100vh; display: flex; flex-direction: column; padding: 2.5vw 4vw 5vw; }
         .head { text-align: center; border-bottom: 4px solid #1f9d3a; padding-bottom: 1.5vw; margin-bottom: 2vw; perspective: 900px; }
         .head img { max-height: calc(18vw * var(--esc)); max-width: 60%; width: auto; margin-bottom: 1vw; }
 
@@ -56,7 +68,15 @@
         .btn.on { background: #f59e0b; color: #111; }
         .btn.lock { background: #dc2626; }
         .unlock { position: fixed; bottom: 16px; right: 16px; z-index: 50; background: rgba(0,0,0,.2); color: #fff; border: none; border-radius: 999px; width: 56px; height: 56px; font-size: 1.6rem; cursor: pointer; }
-        .pushed { padding-top: 4rem; }
+
+        /* Pantalla bloqueada: se decide con una clase en <html> y CSS, NO con
+           x-show/x-cloak. Livewire re-agregaba x-cloak en cada refresco, así que
+           la barra y el candado parpadeaban 10 veces por minuto — y si el toque
+           caía justo en ese instante, el candado no respondía. Con la clase en
+           <html> el refresco no puede tocarlos. */
+        html.pantalla-bloqueada .bar { display: none; }
+        html:not(.pantalla-bloqueada) .unlock { display: none; }
+        html:not(.pantalla-bloqueada) .board { padding-top: 4rem; }
 
         /* Aviso de que el menú sigue más abajo. Solo aparece los días de menú
            cargado, cuando achicar más dejaría la letra ilegible y se prefiere
@@ -117,7 +137,7 @@
             const firma = (board) => [
                 board.textContent.length,
                 board.children.length,
-                board.className,
+                document.documentElement.className, // bloqueada o no: cambia el alto
                 window.innerHeight,
                 window.innerWidth,
             ].join('|');
@@ -153,7 +173,7 @@
 
                 for (let i = 0; i < 8; i++) {
                     const medio = (bajo + alto) / 2;
-                    board.style.setProperty('--esc', medio);
+                    document.documentElement.style.setProperty('--esc', medio);
 
                     if (medir(board) <= disponible) {
                         mejor = medio;
@@ -163,7 +183,7 @@
                     }
                 }
 
-                board.style.setProperty('--esc', mejor);
+                document.documentElement.style.setProperty('--esc', mejor);
 
                 // ¿Ni siquiera al tamaño mínimo entra? Entonces hay scroll:
                 // preferimos que se lea y se deslice, no letra de hormiga.
