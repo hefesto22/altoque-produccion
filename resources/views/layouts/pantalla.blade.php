@@ -35,10 +35,11 @@
         .unlock { position: fixed; bottom: 16px; right: 16px; z-index: 50; background: rgba(0,0,0,.2); color: #fff; border: none; border-radius: 999px; width: 56px; height: 56px; font-size: 1.6rem; cursor: pointer; }
         .pushed { padding-top: 4rem; }
 
-        /* Cinta de bebidas: marquee continuo fijo al pie de la pantalla.
+        /* Cinta de bebidas: banda con marquee JUSTO DEBAJO del encabezado —
+           ocupa el lugar de la línea verde separadora (la cinta ES la línea).
            Dos copias idénticas del contenido y translateX(-50%) → bucle
            perfecto sin salto, todo en CSS (la TV no gasta en JS). */
-        .cinta { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: #1f9d3a; color: #fff; overflow: hidden; padding: 1.1vw 0; box-shadow: 0 -4px 14px rgba(0,0,0,.22); }
+        .cinta { background: #1f9d3a; color: #fff; overflow: hidden; padding: 1.1vw 0; margin: 0 -4vw 2vw; }
         .cinta-track { display: inline-flex; align-items: center; white-space: nowrap; will-change: transform; animation: cinta-scroll linear infinite; }
         .cinta-grupo { display: inline-flex; align-items: center; }
         .cinta-item { font-size: 3.2vw; font-weight: 800; padding: 0 1.2vw; }
@@ -46,10 +47,9 @@
         .cinta-sep { font-size: 2.4vw; opacity: .65; }
         @keyframes cinta-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
-        /* Con cinta abajo: aire extra para que el pie no quede tapado, y el
-           botón de desbloquear sube por encima de la cinta. */
-        .con-cinta { padding-bottom: 12vw; }
-        .unlock.sobre-cinta { bottom: calc(6vw + 16px); }
+        /* Con cinta, el encabezado suelta su línea verde: la banda de bebidas
+           queda exactamente donde iba esa línea. */
+        .head.sin-linea { border-bottom: none; padding-bottom: .8vw; margin-bottom: 0; }
     </style>
 </head>
 <body>
