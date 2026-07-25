@@ -49,6 +49,32 @@ class CompraResource extends Resource
         return $get('tipo_documento') !== 'recibo';
     }
 
+    /**
+     * Compra ya registrada con el MISMO número y el MISMO proveedor.
+     * Sirve para avisar antes de guardar dos veces la misma factura, que
+     * duplicaría el crédito fiscal (lo primero que observa una auditoría).
+     */
+    private static function facturaDuplicada(Get $get, ?Compra $record): ?Compra
+    {
+        $numero = trim((string) $get('numero_factura'));
+        $proveedor = mb_strtoupper(trim((string) $get('proveedor_nombre')));
+
+        if ($numero === '' || $proveedor === '') {
+            return null;
+        }
+
+        $query = Compra::query()
+            ->where('numero_factura', $numero)
+            ->whereRaw('upper(trim(proveedor_nombre)) = ?', [$proveedor]);
+
+        // Al editar, la propia compra no cuenta como duplicada.
+        if ($record !== null) {
+            $query->whereKeyNot($record->getKey());
+        }
+
+        return $query->first();
+    }
+
     /** Total = exento + gravado + ISV. Se recalcula al tocar cualquiera. */
     private static function recalcularTotal(Get $get, Set $set): void
     {
@@ -107,17 +133,21 @@ class CompraResource extends Resource
                         ->default(now())
                         ->maxDate(now()),
 
+                    // Doble ancho: un correlativo del SAR (000-001-01-00000657)
+                    // no entra cómodo en una columna.
                     TextInput::make('numero_factura')
                         ->label(fn (Get $get): string => self::esFactura($get) ? 'N° de factura' : 'N° de recibo (si tiene)')
                         ->required(fn (Get $get): bool => self::esFactura($get))
-                        ->maxLength(50),
+                        ->maxLength(50)
+                        ->columnSpan(2)
+                        ->live(onBlur: true)
+                        ->placeholder('000-001-01-00000657'),
 
                     Select::make('categoria')
                         ->label('¿En qué se gastó?')
                         ->required()
                         ->default('otros')
                         ->native(false)
-                        ->columnSpan(2)
                         ->options([
                             'insumos'   => 'Insumos',
                             'empaques'  => 'Empaques / descartables',
@@ -155,6 +185,27 @@ class CompraResource extends Resource
                         ->helperText(fn (Get $get): string => self::esFactura($get)
                             ? 'Necesario para que el SAR acepte el descuento del ISV.'
                             : 'Opcional en un recibo.'),
+
+                    // Aviso (no bloquea): registrar dos veces la misma factura
+                    // descontaría el ISV por duplicado.
+                    Placeholder::make('aviso_duplicada')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn (Get $get, ?Compra $record): bool => self::facturaDuplicada($get, $record) !== null)
+                        ->content(function (Get $get, ?Compra $record): HtmlString {
+                            $previa = self::facturaDuplicada($get, $record);
+
+                            if ($previa === null) {
+                                return new HtmlString('');
+                            }
+
+                            return new HtmlString(
+                                '<span style="font-size:.85rem; color:#d97706;">⚠ Ese número ya está registrado para este proveedor el <strong>'
+                                .$previa->fecha->format('d/m/Y')
+                                .'</strong> por <strong>L. '.number_format((float) $previa->total, 2)
+                                .'</strong>. Si es la misma compra no la guardes otra vez: descontarías el ISV dos veces.</span>'
+                            );
+                        }),
                 ])->columns(4),
 
             // ── Paso 3: montos ──────────────────────────────────────────
