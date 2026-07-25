@@ -29,7 +29,11 @@
     <div class="board" :class="locked ? '' : 'pushed'">
         <div class="head {{ $bebidas->isNotEmpty() ? 'sin-linea' : '' }}">
             @if ($logoUrl)
-                <img src="{{ $logoUrl }}" alt="logo">
+                {{-- Dos caras para que el giro de moneda nunca muestre el logo en espejo --}}
+                <div class="moneda">
+                    <img src="{{ $logoUrl }}" alt="logo">
+                    <img src="{{ $logoUrl }}" alt="" class="reverso" aria-hidden="true">
+                </div>
             @endif
             <div class="titulo">{{ $empresa['nombre'] }}</div>
             <div class="sub">🟡 Menú {{ ucfirst($fecha) }}</div>

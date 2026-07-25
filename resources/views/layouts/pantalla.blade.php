@@ -12,8 +12,24 @@
 
         /* Pantalla VERTICAL (tótem). Una sola columna a todo lo alto. */
         .board { min-height: 100vh; display: flex; flex-direction: column; padding: 2.5vw 4vw 5vw; }
-        .head { text-align: center; border-bottom: 4px solid #1f9d3a; padding-bottom: 1.5vw; margin-bottom: 2vw; }
+        .head { text-align: center; border-bottom: 4px solid #1f9d3a; padding-bottom: 1.5vw; margin-bottom: 2vw; perspective: 900px; }
         .head img { max-height: 18vw; max-width: 60%; width: auto; margin-bottom: 1vw; }
+
+        /* Logo tipo MONEDA: descansa de frente y da una vuelta completa sobre
+           su eje cada 6s. El giro ocupa el último 30% del ciclo (~1.8s) — se
+           lee como el volteo de una moneda y no como un trompo mareador en una
+           pantalla encendida todo el día.
+           Son DOS copias del logo (cara y reverso, la de atrás pre-rotada
+           180°) con backface-visibility: hidden. Sin eso, media vuelta se
+           vería el logo en espejo, que parece un error de la pantalla. */
+        .moneda { position: relative; display: inline-block; transform-style: preserve-3d; margin-bottom: 1vw; animation: logo-moneda 6s ease-in-out infinite; }
+        /* max-width en vw, NO en %: dentro de un inline-block el porcentaje se
+           resuelve contra un ancho que depende de la propia imagen y el logo
+           colapsa a 0 (queda invisible). */
+        .moneda img { max-height: 18vw; max-width: 60vw; width: auto; margin-bottom: 0; backface-visibility: hidden; display: block; }
+        .moneda .reverso { position: absolute; top: 0; left: 0; width: 100%; height: 100%; max-height: none; max-width: none; transform: rotateY(180deg); }
+        @keyframes logo-moneda { 0%, 70% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .moneda { animation: none; } }
         .head .titulo { font-size: 5.5vw; font-weight: 800; line-height: 1.1; }
         .head .sub { font-size: 3vw; color: #444; margin-top: .5vw; }
 
