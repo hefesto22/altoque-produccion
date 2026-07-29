@@ -103,9 +103,23 @@
         @endif
 
         {{-- Platillos completos (con nombre y precio fijo) --}}
-        @if ($combosEspeciales->isNotEmpty())
+        @php($platosDelDia = $combosEspeciales->where('del_dia', true))
+        @php($platillos = $combosEspeciales->where('del_dia', false))
+
+        @if ($platosDelDia->isNotEmpty())
+            <div class="combo-h">🍽️ PLATO DEL DÍA</div>
+            @foreach ($platosDelDia as $ce)
+                <div class="combo">
+                    {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
+                    @if ($ce['desglose'])<span style="display:block; font-size:calc(2.6vw * var(--esc)); font-weight:500; opacity:.75;">{{ $ce['desglose'] }}</span>@endif
+                    @if ($ce['nota'])<span style="display:block; font-size:calc(2.3vw * var(--esc)); font-weight:500; opacity:.6;">{{ $ce['nota'] }}</span>@endif
+                </div>
+            @endforeach
+        @endif
+
+        @if ($platillos->isNotEmpty())
             <div class="combo-h">⭐ PLATILLOS COMPLETOS</div>
-            @foreach ($combosEspeciales as $ce)
+            @foreach ($platillos as $ce)
                 <div class="combo">
                     {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
                     @if ($ce['desglose'])<span style="display:block; font-size:calc(2.6vw * var(--esc)); font-weight:500; opacity:.75;">{{ $ce['desglose'] }}</span>@endif

@@ -8,6 +8,7 @@ use App\Models\Combo;
 use App\Models\MenuDia;
 use App\Models\MenuDiaCombo;
 use App\Models\Producto;
+use App\Models\Servicio;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
@@ -18,6 +19,9 @@ use Illuminate\Support\Carbon;
  * Regla de tolerancia: si esa fecha NO tiene ningún menú cargado, el POS
  * muestra todo el catálogo activo (no se bloquea la caja). Si la fecha sí
  * tiene menú pero para otro servicio, ese servicio aparece vacío.
+ *
+ * Los platos del día (productos con `fecha_especial`) quedan siempre fuera
+ * salvo en su propia fecha — incluso bajo la tolerancia de arriba.
  */
 final class MenuDiaService
 {
@@ -27,7 +31,8 @@ final class MenuDiaService
     public function disponibles(Carbon $fecha, ?int $servicioId): Collection
     {
         $query = Producto::query()->activos()
-            ->select(['id', 'nombre', 'categoria', 'tier_combo', 'descripcion', 'precio', 'grava_isv'])
+            ->disponibleEn($fecha)
+            ->select(['id', 'nombre', 'categoria', 'tier_combo', 'descripcion', 'precio', 'grava_isv', 'fecha_especial'])
             ->orderBy('nombre');
 
         if ($this->hayMenuCargado($fecha) && $servicioId !== null) {
@@ -72,6 +77,33 @@ final class MenuDiaService
         if ($filas !== []) {
             MenuDia::query()->insert($filas);
         }
+    }
+
+    /**
+     * Publica un producto en TODOS los servicios activos de una fecha.
+     *
+     * Es el camino del plato del día: se ofrece el día entero (desayuno,
+     * almuerzo y cena) sin pisar lo que ya estaba marcado en cada servicio
+     * — por eso firstOrCreate y no el sincronizar() de arriba, que reemplaza.
+     */
+    public function agregarATodoElDia(Carbon $fecha, int $productoId): void
+    {
+        foreach (Servicio::query()->activos()->pluck('id') as $servicioId) {
+            MenuDia::query()->firstOrCreate([
+                'fecha'       => $fecha->toDateString(),
+                'servicio_id' => (int) $servicioId,
+                'producto_id' => $productoId,
+            ]);
+        }
+    }
+
+    /** Quita un producto del menú de una fecha (todos sus servicios). */
+    public function quitarDeTodoElDia(Carbon $fecha, int $productoId): void
+    {
+        MenuDia::query()
+            ->whereDate('fecha', $fecha)
+            ->where('producto_id', $productoId)
+            ->delete();
     }
 
     /**

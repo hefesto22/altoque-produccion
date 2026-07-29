@@ -207,6 +207,25 @@
                 </x-filament::button>
             </div>
 
+            {{-- Plato del día: el especial de hoy, primero de la lista. --}}
+            @if (count($platosDelDia))
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($platosDelDia)->pluck('nombre')) }}.some(n => ver(n))">
+                    <x-slot name="heading">🍽️ Plato del día</x-slot>
+                    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;">
+                        @foreach ($platosDelDia as $plato)
+                            <x-filament::button style="width:100%; justify-content:flex-start;" color="danger"
+                                x-show="ver({{ \Illuminate\Support\Js::from($plato['nombre']) }})"
+                                wire:click="personalizarPlatillo({{ $plato['id'] }})">
+                                <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
+                                    <span style="font-weight:600;">{{ $plato['nombre'] }}</span>
+                                    <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $plato['precio'], 2) }}</span>
+                                </span>
+                            </x-filament::button>
+                        @endforeach
+                    </div>
+                </x-filament::section>
+            @endif
+
             {{-- Platillos completos: cobro de un toque a precio fijo. --}}
             @if (count($combos))
                 <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($combos)->pluck('nombre')) }}.some(n => ver(n))">

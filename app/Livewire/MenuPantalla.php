@@ -63,6 +63,8 @@ class MenuPantalla extends Component
                     'nombre'   => $c->nombre,
                     'precio'   => (float) $c->precio,
                     'desglose' => $c->desglose($c->proteinaCombo?->nombre),
+                    'nota'     => $c->descripcion,
+                    'del_dia'  => $c->esDelDia(),
                 ]);
 
         // Precios individuales por nivel (tier) de proteína presente hoy.

@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property float $precio
  * @property bool $grava_isv
  * @property bool $activo
+ * @property Carbon|null $fecha_especial
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -48,6 +49,7 @@ class Producto extends Model
         'precio',
         'grava_isv',
         'activo',
+        'fecha_especial',
     ];
 
     /** @return array<string, string> */
@@ -59,6 +61,7 @@ class Producto extends Model
             'activo'                 => 'boolean',
             'combo_num_complementos' => 'integer',
             'combo_num_bebidas'      => 'integer',
+            'fecha_especial'         => 'date',
         ];
     }
 
@@ -71,5 +74,39 @@ class Producto extends Model
     public function scopeDeCategoria(Builder $query, string $categoria): Builder
     {
         return $query->where('categoria', $categoria);
+    }
+
+    /**
+     * Excluye los platos del día de OTRAS fechas.
+     *
+     * Un producto con `fecha_especial` solo existe en el menú de ese día; el
+     * catálogo permanente (NULL) siempre está disponible. Va en TODA consulta
+     * de menú — sobre todo en la tolerancia "si la fecha no tiene menú
+     * cargado, mostrar el catálogo completo", que si no filtrara dejaría
+     * salir el especial de ayer.
+     */
+    public function scopeDisponibleEn(Builder $query, Carbon|string $fecha): Builder
+    {
+        return $query->where(static function (Builder $q) use ($fecha): void {
+            $q->whereNull('fecha_especial')->orWhereDate('fecha_especial', $fecha);
+        });
+    }
+
+    /** Solo los platos especiales de esa fecha. */
+    public function scopeDelDia(Builder $query, Carbon|string $fecha): Builder
+    {
+        return $query->whereNotNull('fecha_especial')->whereDate('fecha_especial', $fecha);
+    }
+
+    /** Solo catálogo permanente: deja fuera cualquier plato del día. */
+    public function scopeDelCatalogo(Builder $query): Builder
+    {
+        return $query->whereNull('fecha_especial');
+    }
+
+    /** ¿Es un plato especial atado a una sola fecha? */
+    public function esDelDia(): bool
+    {
+        return $this->fecha_especial !== null;
     }
 }

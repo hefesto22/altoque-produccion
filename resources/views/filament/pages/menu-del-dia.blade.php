@@ -65,6 +65,45 @@
             </div>
         </x-filament::section>
 
+        {{-- Plato especial del día: se crea con el botón del encabezado --}}
+        <x-filament::section>
+            <x-slot name="heading">🍽️ Plato del día</x-slot>
+            <x-slot name="description">El especial que la cocina hace solo este día. Se publica en el POS y en la pantalla del menú en los tres servicios de la fecha, y no aparece ningún otro día.</x-slot>
+
+            @if (empty($platosDelDia))
+                <div style="padding:.9rem 1rem; border:1px dashed rgba(128,128,128,.35); border-radius:.6rem; font-size:.88rem; opacity:.75;">
+                    Todavía no hay plato del día para <strong>{{ $this->etiquetaFecha() }}</strong>. Usá el botón <strong>Crear plato del día</strong> de arriba.
+                </div>
+            @else
+                <div style="display:flex; flex-direction:column; gap:.5rem;">
+                    @foreach ($platosDelDia as $plato)
+                        <div style="display:flex; align-items:flex-start; gap:1rem; padding:.7rem .9rem; border:1px solid rgba(217,119,6,.45); background:rgba(217,119,6,.08); border-radius:.6rem;">
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700;">
+                                    {{ $plato['nombre'] }}
+                                    <span style="font-weight:500; opacity:.75;">· L. {{ number_format($plato['precio'], 2) }}</span>
+                                </div>
+                                @if ($plato['desglose'])
+                                    <div style="font-size:.78rem; opacity:.8; margin-top:.15rem;">Lleva: {{ $plato['desglose'] }}</div>
+                                @endif
+                                @if ($plato['nota'])
+                                    <div style="font-size:.72rem; opacity:.6; margin-top:.15rem;">{{ $plato['nota'] }}</div>
+                                @endif
+                            </div>
+
+                            <x-filament::button
+                                size="xs" color="danger" outlined icon="heroicon-o-trash"
+                                wire:click="eliminarPlatoDelDia({{ $plato['id'] }})"
+                                wire:confirm="¿Quitar «{{ $plato['nombre'] }}» del menú de este día?"
+                            >
+                                Quitar
+                            </x-filament::button>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        </x-filament::section>
+
         {{-- Productos por categoría --}}
         @foreach (['proteina' => 'Proteínas', 'complemento' => 'Complementos', 'bebida' => 'Bebidas', 'extra' => 'Extras', 'combo' => 'Platillos completos'] as $cat => $titulo)
             @if (! empty($productosPorCategoria[$cat]))

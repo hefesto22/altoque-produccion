@@ -128,6 +128,9 @@ class PuntoDeVenta extends Page
     /** @var array<int, Producto> combos promocionales con nombre */
     public array $combos = [];
 
+    /** @var array<int, Producto> especiales atados solo a la fecha de hoy */
+    public array $platosDelDia = [];
+
     /** Servicio activo (desayuno/almuerzo/cena) que filtra el menú. */
     public ?int $servicioId = null;
 
@@ -462,7 +465,11 @@ class PuntoDeVenta extends Page
         $this->complementos = $productos->where('categoria', 'complemento')->values()->all();
         $this->bebidas = $productos->where('categoria', 'bebida')->values()->all();
         $this->extras = $productos->where('categoria', 'extra')->values()->all();
-        $this->combos = $productos->where('categoria', 'combo')->values()->all();
+        // El especial del día va en su propia sección, arriba de todo: es lo
+        // primero que pregunta el cliente y lo único que la cocina hizo solo hoy.
+        $combos = $productos->where('categoria', 'combo');
+        $this->platosDelDia = $combos->whereNotNull('fecha_especial')->values()->all();
+        $this->combos = $combos->whereNull('fecha_especial')->values()->all();
     }
 
     public function cambiarServicio(int $id): void

@@ -52,7 +52,13 @@ class ComboEspecialResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['proteinaCombo:id,nombre', 'items.producto:id,nombre']);
+        // Los platos del día se administran desde Menú del Día y viven una
+        // sola fecha — no ensucian el catálogo permanente. Va como whereNull
+        // y no como scopeDelCatalogo(): parent::getEloquentQuery() devuelve
+        // un Builder<Model> genérico donde los scopes del modelo no se tipan.
+        return parent::getEloquentQuery()
+            ->whereNull('fecha_especial')
+            ->with(['proteinaCombo:id,nombre', 'items.producto:id,nombre']);
     }
 
     public static function form(Schema $schema): Schema
