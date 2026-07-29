@@ -8,7 +8,7 @@ use App\Models\Combo;
 use App\Models\MenuDia;
 use App\Models\MenuDiaCombo;
 use App\Models\Producto;
-use App\Models\Servicio;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
@@ -21,7 +21,8 @@ use Illuminate\Support\Carbon;
  * tiene menú pero para otro servicio, ese servicio aparece vacío.
  *
  * Los platos del día (productos con `fecha_especial`) quedan siempre fuera
- * salvo en su propia fecha — incluso bajo la tolerancia de arriba.
+ * salvo en su propia fecha, donde entran siempre — no se marcan en menu_dia
+ * ni dependen de él.
  */
 final class MenuDiaService
 {
@@ -41,7 +42,17 @@ final class MenuDiaService
                 ->where('servicio_id', $servicioId)
                 ->pluck('producto_id');
 
-            $query->whereIn('id', $ids);
+            // El plato del día entra SIEMPRE, sin pasar por menu_dia: se
+            // ofrece el día entero y su publicación es `fecha_especial`.
+            // Si dependiera de filas en menu_dia, crear un plato marcaría la
+            // fecha como "con menú cargado" y tumbaría la tolerancia de
+            // arriba — el resto del menú desaparecería de golpe.
+            $query->where(function (Builder $q) use ($ids, $fecha): void {
+                $q->whereIn('id', $ids)
+                    ->orWhere(function (Builder $especial) use ($fecha): void {
+                        $especial->whereNotNull('fecha_especial')->whereDate('fecha_especial', $fecha);
+                    });
+            });
         }
 
         return $query->get();
@@ -77,33 +88,6 @@ final class MenuDiaService
         if ($filas !== []) {
             MenuDia::query()->insert($filas);
         }
-    }
-
-    /**
-     * Publica un producto en TODOS los servicios activos de una fecha.
-     *
-     * Es el camino del plato del día: se ofrece el día entero (desayuno,
-     * almuerzo y cena) sin pisar lo que ya estaba marcado en cada servicio
-     * — por eso firstOrCreate y no el sincronizar() de arriba, que reemplaza.
-     */
-    public function agregarATodoElDia(Carbon $fecha, int $productoId): void
-    {
-        foreach (Servicio::query()->activos()->pluck('id') as $servicioId) {
-            MenuDia::query()->firstOrCreate([
-                'fecha'       => $fecha->toDateString(),
-                'servicio_id' => (int) $servicioId,
-                'producto_id' => $productoId,
-            ]);
-        }
-    }
-
-    /** Quita un producto del menú de una fecha (todos sus servicios). */
-    public function quitarDeTodoElDia(Carbon $fecha, int $productoId): void
-    {
-        MenuDia::query()
-            ->whereDate('fecha', $fecha)
-            ->where('producto_id', $productoId)
-            ->delete();
     }
 
     /**

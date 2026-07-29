@@ -8,7 +8,6 @@ use App\Models\ComboEspecial;
 use App\Models\ComboEspecialItem;
 use App\Models\MenuDia;
 use App\Models\VentaItem;
-use App\Services\Pos\MenuDiaService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,18 +20,20 @@ use Illuminate\Support\Facades\DB;
  *
  *  - se cobra, factura y manda a cocina por el camino que ya existe;
  *  - el POS lo personaliza igual que cualquier platillo armado;
- *  - solo aparece en el menú de SU fecha (lo garantiza el scope
- *    `disponibleEn()` de Producto, no una limpieza programada).
+ *  - solo aparece en el menú de SU fecha, y ahí aparece siempre: la
+ *    publicación es la columna `fecha_especial`, NO filas en `menu_dia`.
+ *    Marcarlo en menu_dia haría que la fecha contara como "menú cargado" y
+ *    tumbaría la tolerancia que muestra el catálogo completo cuando nadie
+ *    armó el menú del día.
  *
  * Un plato ya vendido nunca se borra: `venta_items` guarda la FK y el
  * desglose fiscal del período tiene que seguir cuadrando.
  */
 final class PlatoDelDiaService
 {
-    public function __construct(private readonly MenuDiaService $menuDia) {}
-
     /**
-     * Crea el plato y lo publica en los tres servicios de esa fecha.
+     * Crea el plato. Queda publicado en los tres servicios de esa fecha por
+     * su `fecha_especial`, sin tocar el menú del día de nadie.
      *
      * @param array<int, int> $productoIds productos del catálogo que lo componen
      */
@@ -66,8 +67,6 @@ final class PlatoDelDiaService
                     'orden'       => $orden++,
                 ]);
             }
-
-            $this->menuDia->agregarATodoElDia($fecha, (int) $plato->id);
 
             return $plato;
         });

@@ -62,8 +62,6 @@
                 <div class="cinta-track" style="animation-duration: {{ max(18, $bebidas->count() * 3) }}s;">
                     @foreach ([0, 1] as $copia)
                         <span class="cinta-grupo">
-                            <span class="cinta-item">🥤 BEBIDAS</span>
-                            <span class="cinta-sep">●</span>
                             @foreach ($bebidas as $b)
                                 <span class="cinta-item">{{ mb_strtoupper($b->nombre) }}<span class="precio">L.{{ number_format((float) $b->precio, 0) }}</span></span>
                                 <span class="cinta-sep">●</span>

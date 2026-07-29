@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\ComboEspecial;
-use App\Models\MenuDia;
 use App\Models\Producto;
 use App\Models\Servicio;
 use App\Models\User;
@@ -34,11 +33,47 @@ it('publica el plato del día en los tres servicios de esa fecha', function () {
         'Incluye tortillas',
     );
 
+    $menuDia = app(MenuDiaService::class);
+
+    foreach (Servicio::query()->pluck('id') as $servicioId) {
+        expect($menuDia->disponibles(Carbon::today(), (int) $servicioId)->pluck('nombre'))
+            ->toContain('Sopa de caracol');
+    }
+
     expect($plato->categoria)->toBe('combo')
         ->and($plato->combo_modo)->toBe('platillo')
         ->and($plato->fecha_especial->toDateString())->toBe(Carbon::today()->toDateString())
-        ->and($plato->items()->count())->toBe(2)
-        ->and(MenuDia::query()->where('producto_id', $plato->id)->count())->toBe(3);
+        ->and($plato->items()->count())->toBe(2);
+});
+
+it('crear el plato del día NO tumba el resto del menú', function () {
+    serviciosDelLocal();
+    Producto::factory()->count(3)->create();
+
+    app(PlatoDelDiaService::class)->crear(Carbon::today(), 'Especial de hoy', 150.00, []);
+
+    $menuDia = app(MenuDiaService::class);
+    $almuerzo = Servicio::query()->where('slug', 'almuerzo')->firstOrFail();
+
+    // Nadie armó el menú del día: sigue valiendo la tolerancia de mostrar
+    // todo el catálogo. Publicar el especial no puede romper eso.
+    expect($menuDia->hayMenuCargado(Carbon::today()))->toBeFalse()
+        ->and($menuDia->disponibles(Carbon::today(), $almuerzo->id))->toHaveCount(4);
+});
+
+it('el plato del día aparece aunque el servicio tenga su propio menú armado', function () {
+    serviciosDelLocal();
+    $almuerzo = Servicio::query()->where('slug', 'almuerzo')->firstOrFail();
+    $pollo = Producto::factory()->proteina()->create();
+
+    $menuDia = app(MenuDiaService::class);
+    $menuDia->sincronizar(Carbon::today(), $almuerzo->id, [$pollo->id]);
+
+    app(PlatoDelDiaService::class)->crear(Carbon::today(), 'Especial de hoy', 150.00, []);
+
+    expect($menuDia->disponibles(Carbon::today(), $almuerzo->id)->pluck('nombre'))
+        ->toContain('Especial de hoy')
+        ->toContain($pollo->nombre);
 });
 
 it('el especial de otro día no se cuela en el menú de hoy', function () {
@@ -81,8 +116,7 @@ it('un plato del día sin ventas se borra por completo', function () {
     $plato = $svc->crear(Carbon::today(), 'Especial sin vender', 150.00, []);
 
     expect($svc->eliminar($plato))->toBeTrue()
-        ->and(ComboEspecial::query()->find($plato->id))->toBeNull()
-        ->and(MenuDia::query()->where('producto_id', $plato->id)->exists())->toBeFalse();
+        ->and(ComboEspecial::query()->find($plato->id))->toBeNull();
 });
 
 it('un plato del día ya vendido NO se borra: solo sale del menú', function () {
@@ -105,6 +139,9 @@ it('un plato del día ya vendido NO se borra: solo sale del menú', function () 
 
     expect($svc->eliminar($plato))->toBeFalse()
         ->and(ComboEspecial::query()->find($plato->id))->not->toBeNull()
-        ->and(ComboEspecial::query()->find($plato->id)->activo)->toBeFalse()
-        ->and(MenuDia::query()->where('producto_id', $plato->id)->exists())->toBeFalse();
+        ->and(ComboEspecial::query()->find($plato->id)->activo)->toBeFalse();
+
+    // Y desactivado ya no sale en el menú de su propio día.
+    expect(app(MenuDiaService::class)->disponibles(Carbon::today(), null)->pluck('nombre'))
+        ->not->toContain('Especial vendido');
 });
