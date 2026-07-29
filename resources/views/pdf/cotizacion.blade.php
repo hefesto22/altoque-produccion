@@ -48,10 +48,25 @@
     .totales { width: 260px; }
     .totales .fila { display: flex; justify-content: space-between; padding: 3px 8px; }
     .totales .fila.suave { color: #555; font-size: 11px; }
+    /* El descuento es el argumento de venta de la cotización: va resaltado y
+       subrayado para que el cliente lo vea de un vistazo. */
+    .totales .fila.descuento {
+        font-weight: 700; color: #146c2e;
+        background: #eafaef; border-bottom: 2px solid #146c2e;
+        border-radius: 4px; padding: 5px 8px;
+    }
     .totales .fila.total {
         margin-top: 6px; padding: 8px; border-radius: 6px;
         background: #1a1a1a; color: #fff; font-size: 14px; font-weight: 800;
     }
+    /* Total en letras, igual que en la factura: evita que alguien "corrija"
+       el número a mano en el papel. */
+    .en-letras {
+        margin-top: 6px; padding: 0 8px; font-size: 10px; line-height: 1.35;
+        text-align: right; color: #444;
+    }
+    .en-letras strong { color: #1a1a1a; }
+
     .anticipo {
         margin-top: 8px; padding: 7px 8px; border: 1px dashed #999; border-radius: 6px;
         font-size: 11px; text-align: center;
@@ -137,7 +152,7 @@
         <div class="totales">
             <div class="fila"><span>Subtotal</span><span>L. {{ number_format((float) $c->subtotal, 2) }}</span></div>
             @if ((float) $c->descuento > 0)
-                <div class="fila"><span>Descuento</span><span>− L. {{ number_format((float) $c->descuento, 2) }}</span></div>
+                <div class="fila descuento"><span>Descuento</span><span>− L. {{ number_format((float) $c->descuento, 2) }}</span></div>
             @endif
             @if ((float) $c->exento > 0)
                 <div class="fila suave"><span>Importe exento</span><span>L. {{ number_format((float) $c->exento, 2) }}</span></div>
@@ -145,6 +160,7 @@
             <div class="fila suave"><span>Importe gravado</span><span>L. {{ number_format((float) $c->gravado, 2) }}</span></div>
             <div class="fila suave"><span>ISV ({{ rtrim(rtrim(number_format($tasaIsv * 100, 2), '0'), '.') }}%) incluido</span><span>L. {{ number_format((float) $c->isv, 2) }}</span></div>
             <div class="fila total"><span>TOTAL</span><span>L. {{ number_format((float) $c->total, 2) }}</span></div>
+            <div class="en-letras">Son: <strong>{{ \App\Support\NumeroALetras::convertir((float) $c->total) }}</strong></div>
             @if ($c->anticipo !== null && (float) $c->anticipo > 0)
                 <div class="anticipo">Anticipo para reservar la fecha: <strong>L. {{ number_format((float) $c->anticipo, 2) }}</strong></div>
             @endif
