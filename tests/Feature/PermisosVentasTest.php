@@ -133,7 +133,7 @@ it('ni el cajero ni el administrador ven el registro de actividad', function () 
 
 /**
  * Abrir turno es de quien entrega el fondo (gerente/administrador).
- * El cajero no abre su propio turno; se lo abren desde Cortes De Caja.
+ * El cajero no abre su propio turno; se lo abre el encargado desde el POS.
  */
 it('solo gerente y administrador pueden abrir turnos de caja', function () {
     Auth::login(usuarioConRol('cajero'));

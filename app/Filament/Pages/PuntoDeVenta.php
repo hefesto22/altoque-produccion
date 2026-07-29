@@ -285,7 +285,8 @@ class PuntoDeVenta extends Page
     /**
      * Quien entrega el fondo abre el turno (gerente/administrador). El
      * cajero sin este permiso ve el aviso de pedirle la apertura al
-     * encargado; su turno se abre desde Cortes De Caja a su nombre.
+     * encargado, que la hace desde este mismo POS (único punto de
+     * apertura: el turno queda a nombre de quien lo abre).
      */
     public function puedeAbrirTurno(): bool
     {
