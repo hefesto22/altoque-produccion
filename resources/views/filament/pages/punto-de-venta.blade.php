@@ -113,7 +113,7 @@
         </div>
     @endif
 
-    <div style="display:grid; gap:1.5rem; grid-template-columns:minmax(0,2fr) minmax(0,1fr);">
+    <div style="display:grid; gap:1.5rem; grid-template-columns:minmax(0,1fr) minmax(0,21rem); align-items:start;">
 
         {{-- ─────────── MENÚ ─────────── --}}
         {{-- El buscador es global: filtra platillos, proteínas, complementos,
@@ -241,7 +241,7 @@
 
             <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($proteinas)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">1 · Proteína</x-slot>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.5rem;">
                     @foreach ($proteinas as $p)
                         <x-filament::button style="width:100%; justify-content:flex-start;"
                             x-show="ver({{ \Illuminate\Support\Js::from($p['nombre']) }})"
@@ -304,7 +304,7 @@
 
             <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($complementos)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">2 · Complementos</x-slot>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.5rem;">
                     @foreach ($complementos as $c)
                         @php($n = $this->contarComplemento($c['id']))
                         @php($bajo = in_array($c['id'], $productosBajos, true))
@@ -341,10 +341,10 @@
                 </div>
             </x-filament::section>
 
-            <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.5rem;">
+            <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($bebidas)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Bebidas (ISV)</x-slot>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(10rem,1fr)); gap:.5rem;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
                         @forelse ($bebidas as $b)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
                                 x-show="ver({{ \Illuminate\Support\Js::from($b['nombre']) }})"
@@ -362,7 +362,7 @@
 
                 <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($extras)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Extras</x-slot>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(10rem,1fr)); gap:.5rem;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
                         @forelse ($extras as $e)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
                                 x-show="ver({{ \Illuminate\Support\Js::from($e['nombre']) }})"
