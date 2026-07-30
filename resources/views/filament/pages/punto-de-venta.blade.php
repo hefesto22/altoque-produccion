@@ -50,37 +50,41 @@
         </div>
     @endif
 
-    {{-- Barra: tipo de pedido. El selector de servicio (Desayuno/Almuerzo/Cena)
-         se quitó a pedido de caja: el POS muestra TODO el catálogo activo y el
-         cajero filtra con el buscador. El Menú del Día sigue mandando en la
-         pantalla /menu de la TV, no acá. --}}
-    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">
+    {{-- UNA sola franja: tipo de orden + nombre del cliente.
+         Antes eran dos bloques apilados que se comían dos franjas de la parte
+         de arriba, que en caja es la zona más cara de la pantalla. El selector
+         de servicio (Desayuno/Almuerzo/Cena) ya no está: el POS muestra TODO
+         el catálogo y el cajero filtra con el buscador; el Menú del Día sigue
+         mandando en la pantalla /menu de la TV, no acá. --}}
+    <div style="display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin-bottom:1rem;">
         <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
             @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
                 <x-filament::button size="sm" :color="$tipoServicio === $val ? 'primary' : 'gray'" wire:click="setTipoServicio('{{ $val }}')">{{ $lbl }}</x-filament::button>
             @endforeach
         </div>
-    </div>
 
-    {{-- Nombre del cliente (local y llevar): tarjeta compacta en línea, sin
-         sección completa — un dato no merece medio metro de pantalla. --}}
-    @if (in_array($tipoServicio, ['llevar', 'local'], true))
-        <div style="display:flex; align-items:center; gap:.8rem; margin-bottom:1.25rem; padding:.6rem .9rem; max-width:36rem;
-                    border:1px solid rgba(128,128,128,.25); border-radius:.75rem; background:rgba(128,128,128,.06);">
-            <x-filament::icon icon="heroicon-o-user" style="width:1.4rem; height:1.4rem; opacity:.65; flex-shrink:0;" />
-            <div style="flex:1;">
-                <label style="display:block; font-size:.7rem; font-weight:600; letter-spacing:.02em; opacity:.75; margin-bottom:.2rem;">
+        {{-- Nombre del cliente (local y llevar): al lado de los botones, no
+             debajo. La etiqueta larga pasa a ser una ayuda chica a la derecha
+             para que la fila no crezca de alto. --}}
+        @if (in_array($tipoServicio, ['llevar', 'local'], true))
+            <div style="width:1px; height:1.6rem; background:rgba(128,128,128,.3);"></div>
+            <div style="display:flex; align-items:center; gap:.5rem; flex:1; min-width:20rem;">
+                <x-filament::icon icon="heroicon-o-user" style="width:1.25rem; height:1.25rem; opacity:.65; flex-shrink:0;" />
+                <span style="font-size:.78rem; opacity:.6; white-space:nowrap;">Cliente{{ $tipoServicio === 'llevar' ? ' *' : '' }}:</span>
+                <div style="flex:1; max-width:22rem;">
+                    <x-filament::input.wrapper>
+                        <x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" />
+                    </x-filament::input.wrapper>
+                </div>
+                <span style="font-size:.66rem; opacity:.5; line-height:1.2;">
                     {{ $tipoServicio === 'llevar'
-                        ? 'CLIENTE * — PARA LLAMARLO CUANDO ESTÉ LISTO'
-                        : 'CLIENTE — OBLIGATORIO AL MANDAR A COCINA (SALE EN LA COMANDA)' }}
-                </label>
-                <x-filament::input.wrapper>
-                    <x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" />
-                </x-filament::input.wrapper>
+                        ? 'Para llamarlo cuando esté listo'
+                        : 'Obligatorio al mandar a cocina (sale en la comanda)' }}
+                </span>
             </div>
-        </div>
-    @endif
+        @endif
+    </div>
 
     @if ($tipoServicio === 'domicilio')
         <div style="margin-bottom:1.25rem;">
