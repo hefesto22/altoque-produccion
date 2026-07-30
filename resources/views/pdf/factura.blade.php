@@ -2,6 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
+    @if (($paraCliente ?? false))
+        {{-- Sin esto el teléfono renderiza a 980px y encoge la factura a un
+             sello. Solo va en la vista del cliente: en el PDF y en la térmica
+             el ancho lo manda @page (80mm), no el viewport. --}}
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Factura {{ $f->numero }}</title>
+    @endif
     <style>
         /* Impresión HTML directa (ticket de caja): mismo 80mm que el PDF.
            Browsershot fija el tamaño por parámetro; el print del navegador
@@ -47,17 +54,23 @@
         @media screen {
             body.cliente { background: #f3f4f6; padding: 12px 0 96px; }
             body.cliente .doc {
-                width: min(74mm, 94vw);
-                font-size: 13px;
-                line-height: 1.45;
+                /* En teléfono ocupa casi todo el ancho; en escritorio no pasa
+                   de 420px para que no se estire y quede ilegible. */
+                width: min(420px, 94vw);
+                font-size: 15px;
+                line-height: 1.5;
                 background: #fff;
-                padding: 14px 12px;
-                border-radius: 10px;
+                padding: 18px 16px;
+                border-radius: 12px;
                 box-shadow: 0 2px 14px rgba(0,0,0,.12);
             }
-            body.cliente .lg { font-size: 15px; }
-            body.cliente .sm { font-size: 11.5px; }
-            body.cliente .xs { font-size: 10.5px; }
+            body.cliente .lg { font-size: 18px; }
+            body.cliente .sm { font-size: 13px; }
+            body.cliente .xs { font-size: 12px; }
+            /* El QR se dibuja a 150px fijos: que acompañe el ancho. */
+            body.cliente img { max-width: 100%; height: auto; }
+            /* Tabla de ítems: que los nombres largos partan en vez de desbordar. */
+            body.cliente td { word-break: break-word; }
             /* Barra fija abajo: el botón queda siempre a mano sin hacer scroll. */
             .acciones {
                 position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px;
@@ -66,7 +79,7 @@
                 font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
             }
             .acciones a {
-                display: block; width: min(74mm, 94vw); text-align: center;
+                display: block; width: min(420px, 94vw); text-align: center;
                 padding: 13px 16px; border-radius: 10px; background: #111827;
                 color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
             }
