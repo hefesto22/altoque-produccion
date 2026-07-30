@@ -98,24 +98,34 @@
              del cliente: hoja normal y ticket centrado. Va después del <style>
              de arriba a propósito — gana el último. --}}
         <style>
-            @page { size: auto; margin: 14mm; }
+            /* Margen chico: la factura tiene que caber en UNA hoja. Con 14mm
+               se pasaba por unos milímetros y el teléfono la partía en dos. */
+            @page { size: auto; margin: 8mm; }
 
             @media print {
                 html, body { background: #fff; }
                 body.cliente { padding: 0; }
                 body.cliente .doc {
-                    width: 80mm;
+                    width: 78mm;
                     margin: 0 auto;              /* centrado en la hoja */
-                    font-size: 11px;
-                    line-height: 1.35;
+                    font-size: 9.5px;
+                    line-height: 1.22;
                     background: transparent;
                     box-shadow: none;
                     border-radius: 0;
                     padding: 0;
+                    /* Que no se parta a la mitad: o entra entera o nada. */
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
-                body.cliente .lg { font-size: 13px; }
-                body.cliente .sm { font-size: 9.5px; }
-                body.cliente .xs { font-size: 8.5px; }
+                body.cliente .lg { font-size: 11.5px; }
+                body.cliente .sm { font-size: 8.5px; }
+                body.cliente .xs { font-size: 7.5px; }
+                /* El QR se dibuja a 150px: en la hoja no hace falta tan grande
+                   y esos milímetros son los que empujaban a la segunda página. */
+                body.cliente img { max-width: 105px; height: auto; }
+                body.cliente .hr, body.cliente .hr2 { margin: 2px 0; }
+                body.cliente td { padding: 0; }
             }
         </style>
     @endif
