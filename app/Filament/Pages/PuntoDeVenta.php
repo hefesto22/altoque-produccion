@@ -485,7 +485,6 @@ class PuntoDeVenta extends Page
         return preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#f59e0b';
     }
 
-
     /**
      * Carga TODO el catálogo activo de hoy.
      *
