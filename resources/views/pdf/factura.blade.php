@@ -89,6 +89,36 @@
         /* Al imprimir, la barra no existe. */
         @media print { .acciones { display: none !important; } }
     </style>
+
+    @if (($paraCliente ?? false))
+        {{-- Impresión desde el TELÉFONO ("Guardar como PDF").
+             El @page de arriba fija 80x250mm para la térmica de caja; el
+             teléfono imprime en A4 y con esa regla el ticket queda pegado
+             arriba a la izquierda de la hoja. Acá se pisa SOLO para la vista
+             del cliente: hoja normal y ticket centrado. Va después del <style>
+             de arriba a propósito — gana el último. --}}
+        <style>
+            @page { size: auto; margin: 14mm; }
+
+            @media print {
+                html, body { background: #fff; }
+                body.cliente { padding: 0; }
+                body.cliente .doc {
+                    width: 80mm;
+                    margin: 0 auto;              /* centrado en la hoja */
+                    font-size: 11px;
+                    line-height: 1.35;
+                    background: transparent;
+                    box-shadow: none;
+                    border-radius: 0;
+                    padding: 0;
+                }
+                body.cliente .lg { font-size: 13px; }
+                body.cliente .sm { font-size: 9.5px; }
+                body.cliente .xs { font-size: 8.5px; }
+            }
+        </style>
+    @endif
 </head>
 <body @if (($paraCliente ?? false)) class="cliente" @endif>
 @include('pdf.partials.factura-contenido')
