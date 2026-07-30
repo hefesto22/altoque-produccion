@@ -69,6 +69,17 @@
         .precios { font-size: calc(3.8vw * var(--esc)); font-weight: 800; margin-top: calc(2vw * var(--esc)); background: #fff8e1; padding: 1.5vw 2vw; border-radius: 1.5vw; }
         .combo-h { font-size: calc(4.4vw * var(--esc)); font-weight: 800; margin-top: calc(2vw * var(--esc)); color: #1f9d3a; }
         .combo { font-size: calc(3.7vw * var(--esc)); font-weight: 600; line-height: 1.5; }
+        /* Plato del día: tarjeta destacada arriba de todo (debajo de la cinta).
+           Todos los tamaños en calc(Xvw * var(--esc)) para no romper el ajuste
+           automático al alto — ver el script de bisección más abajo. */
+        .plato-dia { margin: calc(1.6vw * var(--esc)) 0 calc(1vw * var(--esc));
+            background: #eafaef; border-left: calc(1.2vw * var(--esc)) solid #1f9d3a;
+            border-radius: calc(1.5vw * var(--esc));
+            padding: calc(1.4vw * var(--esc)) calc(2vw * var(--esc)); }
+        .plato-dia .titulo-dia { font-size: calc(3.6vw * var(--esc)); font-weight: 800; color: #1f9d3a; letter-spacing: .02em; }
+        .plato-dia .nombre { font-size: calc(4.6vw * var(--esc)); font-weight: 800; line-height: 1.25; }
+        .plato-dia .desglose { display: block; font-size: calc(2.9vw * var(--esc)); font-weight: 500; opacity: .75; }
+        .plato-dia .nota { display: block; font-size: calc(2.5vw * var(--esc)); font-weight: 500; opacity: .6; }
         .pie-wrap { margin-top: auto; border-top: 3px dashed #ccc; padding-top: 1.5vw; }
         .pie { font-size: calc(3vw * var(--esc)); margin-top: .6vw; line-height: 1.4; }
 

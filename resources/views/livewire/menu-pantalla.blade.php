@@ -72,6 +72,25 @@
             </div>
         @endif
 
+        {{-- Plato del día: va PRIMERO, justo debajo de la cinta de bebidas.
+             Es lo que la cocina quiere empujar hoy, así que se lee antes que
+             nada; los platillos permanentes siguen abajo con los combos. --}}
+        @php($platosDelDia = $combosEspeciales->where('del_dia', true))
+        @php($platillos = $combosEspeciales->where('del_dia', false))
+
+        @if ($platosDelDia->isNotEmpty())
+            <div class="plato-dia">
+                <div class="titulo-dia">🍽️ PLATO DEL DÍA</div>
+                @foreach ($platosDelDia as $ce)
+                    <div class="nombre">
+                        {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
+                        @if ($ce['desglose'])<span class="desglose">{{ $ce['desglose'] }}</span>@endif
+                        @if ($ce['nota'])<span class="nota">{{ $ce['nota'] }}</span>@endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         {{-- Proteínas del día --}}
         @forelse ($proteinas as $p)
             <div class="item"><span class="ck">✔</span><span>{{ $p->nombre }}</span></div>
@@ -100,21 +119,8 @@
             @endforeach
         @endif
 
-        {{-- Platillos completos (con nombre y precio fijo) --}}
-        @php($platosDelDia = $combosEspeciales->where('del_dia', true))
-        @php($platillos = $combosEspeciales->where('del_dia', false))
-
-        @if ($platosDelDia->isNotEmpty())
-            <div class="combo-h">🍽️ PLATO DEL DÍA</div>
-            @foreach ($platosDelDia as $ce)
-                <div class="combo">
-                    {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
-                    @if ($ce['desglose'])<span style="display:block; font-size:calc(2.6vw * var(--esc)); font-weight:500; opacity:.75;">{{ $ce['desglose'] }}</span>@endif
-                    @if ($ce['nota'])<span style="display:block; font-size:calc(2.3vw * var(--esc)); font-weight:500; opacity:.6;">{{ $ce['nota'] }}</span>@endif
-                </div>
-            @endforeach
-        @endif
-
+        {{-- Platillos completos (con nombre y precio fijo). El plato del día
+             ya salió arriba; acá solo van los permanentes. --}}
         @if ($platillos->isNotEmpty())
             <div class="combo-h">⭐ PLATILLOS COMPLETOS</div>
             @foreach ($platillos as $ce)
