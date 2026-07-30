@@ -680,7 +680,12 @@ class PuntoDeVenta extends Page
             }
         }
 
-        if ($principal === null || empty($principal['seleccion'])) {
+        // OJO: `empty()` NO sirve acá. Un platillo con base 0/0 (los PROMO, por
+        // ejemplo) se agrega con la selección vacía `[]`, y `empty([])` es true:
+        // con empty() esos platillos —justo los que más se venden— quedaban sin
+        // poder editarse. Lo que distingue "editable" es que la línea TRAIGA la
+        // clave (los productos sueltos la guardan como null).
+        if ($principal === null || ! isset($principal['seleccion']) || ! is_array($principal['seleccion'])) {
             return;
         }
 

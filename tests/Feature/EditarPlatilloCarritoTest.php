@@ -124,3 +124,32 @@ it('un producto suelto del carrito no se puede editar como platillo', function (
     expect($pos->get('personalizando'))->toBeFalse()
         ->and($pos->get('carrito'))->toHaveCount(1);
 });
+
+it('un platillo con base 0/0 (los PROMO) también se puede editar', function () {
+    // Sin ComboEspecialItem: base 0 carne / 0 complementos y selección vacía.
+    // Este es el caso que rompía con empty([]) === true.
+    $promo = Producto::factory()->create([
+        'categoria' => 'combo', 'combo_modo' => 'platillo',
+        'nombre'    => 'Promo cena', 'precio' => 100.00, 'grava_isv' => true,
+    ]);
+
+    $pos = Livewire::test(PuntoDeVenta::class)
+        ->call('personalizarPlatillo', $promo->id)
+        ->call('confirmarPlatillo');
+
+    $carrito = $pos->get('carrito');
+
+    expect($carrito)->toHaveCount(1)
+        ->and($carrito[0]['seleccion'])->toBe([]);   // vacía, pero PRESENTE
+
+    $pos->call('editarPlatillo', (string) $carrito[0]['grupo']);
+
+    expect($pos->get('personalizando'))->toBeTrue()
+        ->and($pos->get('platilloEditGrupo'))->toBe((string) $carrito[0]['grupo']);
+
+    // Le agrega un complemento (todo es extra: la base es 0) y guarda.
+    $pos->call('platilloAgregar', $this->tajadas->id)
+        ->call('confirmarPlatillo');
+
+    expect($pos->get('carrito'))->toHaveCount(2);   // platillo + extra
+});

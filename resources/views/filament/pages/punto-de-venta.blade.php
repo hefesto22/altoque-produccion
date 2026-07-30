@@ -409,9 +409,9 @@
                                      esta línea. Sin ícono ni adorno: se toca y se abre. Solo los
                                      platillos armados traen `seleccion`; el resto (productos sueltos o
                                      líneas de "Anular y corregir") no se editan y no reaccionan. --}}
-                                <div @if (! empty($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-weight:600; cursor:pointer;" title="Tocá para editar este platillo" @else style="font-weight:600;" @endif>{{ $p['nombre'] }}</div>
+                                <div @if (isset($p['seleccion']) && is_array($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-weight:600; cursor:pointer;" title="Tocá para editar este platillo" @else style="font-weight:600;" @endif>{{ $p['nombre'] }}</div>
                                 @if (! empty($p['detalle']))
-                                    <div @if (! empty($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-size:.72rem; opacity:.7; cursor:pointer;" @else style="font-size:.72rem; opacity:.7;" @endif>{{ implode(', ', $p['detalle']) }}</div>
+                                    <div @if (isset($p['seleccion']) && is_array($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-size:.72rem; opacity:.7; cursor:pointer;" @else style="font-size:.72rem; opacity:.7;" @endif>{{ implode(', ', $p['detalle']) }}</div>
                                 @endif
                                 @if (! empty($p['nota']))
                                     <div style="font-size:.72rem; color:#f59e0b;">📝 {{ $p['nota'] }}</div>
