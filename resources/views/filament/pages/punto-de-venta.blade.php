@@ -7,7 +7,7 @@
     <style>
         .pos-barra-armado {
             display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
-            padding: .7rem .9rem; border: 2px solid #d946ef; border-radius: .7rem;
+            padding: .7rem .9rem; border: 2px solid var(--pos-marca); border-radius: .7rem;
             background: #ffffff;
             box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
         }
@@ -28,8 +28,10 @@
         .dark .pos-sugerencias button { color: #e7ecf3; }
     </style>
 
-    {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja --}}
-    <div style="text-transform:uppercase;">
+    {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja.
+         --pos-marca sale del color configurado en Sistema → Configuración: los
+         mosaicos se pintan con tonos de ESE color, no con naranjas fijos. --}}
+    <div style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
     {{-- Turno de caja --}}
     @if (! $turnoAbierto)
         <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:.75rem 1rem; border:1px solid #f59e0b; border-radius:.6rem; background:rgba(245,158,11,.08);">
@@ -211,7 +213,8 @@
                     <x-slot name="heading">🍽️ Plato del día</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
                         @foreach ($platosDelDia as $plato)
-                            <x-filament::button style="width:100%; justify-content:flex-start;" color="danger"
+                            <x-filament::button color="gray"
+                                style="width:100%; justify-content:flex-start; background:var(--pos-marca); border-color:transparent; color:#fff;"
                                 x-show="ver({{ \Illuminate\Support\Js::from($plato['nombre']) }})"
                                 wire:click="personalizarPlatillo({{ $plato['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
@@ -230,7 +233,8 @@
                     <x-slot name="heading">⭐ Platillos completos</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
                         @foreach ($combos as $combo)
-                            <x-filament::button style="width:100%; justify-content:flex-start;" color="warning"
+                            <x-filament::button color="gray"
+                                style="width:100%; justify-content:flex-start; background:color-mix(in srgb, var(--pos-marca) 74%, transparent); border-color:transparent; color:#fff;"
                                 x-show="ver({{ \Illuminate\Support\Js::from($combo['nombre']) }})"
                                 wire:click="personalizarPlatillo({{ $combo['id'] }})">
                                 <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
@@ -285,7 +289,7 @@
                                 style="font-size:.78rem; padding:.4rem .6rem; border-radius:.45rem; border:1px solid rgba(128,128,128,.45); background:transparent; color:inherit; cursor:pointer;">Sin compl.</button>
                             @foreach ([1, 2, 3] as $q)
                                 <button type="button" wire:click="platoRapido({{ $q }})"
-                                    style="width:2.1rem; height:2.1rem; border-radius:.45rem; border:1px solid #d946ef; background:rgba(217,70,239,.12); color:inherit; cursor:pointer; font-weight:800; font-size:1rem;">{{ $q }}</button>
+                                    style="width:2.1rem; height:2.1rem; border-radius:.45rem; border:1px solid var(--pos-marca); background:color-mix(in srgb, var(--pos-marca) 14%, transparent); color:inherit; cursor:pointer; font-weight:800; font-size:1rem;">{{ $q }}</button>
                             @endforeach
                         </div>
 

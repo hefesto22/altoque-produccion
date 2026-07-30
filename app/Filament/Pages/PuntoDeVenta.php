@@ -8,6 +8,7 @@ use App\Domain\Exceptions\RestauranteException;
 use App\Domain\ValueObjects\ComponenteLinea;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
+use App\Models\BrandingSetting;
 use App\Models\Cliente;
 use App\Models\Comanda;
 use App\Models\ComboEspecial;
@@ -468,6 +469,22 @@ class PuntoDeVenta extends Page
 
         Notification::make()->title($titulo)->body($cuerpo)->success()->seconds(3)->send();
     }
+
+    /**
+     * Color de marca configurado en Sistema → Configuración.
+     *
+     * Los mosaicos del POS estaban pintados con naranja y rojo fijos, que no
+     * tenían nada que ver con el color del panel. Ahora TODOS salen de acá:
+     * si mañana se cambia el color en Configuración, el POS cambia solo.
+     */
+    public function getMarcaColorProperty(): string
+    {
+        $color = trim((string) BrandingSetting::current()->primary_color);
+
+        // Solo hex de 6 dígitos: el valor entra directo en un atributo style.
+        return preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#f59e0b';
+    }
+
 
     /**
      * Carga TODO el catálogo activo de hoy.
