@@ -27,15 +27,15 @@ final class FacturaPdfService
      * Factura como HTML.
      *
      * @param bool $paraCliente vista pública (link de WhatsApp): se lee en
-     *                          teléfono y ofrece descargar el PDF. En caja
-     *                          va en false — ahí el HTML es para imprimir.
+     *                          teléfono y se guarda con el diálogo de impresión
+     *                          del propio teléfono ("Guardar como PDF"). En caja
+     *                          va en false — ahí el HTML sale a la térmica.
      */
     public function html(Factura $factura, bool $paraCliente = false): string
     {
         return view('pdf.factura', [
             ...$this->datosVista($factura),
             'paraCliente' => $paraCliente,
-            'urlPdf'      => $paraCliente ? $factura->urlPdf() : null,
         ])->render();
     }
 
@@ -49,7 +49,6 @@ final class FacturaPdfService
             ...$this->datosVista($factura),
             'comanda'     => $comanda,
             'paraCliente' => false,
-            'urlPdf'      => null,
         ])->render();
     }
 

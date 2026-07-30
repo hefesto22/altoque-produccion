@@ -75,15 +75,16 @@
             .acciones {
                 position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px;
                 background: rgba(255,255,255,.97); border-top: 1px solid #e5e7eb;
-                display: flex; justify-content: center;
+                display: flex; flex-direction: column; align-items: center; gap: 5px;
                 font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
             }
-            .acciones a {
+            .acciones button {
                 display: block; width: min(420px, 94vw); text-align: center;
-                padding: 13px 16px; border-radius: 10px; background: #111827;
-                color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
+                padding: 13px 16px; border: none; border-radius: 10px; background: #111827;
+                color: #fff; font-weight: 700; font-size: 15px; cursor: pointer;
+                font-family: inherit;
             }
-            .acciones .nota { font-size: 11px; }
+            .acciones .nota { font-size: 11.5px; color: #6b7280; }
         }
         /* Al imprimir, la barra no existe. */
         @media print { .acciones { display: none !important; } }
@@ -92,11 +93,15 @@
 <body @if (($paraCliente ?? false)) class="cliente" @endif>
 @include('pdf.partials.factura-contenido')
 
-@if (($paraCliente ?? false) && ($urlPdf ?? null))
-    {{-- El PDF se genera recién acá, cuando alguien lo pide de verdad: así la
-         factura se ve al instante y el servidor no guarda un archivo por venta. --}}
+@if (($paraCliente ?? false))
+    {{-- Guardar la factura NO pasa por el servidor: se abre el diálogo de
+         impresión del teléfono y ahí el propio sistema ofrece "Guardar como
+         PDF". Antes esto llamaba a una ruta que levantaba Chromium para armar
+         el archivo; era lento y, si se cacheaba, dejaba un PDF por venta en el
+         disco. El teléfono ya sabe hacerlo: que lo haga él. --}}
     <div class="acciones">
-        <a href="{{ $urlPdf }}" target="_blank" rel="noopener">Descargar PDF</a>
+        <button type="button" onclick="window.print()">Descargar PDF</button>
+        <div class="nota">En el diálogo elegí “Guardar como PDF”</div>
     </div>
 @endif
 </body>

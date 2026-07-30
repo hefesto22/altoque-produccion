@@ -91,7 +91,14 @@ class Factura extends Model
         return $this->belongsTo(Cai::class);
     }
 
-    /** URL firmada del PDF — pública pero no adivinable (compartible). */
+    /**
+     * URL firmada del PDF (lo genera Chromium, ~3 s).
+     *
+     * Ya NO se le ofrece al cliente: la vista pública lo resuelve con el
+     * diálogo de impresión del teléfono ("Guardar como PDF"), que no gasta CPU
+     * del servidor ni deja un archivo por venta en el disco. Queda como
+     * endpoint por si alguna vez hace falta el archivo desde el servidor.
+     */
     public function urlPdf(): string
     {
         return URL::signedRoute('facturas.pdf', ['factura' => $this->id]);
