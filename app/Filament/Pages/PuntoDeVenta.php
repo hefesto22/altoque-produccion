@@ -14,7 +14,6 @@ use App\Models\ComboEspecial;
 use App\Models\CorteCaja;
 use App\Models\EmpresaSetting;
 use App\Models\Producto;
-use App\Models\Servicio;
 use App\Models\Venta;
 use App\Services\Caja\CorteCajaService;
 use App\Services\Cocina\ComandaService;
@@ -131,12 +130,6 @@ class PuntoDeVenta extends Page
     /** @var array<int, Producto> especiales atados solo a la fecha de hoy */
     public array $platosDelDia = [];
 
-    /** Servicio activo (desayuno/almuerzo/cena) que filtra el menú. */
-    public ?int $servicioId = null;
-
-    /** @var array<int, Servicio> */
-    public array $servicios = [];
-
     /**
      * Tipo de orden: 'local' (se consume en el local; cada línea define
      * Aquí/Llevar) o 'domicilio' (toda la orden va a domicilio).
@@ -211,8 +204,6 @@ class PuntoDeVenta extends Page
 
     public function mount(): void
     {
-        $this->servicios = Servicio::query()->activos()->get()->all();
-        $this->servicioId = Servicio::activoAhora()?->id ?? ($this->servicios[0]['id'] ?? null);
         $this->productosBajos = app(ReposicionService::class)->productosConAlerta();
 
         $this->cargarTurno();
@@ -456,10 +447,25 @@ class PuntoDeVenta extends Page
         Notification::make()->title($titulo)->body($cuerpo)->success()->seconds(3)->send();
     }
 
-    /** Carga el menú del servicio actual (filtrado por el menú del día). */
+    /**
+     * Carga TODO el catálogo activo de hoy.
+     *
+     * Decisión de caja (2026-07-30): el POS ya no filtra por servicio
+     * (Desayuno/Almuerzo/Cena). El cajero cobra a cualquier hora lo que el
+     * cliente pida y encuentra el producto con el buscador; tener que
+     * adivinar el servicio correcto solo escondía productos y frenaba la
+     * fila. Por eso se pasa `null` como servicio: `disponibles()` devuelve
+     * el catálogo activo completo, sin pasar por `menu_dia`.
+     *
+     * Lo único que sigue filtrando es la fecha: `disponibleEn()` deja fuera
+     * los platos del día de OTRAS fechas (ver PlatoDelDiaService).
+     *
+     * El Menú del Día NO desaparece: sigue mandando en la pantalla /menu de
+     * la TV, que es donde el cliente ve qué hay hoy por servicio.
+     */
     private function cargarMenu(): void
     {
-        $productos = app(MenuDiaService::class)->disponibles(now(), $this->servicioId);
+        $productos = app(MenuDiaService::class)->disponibles(now(), null);
 
         $this->proteinas = $productos->where('categoria', 'proteina')->values()->all();
         $this->complementos = $productos->where('categoria', 'complemento')->values()->all();
@@ -470,12 +476,6 @@ class PuntoDeVenta extends Page
         $combos = $productos->where('categoria', 'combo');
         $this->platosDelDia = $combos->whereNotNull('fecha_especial')->values()->all();
         $this->combos = $combos->whereNull('fecha_especial')->values()->all();
-    }
-
-    public function cambiarServicio(int $id): void
-    {
-        $this->servicioId = $id;
-        $this->cargarMenu();
     }
 
     // ── Construcción del plato ──────────────────────────────────────────

@@ -50,17 +50,11 @@
         </div>
     @endif
 
-    {{-- Barra: servicio + tipo de pedido en una sola línea --}}
+    {{-- Barra: tipo de pedido. El selector de servicio (Desayuno/Almuerzo/Cena)
+         se quitó a pedido de caja: el POS muestra TODO el catálogo activo y el
+         cajero filtra con el buscador. El Menú del Día sigue mandando en la
+         pantalla /menu de la TV, no acá. --}}
     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">
-        @if (count($servicios))
-            <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
-                <span style="font-size:.78rem; opacity:.6;">Servicio:</span>
-                @foreach ($servicios as $s)
-                    <x-filament::button size="sm" :color="$servicioId === $s['id'] ? 'primary' : 'gray'" wire:click="cambiarServicio({{ $s['id'] }})">{{ $s['nombre'] }}</x-filament::button>
-                @endforeach
-            </div>
-            <div style="width:1px; height:1.5rem; background:rgba(128,128,128,.3);"></div>
-        @endif
         <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
             @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
