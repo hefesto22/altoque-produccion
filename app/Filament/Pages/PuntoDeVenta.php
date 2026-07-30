@@ -54,6 +54,19 @@ class PuntoDeVenta extends Page
         return 'Punto de Venta';
     }
 
+    /**
+     * Sin título arriba de la página.
+     *
+     * El cajero ya sabe dónde está (el menú lateral lo marca) y ese bloque se
+     * comía la primera franja de pantalla, que en caja es la más cara. El
+     * título sigue existiendo para la pestaña del navegador (getTitle) y para
+     * el menú lateral (getNavigationLabel).
+     */
+    public function getHeading(): string
+    {
+        return '';
+    }
+
     public static function getNavigationLabel(): string
     {
         return 'Punto de Venta';
