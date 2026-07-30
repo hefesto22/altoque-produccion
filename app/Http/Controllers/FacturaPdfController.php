@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Factura;
 use App\Services\Facturacion\FacturaPdfService;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
@@ -17,11 +18,16 @@ class FacturaPdfController extends Controller
 {
     public function show(Factura $factura, FacturaPdfService $service): Response
     {
+        // Solo bajo pedido: esto levanta Chromium y tarda ~3 s. Lo que se
+        // comparte por WhatsApp es el HTML (instantáneo); el PDF queda para
+        // quien de verdad quiera el archivo.
         $pdf = $service->pdf($factura);
 
         return response($pdf, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="factura-'.$factura->numero.'.pdf"',
+            // Es un documento fiscal inmutable: que el navegador no lo pida dos veces.
+            'Cache-Control' => 'private, max-age=86400',
         ]);
     }
 
@@ -31,9 +37,14 @@ class FacturaPdfController extends Controller
      * tarda ~3s en generarse y en caja eso traba la fila). El PDF queda
      * para WhatsApp/descarga, donde la espera no molesta.
      */
-    public function ticket(Factura $factura, FacturaPdfService $service): Response
+    public function ticket(Request $request, Factura $factura, FacturaPdfService $service): Response
     {
-        return response($service->html($factura), 200, [
+        // ?cliente=1 (va dentro de la firma) = link de WhatsApp: se lee en
+        // teléfono y ofrece descargar el PDF. Sin el flag es la impresión de
+        // caja, que sale tal cual a la térmica.
+        $paraCliente = $request->boolean('cliente');
+
+        return response($service->html($factura, $paraCliente), 200, [
             'Content-Type' => 'text/html; charset=utf-8',
         ]);
     }

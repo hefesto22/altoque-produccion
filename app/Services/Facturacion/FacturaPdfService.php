@@ -23,9 +23,20 @@ final class FacturaPdfService
 {
     public function __construct(private readonly QrService $qr) {}
 
-    public function html(Factura $factura): string
+    /**
+     * Factura como HTML.
+     *
+     * @param bool $paraCliente vista pública (link de WhatsApp): se lee en
+     *                          teléfono y ofrece descargar el PDF. En caja
+     *                          va en false — ahí el HTML es para imprimir.
+     */
+    public function html(Factura $factura, bool $paraCliente = false): string
     {
-        return view('pdf.factura', $this->datosVista($factura))->render();
+        return view('pdf.factura', [
+            ...$this->datosVista($factura),
+            'paraCliente' => $paraCliente,
+            'urlPdf'      => $paraCliente ? $factura->urlPdf() : null,
+        ])->render();
     }
 
     /**
@@ -36,7 +47,9 @@ final class FacturaPdfService
     {
         return view('pdf.venta-documentos', [
             ...$this->datosVista($factura),
-            'comanda' => $comanda,
+            'comanda'     => $comanda,
+            'paraCliente' => false,
+            'urlPdf'      => null,
         ])->render();
     }
 
@@ -90,7 +103,7 @@ final class FacturaPdfService
         return 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($path));
     }
 
-    /** Bytes del PDF (80mm de ancho). */
+    /** Bytes del PDF (80mm de ancho). Solo bajo pedido: levanta Chromium. */
     public function pdf(Factura $factura): string
     {
         // Chromium necesita un HOME y un directorio de datos ESCRIBIBLES para

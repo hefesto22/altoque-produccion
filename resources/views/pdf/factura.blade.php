@@ -39,9 +39,52 @@
             body { background: #fff; padding: 8px 0 16px; }
             .doc { margin: 0 auto; }
         }
+
+        /* Vista del CLIENTE (link de WhatsApp, se abre en el teléfono).
+           El ticket está pensado para 74mm de térmica: en un celular se ve
+           diminuto. Acá se agranda y se centra. Todo va en @media screen y
+           bajo .cliente, así la impresión de caja y el PDF no se enteran. */
+        @media screen {
+            body.cliente { background: #f3f4f6; padding: 12px 0 96px; }
+            body.cliente .doc {
+                width: min(74mm, 94vw);
+                font-size: 13px;
+                line-height: 1.45;
+                background: #fff;
+                padding: 14px 12px;
+                border-radius: 10px;
+                box-shadow: 0 2px 14px rgba(0,0,0,.12);
+            }
+            body.cliente .lg { font-size: 15px; }
+            body.cliente .sm { font-size: 11.5px; }
+            body.cliente .xs { font-size: 10.5px; }
+            /* Barra fija abajo: el botón queda siempre a mano sin hacer scroll. */
+            .acciones {
+                position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px;
+                background: rgba(255,255,255,.97); border-top: 1px solid #e5e7eb;
+                display: flex; justify-content: center;
+                font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            }
+            .acciones a {
+                display: block; width: min(74mm, 94vw); text-align: center;
+                padding: 13px 16px; border-radius: 10px; background: #111827;
+                color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
+            }
+            .acciones .nota { font-size: 11px; }
+        }
+        /* Al imprimir, la barra no existe. */
+        @media print { .acciones { display: none !important; } }
     </style>
 </head>
-<body>
+<body @if (($paraCliente ?? false)) class="cliente" @endif>
 @include('pdf.partials.factura-contenido')
+
+@if (($paraCliente ?? false) && ($urlPdf ?? null))
+    {{-- El PDF se genera recién acá, cuando alguien lo pide de verdad: así la
+         factura se ve al instante y el servidor no guarda un archivo por venta. --}}
+    <div class="acciones">
+        <a href="{{ $urlPdf }}" target="_blank" rel="noopener">Descargar PDF</a>
+    </div>
+@endif
 </body>
 </html>

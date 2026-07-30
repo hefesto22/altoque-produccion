@@ -109,10 +109,23 @@ class Factura extends Model
         return URL::signedRoute('facturas.documentos', ['factura' => $this->id]);
     }
 
-    /** Link de WhatsApp con el mensaje y la URL del PDF para el cliente. */
+    /**
+     * URL firmada de la factura para EL CLIENTE (la que va por WhatsApp).
+     *
+     * Es el HTML, no el PDF: abre al instante desde el teléfono. El PDF
+     * levanta un Chromium en el servidor (~3 s, y 500 si dos personas abren a
+     * la vez) y además obligaría a guardar archivos para que fuera rápido.
+     * La página lleva su propio botón de descarga para quien quiera el archivo.
+     */
+    public function urlCliente(): string
+    {
+        return URL::signedRoute('facturas.ticket', ['factura' => $this->id, 'cliente' => 1]);
+    }
+
+    /** Link de WhatsApp con el mensaje y la factura para el cliente. */
     public function urlWhatsApp(): string
     {
-        $mensaje = "Factura {$this->numero} — {$this->nombre_cliente}. Descárgala aquí: ".$this->urlPdf();
+        $mensaje = "Factura {$this->numero} — {$this->nombre_cliente}. Vela aquí: ".$this->urlCliente();
 
         return 'https://wa.me/?text='.rawurlencode($mensaje);
     }
