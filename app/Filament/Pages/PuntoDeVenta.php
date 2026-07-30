@@ -111,6 +111,15 @@ class PuntoDeVenta extends Page
 
     public string $platilloNota = '';
 
+    /**
+     * Grupo del carrito que se está EDITANDO (null = platillo nuevo).
+     *
+     * Editar un platillo ya agregado reabre el mismo modal precargado y, al
+     * confirmar, REEMPLAZA ese grupo en su misma posición. Nunca agrega una
+     * segunda línea: si lo hiciera, el cliente pagaría dos veces el plato.
+     */
+    public ?string $platilloEditGrupo = null;
+
     // ── Modal de factura ────────────────────────────────────────────────
     public bool $mostrarFactura = false;
 
@@ -649,6 +658,54 @@ class PuntoDeVenta extends Page
         $this->personalizando = true;
     }
 
+    /**
+     * Reabre el modal para EDITAR un platillo que ya está en el carrito.
+     *
+     * Se precarga desde el snapshot `seleccion` que guarda la línea principal
+     * al agregarse: los `componentes` de la línea no sirven para esto porque
+     * guardan nombre/precio (lo fiscal) pero no `producto_id` ni `categoria`,
+     * que es lo que el modal necesita para saber qué slot llena cada cosa.
+     * Las líneas viejas (o las precargadas por "Anular y corregir") no traen
+     * ese snapshot: simplemente no se pueden editar, se quitan y se rehacen.
+     */
+    public function editarPlatillo(string $grupo): void
+    {
+        $principal = null;
+
+        foreach ($this->carrito as $item) {
+            if ((string) ($item['grupo'] ?? $item['key']) === $grupo && ($item['tipo'] ?? '') === 'plato') {
+                $principal = $item;
+
+                break;
+            }
+        }
+
+        if ($principal === null || empty($principal['seleccion'])) {
+            return;
+        }
+
+        // El cast a int no es cosmético: con `mixed`, find() puede devolver una
+        // Collection y Larastan nivel 7 lo rechaza.
+        $combo = ComboEspecial::query()->withoutGlobalScopes()->find((int) $principal['producto_id']);
+
+        if ($combo === null) {
+            return;
+        }
+
+        $base = $combo->composicionBase();
+
+        $this->platilloComboId = $combo->id;
+        $this->platilloNombre = $combo->nombre;
+        $this->platilloPrecio = (float) $combo->precio;
+        $this->platilloBase = ['carne' => $base['carne'], 'complemento' => $base['complemento'], 'bebida' => $base['bebida']];
+        /** @var array<int, array{producto_id: int, nombre: string, precio: float, grava_isv: bool, categoria: string}> $sel */
+        $sel = array_values($principal['seleccion']);
+        $this->platilloSel = $sel;
+        $this->platilloNota = (string) ($principal['nota'] ?? '');
+        $this->platilloEditGrupo = $grupo;
+        $this->personalizando = true;
+    }
+
     /** Agrega un producto a la selección del platillo (para llenar slot o como extra). */
     public function platilloAgregar(int $productoId): void
     {
@@ -716,11 +773,57 @@ class PuntoDeVenta extends Page
         );
 
         // Platillo + sus extras comparten grupo → se ven juntos en el carrito.
-        $grupo = uniqid('g', true);
+        $grupo = $this->platilloEditGrupo ?? uniqid('g', true);
+
+        // Editando: se conserva la cantidad que ya tenía la línea principal
+        // (si el cajero puso 3 iguales, corregir un complemento no los baja a 1).
+        $cantidad = null;
+
+        if ($this->platilloEditGrupo !== null) {
+            foreach ($this->carrito as $item) {
+                if ((string) ($item['grupo'] ?? $item['key']) === $grupo && ($item['tipo'] ?? '') === 'plato') {
+                    $cantidad = (int) $item['cantidad'];
+
+                    break;
+                }
+            }
+        }
+
+        $nuevas = [];
 
         foreach ($lineas as $i => $linea) {
             // El primero (base) va como 'plato' (a cocina); los extras como 'producto'.
-            $this->pushLinea($linea, $i === 0 ? 'plato' : 'producto', grupo: $grupo);
+            $nuevas[] = $this->construirLinea(
+                $linea,
+                $i === 0 ? 'plato' : 'producto',
+                $i === 0 ? $cantidad : null,
+                $grupo,
+                $i === 0 ? $this->platilloSel : null,
+            );
+        }
+
+        if ($this->platilloEditGrupo === null) {
+            $this->carrito = array_merge($this->carrito, $nuevas);
+        } else {
+            // Reemplazo EN SU MISMA POSICIÓN: el carrito no se reordena bajo la
+            // mano del cajero por corregir un complemento.
+            $resultado = [];
+            $puesto = false;
+
+            foreach ($this->carrito as $item) {
+                if ((string) ($item['grupo'] ?? $item['key']) === $grupo) {
+                    if (! $puesto) {
+                        $resultado = array_merge($resultado, $nuevas);
+                        $puesto = true;
+                    }
+
+                    continue;
+                }
+
+                $resultado[] = $item;
+            }
+
+            $this->carrito = $puesto ? $resultado : array_merge($resultado, $nuevas);
         }
 
         $this->cancelarPlatillo();
@@ -735,13 +838,27 @@ class PuntoDeVenta extends Page
         $this->platilloBase = ['carne' => 0, 'complemento' => 0, 'bebida' => 0];
         $this->platilloSel = [];
         $this->platilloNota = '';
+        $this->platilloEditGrupo = null;
     }
 
     private function pushLinea(LineaVenta $linea, string $tipo, ?int $cantidad = null, ?string $grupo = null): void
     {
+        $this->carrito[] = $this->construirLinea($linea, $tipo, $cantidad, $grupo);
+    }
+
+    /**
+     * Arma la fila del carrito sin agregarla (editar un platillo necesita
+     * construir las líneas nuevas antes de decidir dónde van).
+     *
+     * @param array<int, array<string, mixed>>|null $seleccion snapshot de lo elegido en el modal, solo para poder reabrirlo
+     *
+     * @return array<string, mixed>
+     */
+    private function construirLinea(LineaVenta $linea, string $tipo, ?int $cantidad = null, ?string $grupo = null, ?array $seleccion = null): array
+    {
         $key = uniqid('l', true);
 
-        $this->carrito[] = [
+        return [
             'key'          => $key,
             'grupo'        => $grupo ?? $key,   // singleton por defecto; el platillo comparte grupo con sus extras
             'tipo'         => $tipo,
@@ -754,6 +871,8 @@ class PuntoDeVenta extends Page
             'detalle'      => $linea->detalle,
             'nota'         => $linea->nota,
             'componentes'  => array_map(static fn (ComponenteLinea $c): array => $c->toArray(), $linea->componentes),
+            // Solo UI: permite reabrir el modal para editar. No entra en la venta.
+            'seleccion' => $seleccion,
         ];
     }
 

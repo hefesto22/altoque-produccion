@@ -405,7 +405,19 @@
                         @php($grupo = $p['grupo'] ?? $p['key'])
                         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; padding:.5rem; border:1px solid rgba(128,128,128,.2); border-radius:.5rem;">
                             <div style="flex:1;">
-                                <div style="font-weight:600;">{{ $p['nombre'] }}</div>
+                                {{-- Tocar el nombre reabre el modal con todo precargado y REEMPLAZA
+                                     esta línea. Solo los platillos armados traen `seleccion`; el resto
+                                     (productos sueltos, o líneas de "Anular y corregir") no se editan. --}}
+                                @if (! empty($p['seleccion']))
+                                    <button type="button" wire:click="editarPlatillo('{{ $grupo }}')"
+                                        style="display:flex; align-items:center; gap:.3rem; font-weight:600; background:none; border:none; padding:0; color:inherit; cursor:pointer; text-align:left;"
+                                        title="Tocá para editar este platillo">
+                                        <span>{{ $p['nombre'] }}</span>
+                                        <span style="font-size:.7rem; opacity:.55;">✏️</span>
+                                    </button>
+                                @else
+                                    <div style="font-weight:600;">{{ $p['nombre'] }}</div>
+                                @endif
                                 @if (! empty($p['detalle']))
                                     <div style="font-size:.72rem; opacity:.7;">{{ implode(', ', $p['detalle']) }}</div>
                                 @endif
@@ -513,7 +525,7 @@
         <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:40rem; max-height:90vh; overflow-y:auto;">
                 <x-filament::section>
-                    <x-slot name="heading">Personalizar: {{ $platilloNombre }}</x-slot>
+                    <x-slot name="heading">{{ $platilloEditGrupo ? 'Editar' : 'Personalizar' }}: {{ $platilloNombre }}</x-slot>
                     <x-slot name="description">
                         @php($bebTxt = $platilloBase['bebida'] > 0 ? ' · '.$platilloBase['bebida'].' bebida(s)' : '')
                         Base: {{ $platilloBase['carne'] }} carne · {{ $platilloBase['complemento'] }} complementos{{ $bebTxt }} — L. {{ number_format($platilloPrecio, 2) }}. Cambiá lo que quieras; lo que pase de la base se cobra extra.
@@ -595,7 +607,7 @@
 
                     <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.8rem;">
                         <x-filament::button color="gray" wire:click="cancelarPlatillo">Cancelar</x-filament::button>
-                        <x-filament::button color="primary" wire:click="confirmarPlatillo">Agregar al carrito</x-filament::button>
+                        <x-filament::button color="primary" wire:click="confirmarPlatillo">{{ $platilloEditGrupo ? 'Guardar cambios' : 'Agregar al carrito' }}</x-filament::button>
                     </div>
                 </x-filament::section>
             </div>
