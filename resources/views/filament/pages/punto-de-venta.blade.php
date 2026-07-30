@@ -405,21 +405,13 @@
                         @php($grupo = $p['grupo'] ?? $p['key'])
                         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; padding:.5rem; border:1px solid rgba(128,128,128,.2); border-radius:.5rem;">
                             <div style="flex:1;">
-                                {{-- Tocar el nombre reabre el modal con todo precargado y REEMPLAZA
-                                     esta línea. Solo los platillos armados traen `seleccion`; el resto
-                                     (productos sueltos, o líneas de "Anular y corregir") no se editan. --}}
-                                @if (! empty($p['seleccion']))
-                                    <button type="button" wire:click="editarPlatillo('{{ $grupo }}')"
-                                        style="display:flex; align-items:center; gap:.3rem; font-weight:600; background:none; border:none; padding:0; color:inherit; cursor:pointer; text-align:left;"
-                                        title="Tocá para editar este platillo">
-                                        <span>{{ $p['nombre'] }}</span>
-                                        <span style="font-size:.7rem; opacity:.55;">✏️</span>
-                                    </button>
-                                @else
-                                    <div style="font-weight:600;">{{ $p['nombre'] }}</div>
-                                @endif
+                                {{-- Tocar el platillo reabre el modal con todo precargado y REEMPLAZA
+                                     esta línea. Sin ícono ni adorno: se toca y se abre. Solo los
+                                     platillos armados traen `seleccion`; el resto (productos sueltos o
+                                     líneas de "Anular y corregir") no se editan y no reaccionan. --}}
+                                <div @if (! empty($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-weight:600; cursor:pointer;" title="Tocá para editar este platillo" @else style="font-weight:600;" @endif>{{ $p['nombre'] }}</div>
                                 @if (! empty($p['detalle']))
-                                    <div style="font-size:.72rem; opacity:.7;">{{ implode(', ', $p['detalle']) }}</div>
+                                    <div @if (! empty($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-size:.72rem; opacity:.7; cursor:pointer;" @else style="font-size:.72rem; opacity:.7;" @endif>{{ implode(', ', $p['detalle']) }}</div>
                                 @endif
                                 @if (! empty($p['nota']))
                                     <div style="font-size:.72rem; color:#f59e0b;">📝 {{ $p['nota'] }}</div>
