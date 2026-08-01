@@ -82,6 +82,19 @@ class RestauranteAccessSeeder extends Seeder
     ];
 
     /**
+     * Permisos que NO son de todos: se asignan rol por rol más abajo.
+     *
+     * `VerAvisoPago` es el recordatorio del pago mensual del sistema — lo ve
+     * solo el gerente, que es quien paga. No entra en PERMISOS_EXTRA porque
+     * ese bloque se reparte a administrador y gerente por igual.
+     *
+     * @var array<int, string>
+     */
+    private const PERMISOS_PROPIOS = [
+        'VerAvisoPago',
+    ];
+
+    /**
      * Nombres viejos reemplazados por la convención Shield. Se eliminan de
      * la base en cada corrida (idempotente).
      *
@@ -155,6 +168,7 @@ class RestauranteAccessSeeder extends Seeder
             'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina', 'View:MenuDelDia',
             'View:DeclaracionIsvMensual', 'View:LibrosFiscales',
             ...self::PERMISOS_EXTRA, // incluye AnularFactura (decisión 2026-07-03)
+            ...self::PERMISOS_PROPIOS, // aviso del pago mensual: solo el gerente
         ]);
 
         $this->rol('cajero', [
@@ -202,7 +216,7 @@ class RestauranteAccessSeeder extends Seeder
             );
         }
 
-        foreach (self::PERMISOS_EXTRA as $permiso) {
+        foreach ([...self::PERMISOS_EXTRA, ...self::PERMISOS_PROPIOS] as $permiso) {
             Permission::firstOrCreate(['name' => $permiso], ['guard_name' => 'web']);
         }
     }

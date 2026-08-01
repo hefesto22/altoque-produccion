@@ -250,6 +250,7 @@ return [
         'AbrirTurno'     => 'Abrir turnos de caja',
         'CorregirPago'   => 'Corregir forma de pago (interno)',
         'FacturarEvento' => 'Facturar eventos (desde cotización)',
+        'VerAvisoPago'   => 'Ver el aviso del pago mensual del sistema',
     ],
 
     /*

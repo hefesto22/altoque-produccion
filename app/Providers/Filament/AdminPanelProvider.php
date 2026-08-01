@@ -15,12 +15,14 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Throwable;
 
@@ -85,6 +87,13 @@ class AdminPanelProvider extends PanelProvider
                     ->navigationGroup('Administración')
                     ->navigationSort(2),
             ])
+            // Aviso del pago mensual del sistema: franja arriba del contenido,
+            // solo para quien tenga `VerAvisoPago` (el gerente). El propio
+            // componente decide si se dibuja; acá solo se engancha.
+            ->renderHook(
+                PanelsRenderHook::PAGE_START,
+                fn (): string => Blade::render('@livewire(\'aviso-pago-mensual\')'),
+            )
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
