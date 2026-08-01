@@ -72,7 +72,13 @@
             </div>
         @endif
 
-        {{-- Plato del día: va PRIMERO, justo debajo de la cinta de bebidas.
+        {{-- Porciones individuales: pegado a la cinta de bebidas, arriba de todo
+             el menú. Es lo primero que pregunta quien no quiere el combo. --}}
+        @if (count($individuales))
+            <div class="precios">⚜️ PORCIONES INDIVIDUALES: {{ implode(', ', $individuales) }}</div>
+        @endif
+
+        {{-- Plato del día: justo debajo de las porciones individuales.
              Es lo que la cocina quiere empujar hoy, así que se lee antes que
              nada; los platillos permanentes siguen abajo con los combos. --}}
         @php($platosDelDia = $combosEspeciales->where('del_dia', true))
@@ -82,8 +88,11 @@
             <div class="plato-dia">
                 <div class="titulo-dia">🍽️ PLATO DEL DÍA</div>
                 @foreach ($platosDelDia as $ce)
+                    {{-- Sin precio: en la TV el plato del día se anuncia, se cobra
+                         en caja. Mostrarlo obligaba a mantener dos números iguales
+                         y confundía con los precios de los combos de abajo. --}}
                     <div class="nombre">
-                        {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}
+                        {{ mb_strtoupper($ce['nombre']) }}
                         @if ($ce['desglose'])<span class="desglose">{{ $ce['desglose'] }}</span>@endif
                         @if ($ce['nota'])<span class="nota">{{ $ce['nota'] }}</span>@endif
                     </div>
@@ -104,11 +113,6 @@
             @foreach ($complementos as $c)
                 <div class="item"><span class="ck">✔</span><span>{{ $c->nombre }}</span></div>
             @endforeach
-        @endif
-
-        {{-- Precios individuales --}}
-        @if (count($individuales))
-            <div class="precios">⚜️ INDIVIDUALES: {{ implode(', ', $individuales) }}</div>
         @endif
 
         {{-- Combos --}}
