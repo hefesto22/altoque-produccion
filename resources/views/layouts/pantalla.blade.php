@@ -120,9 +120,11 @@
         .cinta { background: #1f9d3a; color: #fff; overflow: hidden; padding: 1.1vw 0; margin: 0 -4vw 2vw; }
         .cinta-track { display: inline-flex; align-items: center; white-space: nowrap; will-change: transform; animation: cinta-scroll linear infinite; }
         .cinta-grupo { display: inline-flex; align-items: center; }
-        .cinta-item { font-size: calc(3.2vw * var(--esc)); font-weight: 800; padding: 0 1.2vw; }
+        /* Letra un poco más grande (pedido del cliente, 2026-08-04): la cinta
+           se lee desde lejos y a 3.2vw quedaba chica frente al resto. */
+        .cinta-item { font-size: calc(3.9vw * var(--esc)); font-weight: 800; padding: 0 1.3vw; }
         .cinta-item .precio { color: #ffe27a; margin-left: .6vw; }
-        .cinta-sep { font-size: calc(2.4vw * var(--esc)); opacity: .65; }
+        .cinta-sep { font-size: calc(2.9vw * var(--esc)); opacity: .65; }
         @keyframes cinta-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
         /* Con cinta, el encabezado suelta su línea verde: la banda de bebidas
