@@ -13,6 +13,12 @@
     @endif
     <div class="center medio">{{ mb_strtoupper($comanda->tipoLabel()) }}</div>
     <div class="center">Comanda {{ $comanda->numero }} · {{ $comanda->created_at->format('d/m/Y h:i A') }}</div>
+    {{-- Quién tomó el pedido: con meseros tomando desde tablets, el papel
+         tiene que decir a quién entregarle el plato. En una venta hecha en la
+         caja es el cajero, por eso la etiqueta es neutra. --}}
+    @if ($comanda->venta?->cajero?->name)
+        <div class="center">Atendió: {{ mb_strtoupper($comanda->venta->cajero->name) }}</div>
+    @endif
 
     <div class="sep"></div>
 

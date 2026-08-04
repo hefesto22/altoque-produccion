@@ -244,13 +244,16 @@ return [
      * en la pantalla de Roles (pestaña "Permisos personalizados").
      */
     'custom_permissions' => [
-        'AnularFactura'  => 'Anular facturas (SAR)',
-        'ExportVentas'   => 'Exportar reporte de ventas',
-        'VerCortesTodos' => 'Ver cortes de otros cajeros',
-        'AbrirTurno'     => 'Abrir turnos de caja',
-        'CorregirPago'   => 'Corregir forma de pago (interno)',
-        'FacturarEvento' => 'Facturar eventos (desde cotización)',
-        'VerAvisoPago'   => 'Ver el aviso del pago mensual del sistema',
+        'AnularFactura'   => 'Anular facturas (SAR)',
+        'ExportVentas'    => 'Exportar reporte de ventas',
+        'VerCortesTodos'  => 'Ver cortes de otros cajeros',
+        'AbrirTurno'      => 'Abrir turnos de caja',
+        'CerrarTurno'     => 'Cerrar turnos de caja',
+        'Cobrar'          => 'Cobrar y facturar en el POS',
+        'CorregirPago'    => 'Corregir forma de pago (interno)',
+        'FacturarEvento'  => 'Facturar eventos (desde cotización)',
+        'VerAvisoPago'    => 'Ver el aviso del pago mensual del sistema',
+        'ImprimirDirecto' => 'Imprimir directo en la térmica (compu de la caja)',
     ],
 
     /*

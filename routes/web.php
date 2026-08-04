@@ -23,6 +23,7 @@ use App\Http\Controllers\ComandaTicketController;
 use App\Http\Controllers\CorteTicketController;
 use App\Http\Controllers\CotizacionPdfController;
 use App\Http\Controllers\FacturaPdfController;
+use App\Http\Controllers\TandaImpresionController;
 use App\Http\Controllers\VerificacionController;
 use App\Livewire\MenuPantalla;
 use App\Livewire\PedirOnline;
@@ -62,6 +63,12 @@ Route::get('/comandas/{comanda}/ticket', [ComandaTicketController::class, 'show'
 // el turno y se reimprime desde Cortes de Caja.
 Route::get('/cortes/{corte}/ticket', [CorteTicketController::class, 'show'])
     ->name('cortes.ticket')
+    ->middleware('signed');
+
+// Tanda de impresión: varios tickets pendientes en UN solo documento (un
+// diálogo, un envío; la térmica corta entre uno y otro) — FIRMADA.
+Route::get('/impresiones/tanda', [TandaImpresionController::class, 'show'])
+    ->name('impresiones.tanda')
     ->middleware('signed');
 
 // PDF de cotización de evento — ruta pública FIRMADA (compartible por WhatsApp).

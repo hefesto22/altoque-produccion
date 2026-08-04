@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CorteCajas;
 use App\Filament\Resources\CorteCajas\Pages\ListCorteCajas;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\CorteCaja;
+use App\Services\Impresion\ColaImpresionService;
 use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -94,8 +95,26 @@ class CorteCajaResource extends Resource
                     ->visible(fn (CorteCaja $record): bool => $record->estado === 'cerrado')
                     // Reimpresión del ticket del corte por la misma cola de
                     // impresión global (iframe oculto) que factura y comanda.
+                    // Sin térmica en este dispositivo, queda esperando en caja.
                     ->action(function (CorteCaja $record, Component $livewire): void {
-                        $livewire->dispatch('imprimir-factura', url: $record->urlTicket());
+                        $url = app(ColaImpresionService::class)->enviar(
+                            'corte',
+                            (int) $record->id,
+                            'Corte del '.$record->abierto_at->format('d/m/Y h:i A'),
+                            $record->cajero?->name,
+                        );
+
+                        if ($url !== null) {
+                            $livewire->dispatch('imprimir-factura', url: $url);
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Mandado a la cola de la caja')
+                            ->body('Se imprime desde el Punto de Venta de la computadora.')
+                            ->success()
+                            ->seconds(3)->send();
                     }),
                 Action::make('corregir')
                     ->label('Corregir')

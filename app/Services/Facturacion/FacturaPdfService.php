@@ -52,10 +52,16 @@ final class FacturaPdfService
         ])->render();
     }
 
-    /** @return array<string, mixed> Datos comunes de las vistas de factura. */
-    private function datosVista(Factura $factura): array
+    /**
+     * Datos comunes de las vistas de factura. Público porque la tanda de
+     * impresión (TandaImpresionController) arma varias facturas seguidas en
+     * un solo documento y necesita este bloque por cada una.
+     *
+     * @return array<string, mixed>
+     */
+    public function datosVista(Factura $factura): array
     {
-        $factura->loadMissing(['venta.items', 'venta.pagos', 'venta.comanda', 'cai']);
+        $factura->loadMissing(['venta.items', 'venta.pagos', 'venta.comanda', 'venta.cajero', 'cai']);
 
         $e = EmpresaSetting::actual();
 

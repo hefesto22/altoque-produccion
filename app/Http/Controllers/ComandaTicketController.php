@@ -17,7 +17,9 @@ class ComandaTicketController extends Controller
 {
     public function show(Comanda $comanda): View
     {
-        $comanda->load('venta:id,numero_orden,total,pagada,forma_pago');
+        // cajero_id es obligatorio en el select: sin la FK, la relación
+        // cajero() no resuelve y el ticket saldría sin el "Atendió".
+        $comanda->load(['venta:id,numero_orden,total,pagada,forma_pago,cajero_id', 'venta.cajero:id,name']);
 
         return view('tickets.comanda', ['comanda' => $comanda]);
     }

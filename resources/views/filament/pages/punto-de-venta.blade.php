@@ -32,6 +32,14 @@
          --pos-marca sale del color configurado en Sistema → Configuración: los
          mosaicos se pintan con tonos de ESE color, no con naranjas fijos. --}}
     <div style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
+
+    {{-- Cola de impresión: lo que se pidió desde las tablets y todavía no
+         salió en papel. Componente Livewire aparte, con su propio poll, para
+         no arrastrar el re-render del POS entero cada pocos segundos.
+         Va FUERA de todo @if: adentro de una rama condicional Livewire lo
+         re-montearía y perdería su estado al cambiar la condición. --}}
+    @livewire('cola-impresion')
+
     {{-- Turno de caja --}}
     @if (! $turnoAbierto)
         <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; padding:.75rem 1rem; border:1px solid #f59e0b; border-radius:.6rem; background:rgba(245,158,11,.08);">
@@ -48,7 +56,9 @@
         <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; font-size:.76rem;">
             <span style="color:#10b981; font-weight:700;">● Turno abierto</span>
             <span style="opacity:.55;">desde {{ $turnoDesde }}@if ($turnoDe) · {{ $turnoDe }}@endif</span>
-            <x-filament::button size="xs" color="danger" outlined wire:click="$set('mostrarCierre', true)" style="margin-left:auto;">Cerrar turno</x-filament::button>
+            @if ($this->puedeCerrarTurno())
+                <x-filament::button size="xs" color="danger" outlined wire:click="$set('mostrarCierre', true)" style="margin-left:auto;">Cerrar turno</x-filament::button>
+            @endif
         </div>
     @endif
 
@@ -461,6 +471,9 @@
                     <div style="display:flex; justify-content:space-between; font-size:1.15rem; font-weight:700; padding-top:.25rem;"><span>Total</span><span>L. {{ number_format($this->resumen['total'], 2) }}</span></div>
                 </div>
 
+                {{-- Todo lo de dinero es de la CAJA. El mesero arma el pedido y lo
+                     manda a cocina; el cliente paga al salir. --}}
+                @if ($this->puedeCobrar())
                 <div style="display:flex; align-items:center; gap:.4rem; margin-top:.75rem; flex-wrap:wrap;">
                     <span style="font-size:.78rem; opacity:.6;">Pago:</span>
                     @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
@@ -502,10 +515,16 @@
                     </div>
                 @endif
 
+                @endif
+
                 <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.75rem;">
-                    <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
-                    <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
-                    <x-filament::button wire:click="pagarDespues" color="warning" outlined size="lg" style="width:100%;">Pagar después (a cocina)</x-filament::button>
+                    @if ($this->puedeCobrar())
+                        <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
+                        <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
+                    @endif
+                    <x-filament::button wire:click="pagarDespues" color="{{ $this->puedeCobrar() ? 'warning' : 'primary' }}" :outlined="$this->puedeCobrar()" size="lg" style="width:100%;">
+                        {{ $this->puedeCobrar() ? 'Pagar después (a cocina)' : 'Mandar a cocina' }}
+                    </x-filament::button>
                 </div>
             </x-filament::section>
         </div>

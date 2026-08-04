@@ -95,6 +95,34 @@ class RestauranteAccessSeeder extends Seeder
     ];
 
     /**
+     * Permisos de la CAJA FÍSICA: los tiene quien opera la computadora donde
+     * está conectada la única impresora térmica. Las tablets del salón no.
+     *
+     * `ImprimirDirecto` decide dónde sale el papel: con el permiso el ticket
+     * imprime en el acto (comportamiento de siempre); sin él, el trabajo cae
+     * a la cola de impresión y lo saca la caja desde el POS.
+     *
+     * `CerrarTurno` tapa un agujero previo: cerrar el turno no pedía ningún
+     * permiso, así que cualquiera con el POS abierto podía cerrar la caja. Es
+     * un permiso NUEVO y no el `AbrirTurno` existente porque el cajero no
+     * tiene AbrirTurno (lo abre quien entrega el fondo) pero sí es quien
+     * cierra todos los días.
+     *
+     * `Cobrar` es la regla del negocio (2026-08-04): el dinero se recibe en
+     * la caja, siempre. El mesero arma el pedido y lo manda a cocina; el
+     * cliente paga al salir. Sin este permiso el POS no muestra "Cobrar y
+     * Facturar", ni "Factura con RTN", ni la forma de pago, ni la lista de
+     * pedidos por cobrar — solo queda "Pagar después (a cocina)".
+     *
+     * @var array<int, string>
+     */
+    private const PERMISOS_CAJA = [
+        'ImprimirDirecto',
+        'CerrarTurno',
+        'Cobrar',
+    ];
+
+    /**
      * Nombres viejos reemplazados por la convención Shield. Se eliminan de
      * la base en cada corrida (idempotente).
      *
@@ -129,6 +157,11 @@ class RestauranteAccessSeeder extends Seeder
          * gerente: igual que administrador en lo operativo, sin CAI ni
          *   corrección de cortes ni Datos de la Empresa.
          * cajero: opera el POS, cocina y bandeja; ve ventas y su corte.
+         * mesero: SOLO el POS, desde la tablet del salón. Arma el pedido y lo
+         *   manda a cocina, nada más: no cobra (el dinero se recibe en la
+         *   caja), no imprime (no hay térmica en la tablet: sus comandas van
+         *   a la cola y las saca la caja), no cierra turno y no entra al
+         *   histórico de ventas.
          * contador: solo lectura fiscal + export.
          */
 
@@ -149,6 +182,7 @@ class RestauranteAccessSeeder extends Seeder
             'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina', 'View:MenuDelDia',
             'View:DeclaracionIsvMensual', 'View:LibrosFiscales', 'View:DatosEmpresaPage',
             ...self::PERMISOS_EXTRA,
+            ...self::PERMISOS_CAJA, // imprime en la térmica y cierra turno
         ]);
 
         $this->rol('gerente', [
@@ -169,6 +203,7 @@ class RestauranteAccessSeeder extends Seeder
             'View:DeclaracionIsvMensual', 'View:LibrosFiscales',
             ...self::PERMISOS_EXTRA, // incluye AnularFactura (decisión 2026-07-03)
             ...self::PERMISOS_PROPIOS, // aviso del pago mensual: solo el gerente
+            ...self::PERMISOS_CAJA,
         ]);
 
         $this->rol('cajero', [
@@ -176,6 +211,21 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->lectura('CorteCaja'), // ve su corte; VerCortesTodos amplía a todos
             'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',
             'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina',
+            ...self::PERMISOS_CAJA, // está sentado en la compu de la impresora
+        ]);
+
+        /*
+         * mesero: la tablet del salón. Solo el POS y solo para mandar pedidos
+         * a cocina. Sin Cobrar no ve nada de dinero; sin ImprimirDirecto sus
+         * comandas caen a la cola y las saca la caja; sin CerrarTurno no
+         * puede cerrar la caja desde una mesa; sin lectura de Venta no entra
+         * al histórico.
+         *
+         * OJO al crear el usuario: además del rol `mesero` necesita
+         * `panel_user`, si no canAccessPanel() le rebota el login.
+         */
+        $this->rol('mesero', [
+            'View:PuntoDeVenta',
         ]);
 
         $this->rol('contador', [
@@ -216,7 +266,7 @@ class RestauranteAccessSeeder extends Seeder
             );
         }
 
-        foreach ([...self::PERMISOS_EXTRA, ...self::PERMISOS_PROPIOS] as $permiso) {
+        foreach ([...self::PERMISOS_EXTRA, ...self::PERMISOS_PROPIOS, ...self::PERMISOS_CAJA] as $permiso) {
             Permission::firstOrCreate(['name' => $permiso], ['guard_name' => 'web']);
         }
     }
@@ -267,6 +317,7 @@ class RestauranteAccessSeeder extends Seeder
             ['administrador', 'Administrador', 'administrador@gmail.com'],
             ['gerente', 'Gerente', 'gerente@gmail.com'],
             ['cajero', 'Cajero', 'cajero@gmail.com'],
+            ['mesero', 'Mesero', 'mesero@gmail.com'],
             ['contador', 'Contador', 'contador@gmail.com'],
         ];
 

@@ -19,6 +19,7 @@ use App\Models\Venta;
 use App\Services\Caja\CorteCajaService;
 use App\Services\Cocina\ComandaService;
 use App\Services\Cocina\ReposicionService;
+use App\Services\Impresion\ColaImpresionService;
 use App\Services\Pos\CotizadorVenta;
 use App\Services\Pos\MenuDiaService;
 use App\Services\Pos\VentaService;
@@ -81,6 +82,28 @@ class PuntoDeVenta extends Page
     public static function canAccess(): bool
     {
         return Acceso::puede('View:PuntoDeVenta');
+    }
+
+    /**
+     * Cuántos tickets esperan salir por la térmica. Solo lo ve quien puede
+     * imprimir: un mesero no debe mirar un número sobre el que no puede hacer
+     * nada. Ojo, el menú lateral no se refresca con Livewire — el contador
+     * vivo es el del panel adentro del POS.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        if (! Acceso::puede('ImprimirDirecto')) {
+            return null;
+        }
+
+        $n = app(ColaImpresionService::class)->contarPendientes();
+
+        return $n > 0 ? (string) $n : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
     }
 
     /** Proteína seleccionada para el plato en construcción. */
@@ -310,6 +333,27 @@ class PuntoDeVenta extends Page
         return Acceso::puede('AbrirTurno');
     }
 
+    /**
+     * Cerrar el turno es cosa de la caja, no del salón. Permiso propio y no
+     * `AbrirTurno` porque el cajero NO abre (le entregan el fondo) pero sí es
+     * quien cierra todos los días; el mesero con tablet no hace ninguna.
+     */
+    public function puedeCerrarTurno(): bool
+    {
+        return Acceso::puede('CerrarTurno');
+    }
+
+    /**
+     * El dinero se recibe en la CAJA, siempre (regla del negocio, 2026-08-04).
+     * El mesero arma el pedido en la tablet y lo manda a cocina; el cliente
+     * paga al salir. Sin este permiso el POS esconde todo lo de cobro y solo
+     * deja "Pagar después (a cocina)".
+     */
+    public function puedeCobrar(): bool
+    {
+        return Acceso::puede('Cobrar');
+    }
+
     public function abrirTurno(): void
     {
         abort_unless(Acceso::puede('AbrirTurno'), 403);
@@ -413,6 +457,8 @@ class PuntoDeVenta extends Page
 
     public function confirmarCierre(): void
     {
+        abort_unless(Acceso::puede('CerrarTurno'), 403);
+
         if (! is_numeric($this->efectivoContado)) {
             Notification::make()->title('Ingresá el efectivo contado')->warning()->seconds(3)->send();
 
@@ -1060,8 +1106,12 @@ class PuntoDeVenta extends Page
             default     => 'En el local',
         };
 
+        // El título no puede mentir: desde una tablet la comanda no sale de
+        // ninguna impresora, queda esperando a que la caja la saque.
+        $imprimeAca = Acceso::puede('ImprimirDirecto');
+
         Notification::make()
-            ->title($entregada ? 'Comanda impresa' : 'Enviado a cocina')
+            ->title($imprimeAca ? ($entregada ? 'Comanda impresa' : 'Enviado a cocina') : 'Comanda a la cola de la caja')
             ->body("Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
             ->success()
             ->seconds(3)->send();
@@ -1137,6 +1187,8 @@ class PuntoDeVenta extends Page
     /** Factura rápida a Consumidor Final (sin pedir RTN, concepto Alimentación). */
     public function facturarConsumidorFinal(): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         // detallada = null → manda el toggle "Detallar productos por defecto"
         // de Datos de la Empresa. El restaurante pidió que las facturas a
         // Consumidor Final también salgan con el platillo desglosado.
@@ -1256,16 +1308,36 @@ class PuntoDeVenta extends Page
             trim($this->domNombre) !== '' ? mb_strtoupper(trim($this->domNombre)) : null,
         );
 
+        $platos = count($this->carrito);
         $comanda = $this->enviarAComanda($venta, incluirLocal: true);
 
-        // El ticket físico de comanda es lo que la cocina usa para preparar.
+        // El ticket físico de comanda es lo único que llega a la cocina. Sale
+        // acá si esta máquina tiene la térmica; si el pedido vino de una
+        // tablet, queda en la cola y lo saca la caja.
+        $esperaEnCaja = false;
+
         if ($comanda !== null) {
-            $this->dispatch('imprimir-comanda', url: $comanda->urlTicket());
+            $url = app(ColaImpresionService::class)->enviar(
+                'comanda',
+                (int) $comanda->id,
+                "Orden {$venta->numero_orden} · ".$comanda->tipoLabel(),
+                $platos.' plato(s)'.(trim($this->domNombre) !== '' ? ' · '.trim($this->domNombre) : ''),
+            );
+
+            if ($url !== null) {
+                $this->dispatch('imprimir-comanda', url: $url);
+            } else {
+                $esperaEnCaja = true;
+            }
         }
 
         Notification::make()
-            ->title("Pedido en cocina · Orden {$venta->numero_orden}")
-            ->body('Queda PENDIENTE de pago. Cobralo desde “Pedidos por cobrar” cuando esté listo.')
+            ->title($esperaEnCaja
+                ? "Mandado a caja · Orden {$venta->numero_orden}"
+                : "Pedido en cocina · Orden {$venta->numero_orden}")
+            ->body($esperaEnCaja
+                ? 'La caja imprime la comanda y la pasa a cocina. Queda PENDIENTE de pago.'
+                : 'Queda PENDIENTE de pago. Cobralo desde “Pedidos por cobrar” cuando esté listo.')
             ->success()
             ->seconds(3)->send();
 
@@ -1275,6 +1347,12 @@ class PuntoDeVenta extends Page
     /** @return array<int, Venta> Pedidos pendientes de pago (cualquier cajero: una sola caja). */
     public function getPedidosPendientesProperty(): array
     {
+        // El mesero no cobra: la lista entera desaparece de su POS (el bloque
+        // del blade solo se dibuja cuando hay pendientes).
+        if (! Acceso::puede('Cobrar')) {
+            return [];
+        }
+
         return Venta::query()
             ->pendientes()
             ->with('items:id,venta_id,nombre,cantidad')
@@ -1287,12 +1365,16 @@ class PuntoDeVenta extends Page
     /** Cobra un pendiente a Consumidor Final (sin RTN) sin banco: efectivo o tarjeta. */
     public function cobrarPendienteCF(int $ventaId, string $formaPago): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         $this->ejecutarCobroPendiente($ventaId, null, 'Consumidor Final', $formaPago);
     }
 
     /** Abre el selector de banco para cobrar un pendiente por transferencia. */
     public function pedirBancoPendiente(int $ventaId, string $forma): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         $this->cobrandoTransferId = $ventaId;
         $this->cobroFormaPendiente = $forma;
         $this->cobroBanco = '';
@@ -1329,6 +1411,8 @@ class PuntoDeVenta extends Page
     /** Abre el modal de RTN para facturar un pendiente con datos del cliente. */
     public function facturarPendienteRtn(int $ventaId): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         $this->cobrandoPendienteId = $ventaId;
         $this->rtnInput = '';
         $this->nombreInput = '';
@@ -1338,6 +1422,8 @@ class PuntoDeVenta extends Page
     /** Núcleo del cobro de un pendiente: emite el documento y marca pagado. */
     private function ejecutarCobroPendiente(int $ventaId, ?RTN $rtn, string $nombre, string $formaPago, ?bool $detallada = null, ?string $banco = null): bool
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         $venta = Venta::pendientes()->find($ventaId);
 
         if ($venta === null) {
@@ -1379,11 +1465,24 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        $this->dispatch('imprimir-factura', url: $factura->urlTicket()); // HTML: impresión instantánea, sin Chromium
+        // Fuera de la transacción y a prueba de fallos: la venta ya quedó
+        // registrada y el correlativo SAR consumido — la impresión no puede
+        // tumbarla ni empujar a re-facturar (eso quemaría otro correlativo).
+        $url = app(ColaImpresionService::class)->enviar(
+            'factura',
+            (int) $factura->id,
+            "Factura {$factura->numero} · Orden {$factura->venta->numero_orden}",
+            'L. '.number_format((float) $factura->total, 2),
+        );
+
+        if ($url !== null) {
+            $this->dispatch('imprimir-factura', url: $url); // HTML: impresión instantánea, sin Chromium
+        }
 
         Notification::make()
             ->title("Cobrado · Orden {$factura->venta->numero_orden}")
-            ->body("Factura {$factura->numero} · Total L. ".number_format((float) $factura->total, 2))
+            ->body("Factura {$factura->numero} · Total L. ".number_format((float) $factura->total, 2)
+                .($url === null ? ' · lo imprime la caja' : ''))
             ->success()
             ->seconds(3)->send();
 
@@ -1393,6 +1492,8 @@ class PuntoDeVenta extends Page
     /** Abre el modal para facturar con RTN (cuando el cliente lo pide). */
     public function abrirFactura(): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         if ($this->carrito === []) {
             Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
 
@@ -1466,6 +1567,8 @@ class PuntoDeVenta extends Page
     /** Emite la factura con el RTN ingresado en el modal. */
     public function emitirFactura(): void
     {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
         try {
             $rtn = new RTN(trim($this->rtnInput));
         } catch (Throwable) {
@@ -1575,14 +1678,23 @@ class PuntoDeVenta extends Page
             entregada: $esLocal,
         );
 
-        $this->dispatch(
-            'imprimir-factura',
-            url: $comanda !== null ? $factura->urlDocumentos() : $factura->urlTicket(),
+        // Idem: después de la transacción y sin poder lanzar. Si esta máquina
+        // no tiene térmica, el documento queda en la cola de la caja.
+        $url = app(ColaImpresionService::class)->enviar(
+            $comanda !== null ? 'documentos' : 'factura',
+            (int) $factura->id,
+            "Factura {$factura->numero} · Orden {$factura->venta->numero_orden}",
+            'L. '.number_format((float) $factura->total, 2),
         );
+
+        if ($url !== null) {
+            $this->dispatch('imprimir-factura', url: $url);
+        }
 
         Notification::make()
             ->title("Factura emitida · Orden {$factura->venta->numero_orden}")
-            ->body("N° {$factura->numero}  ·  Total L. ".number_format((float) $factura->total, 2).' · Enviando a impresión…')
+            ->body("N° {$factura->numero}  ·  Total L. ".number_format((float) $factura->total, 2)
+                .($url === null ? ' · la imprime la caja' : ' · Enviando a impresión…'))
             ->actions([
                 NotificationAction::make('whatsapp')
                     ->label('Enviar por WhatsApp')

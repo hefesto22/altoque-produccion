@@ -9,6 +9,7 @@ use App\Filament\Pages\PuntoDeVenta;
 use App\Filament\Resources\Ventas\Pages\ListVentas;
 use App\Models\Venta;
 use App\Services\Facturacion\FacturacionSarService;
+use App\Services\Impresion\ColaImpresionService;
 use App\Services\Pos\VentaService;
 use App\Support\Acceso;
 use BackedEnum;
@@ -253,15 +254,39 @@ class VentaResource extends Resource
                     ])
                     // Imprime directo (HTML instantáneo por iframe, igual que el
                     // POS) — sin pestaña nueva ni esperar a Chromium. El PDF
-                    // sigue disponible vía WhatsApp.
+                    // sigue disponible vía WhatsApp. Desde un dispositivo sin
+                    // térmica pasa por la cola y lo saca la caja.
                     ->action(function (Venta $record, array $data, $livewire): void {
-                        $url = match ($data['documento'] ?? 'factura') {
-                            'comanda' => $record->comanda?->urlTicket(),
-                            'ambas'   => $record->factura?->urlDocumentos(),
-                            default   => $record->factura?->urlTicket(),
+                        [$tipo, $id] = match ($data['documento'] ?? 'factura') {
+                            'comanda' => ['comanda', $record->comanda?->id],
+                            'ambas'   => ['documentos', $record->factura?->id],
+                            default   => ['factura', $record->factura?->id],
                         };
 
-                        $livewire->dispatch('imprimir-factura', url: $url);
+                        if ($id === null) {
+                            Notification::make()->title('Ese documento ya no existe')->warning()->seconds(3)->send();
+
+                            return;
+                        }
+
+                        $url = app(ColaImpresionService::class)->enviar(
+                            $tipo,
+                            (int) $id,
+                            'Reimpresión · Orden '.$record->numero_orden,
+                            'L. '.number_format((float) $record->total, 2),
+                        );
+
+                        if ($url !== null) {
+                            $livewire->dispatch('imprimir-factura', url: $url);
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Mandado a la cola de la caja')
+                            ->body('Se imprime desde el Punto de Venta de la computadora.')
+                            ->success()
+                            ->seconds(3)->send();
                     })
                     ->visible(fn (Venta $record): bool => $record->factura !== null),
                 Action::make('whatsapp')
