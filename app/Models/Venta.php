@@ -37,6 +37,10 @@ use Illuminate\Support\Carbon;
  * @property float $costo_viaje
  * @property bool $pagada
  * @property Carbon|null $pagada_at
+ * @property bool $anulada
+ * @property Carbon|null $anulada_at
+ * @property int|null $anulada_por
+ * @property string|null $motivo_anulacion
  * @property Carbon $vendida_at
  */
 class Venta extends Model
@@ -63,6 +67,10 @@ class Venta extends Model
         'costo_viaje',
         'pagada',
         'pagada_at',
+        'anulada',
+        'anulada_at',
+        'anulada_por',
+        'motivo_anulacion',
         'vendida_at',
     ];
 
@@ -79,6 +87,8 @@ class Venta extends Model
             'costo_viaje'    => 'decimal:2',
             'pagada'         => 'boolean',
             'pagada_at'      => 'datetime',
+            'anulada'        => 'boolean',
+            'anulada_at'     => 'datetime',
             'vendida_at'     => 'datetime',
         ];
     }
@@ -166,7 +176,8 @@ class Venta extends Model
      */
     public function scopePendientes(Builder $query): Builder
     {
-        return $query->where('pagada', false);
+        // Anulada = el pedido no se hizo, así que no hay nada que cobrar.
+        return $query->where('pagada', false)->where('anulada', false);
     }
 
     /**

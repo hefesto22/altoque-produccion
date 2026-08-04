@@ -212,6 +212,9 @@ class PuntoDeVenta extends Page
     /** Pendiente al que se le está repartiendo el pago entre varios métodos. */
     public ?int $cobrandoMixtoId = null;
 
+    /** Pendiente al que se le está confirmando la anulación. */
+    public ?int $anulandoPendienteId = null;
+
     /** @var array<int, int> ids de productos con alerta de reposición activa */
     public array $productosBajos = [];
 
@@ -1023,6 +1026,7 @@ class PuntoDeVenta extends Page
         $this->cobrandoPendienteId = null;
         $this->cobrandoTransferId = null;
         $this->cobrandoMixtoId = null;
+        $this->anulandoPendienteId = null;
         $this->cobroFormaPendiente = '';
         $this->cobroBanco = '';
     }
@@ -1408,6 +1412,7 @@ class PuntoDeVenta extends Page
 
         $this->cobrandoTransferId = $ventaId;
         $this->cobrandoMixtoId = null;
+        $this->anulandoPendienteId = null;
         $this->cobroFormaPendiente = $forma;
         $this->cobroBanco = '';
     }
@@ -1422,6 +1427,7 @@ class PuntoDeVenta extends Page
 
         $this->cobrandoMixtoId = $ventaId;
         $this->cobrandoTransferId = null;
+        $this->anulandoPendienteId = null;
         $this->mixtoEfectivo = '';
         $this->mixtoTarjeta = '';
         $this->mixtoTransfer = '';
@@ -1486,6 +1492,64 @@ class PuntoDeVenta extends Page
         if ($ok) {
             $this->cancelarTransferenciaPendiente();
         }
+    }
+
+    /**
+     * Pide confirmación antes de anular. Anular no es cobrar de menos: es
+     * decir que el pedido no se hizo, así que no hay nada que cobrar.
+     */
+    public function pedirAnularPendiente(int $ventaId): void
+    {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
+        $this->anulandoPendienteId = $ventaId;
+        $this->cobrandoTransferId = null;
+        $this->cobrandoMixtoId = null;
+    }
+
+    public function cancelarAnulacionPendiente(): void
+    {
+        $this->anulandoPendienteId = null;
+    }
+
+    /** Anula el pedido: sale de "por cobrar", de cocina y de la cola de impresión. */
+    public function confirmarAnularPendiente(): void
+    {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
+        if ($this->anulandoPendienteId === null) {
+            return;
+        }
+
+        $venta = Venta::pendientes()->with('comanda')->find($this->anulandoPendienteId);
+
+        if ($venta === null) {
+            Notification::make()->title('Ese pedido ya no está pendiente')->warning()->seconds(3)->send();
+            $this->anulandoPendienteId = null;
+
+            return;
+        }
+
+        try {
+            app(VentaService::class)->anularPendiente($venta, (int) Auth::id());
+        } catch (RestauranteException $e) {
+            Notification::make()->title('No se pudo anular')->body($e->getMessage())->danger()->seconds(3)->send();
+
+            return;
+        }
+
+        // Si su comanda seguía esperando papel, ese ticket ya no tiene para qué salir.
+        if ($venta->comanda !== null) {
+            app(ColaImpresionService::class)->cancelarDe('comanda', (int) $venta->comanda->id);
+        }
+
+        Notification::make()
+            ->title("Pedido anulado · Orden {$venta->numero_orden}")
+            ->body('Sale de pedidos por cobrar, de cocina y de la cola de impresión.')
+            ->warning()
+            ->seconds(3)->send();
+
+        $this->anulandoPendienteId = null;
     }
 
     /** Abre el modal de RTN para facturar un pendiente con datos del cliente. */

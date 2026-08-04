@@ -89,7 +89,9 @@ class Comanda extends Model
     public function scopeEnCocina(Builder $query): Builder
     {
         // Las que aún se preparan van primero; las "listo" se van al final.
+        // Si el pedido se anuló, la comanda sale de la pantalla: ya no se hace.
         return $query->whereIn('estado', ['pendiente', 'preparando', 'listo'])
+            ->whereHas('venta', static fn (Builder $q): Builder => $q->where('anulada', false))
             ->orderByRaw("case when estado = 'listo' then 1 else 0 end")
             ->orderBy('created_at');
     }

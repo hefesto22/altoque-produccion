@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Exceptions\PedidoNoAnulableException;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Filament\Pages\PuntoDeVenta;
 use App\Livewire\ColaImpresion;
@@ -11,6 +12,7 @@ use App\Models\Factura;
 use App\Models\Impresion;
 use App\Models\Producto;
 use App\Models\User;
+use App\Models\Venta;
 use App\Services\Caja\CorteCajaService;
 use App\Services\Cocina\ComandaService;
 use App\Services\Impresion\ColaImpresionService;
@@ -368,6 +370,68 @@ it('el mixto de un pendiente no cobra si los montos no cuadran', function () {
         ->call('confirmarMixtoPendiente');
 
     expect($venta->fresh()->pagada)->toBeFalse();
+});
+
+it('anular un pendiente lo saca de por cobrar, de cocina y de la cola', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $comanda = comandaImprimible($cajero);
+    $venta = $comanda->venta;
+
+    // La comanda quedó esperando papel (como si la hubiera mandado un mesero).
+    Impresion::query()->create([
+        'tipo'     => 'comanda', 'referencia_id' => $comanda->id,
+        'etiqueta' => 'ORDEN '.$venta->numero_orden, 'estado' => 'pendiente',
+    ]);
+
+    Livewire::actingAs($cajero)->test(PuntoDeVenta::class)
+        ->call('pedirAnularPendiente', $venta->id)
+        ->call('confirmarAnularPendiente');
+
+    $venta->refresh();
+
+    expect($venta->anulada)->toBeTrue()
+        ->and($venta->anulada_por)->toBe($cajero->id)
+        ->and($venta->anulada_at)->not->toBeNull()
+        // No se borra: queda el rastro de quién y cuándo.
+        ->and(Venta::query()->whereKey($venta->id)->exists())->toBeTrue()
+        // Sale de las tres listas.
+        ->and(Venta::pendientes()->whereKey($venta->id)->exists())->toBeFalse()
+        ->and(Comanda::enCocina()->whereKey($comanda->id)->exists())->toBeFalse()
+        ->and(Impresion::query()->pendientes()->count())->toBe(0);
+});
+
+it('un pedido anulado ya no se puede cobrar', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    if (Cai::query()->count() === 0) {
+        Cai::factory()->create();
+    }
+
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $venta = comandaImprimible($cajero)->venta;
+    app(VentaService::class)->anularPendiente($venta, $cajero->id);
+
+    // Si el pedido no se hizo, no hay nada que cobrar.
+    Livewire::actingAs($cajero)->test(PuntoDeVenta::class)
+        ->call('cobrarPendienteCF', $venta->id, 'efectivo');
+
+    expect($venta->fresh()->pagada)->toBeFalse()
+        ->and($venta->fresh()->factura)->toBeNull();
+});
+
+it('no se puede anular dos veces ni anular algo ya cobrado', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $venta = comandaImprimible($cajero)->venta;
+    app(VentaService::class)->anularPendiente($venta, $cajero->id);
+
+    expect(fn () => app(VentaService::class)->anularPendiente($venta->fresh(), $cajero->id))
+        ->toThrow(PedidoNoAnulableException::class);
 });
 
 it('el mesero no puede cobrar ni facturar desde la tablet', function () {

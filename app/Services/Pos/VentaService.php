@@ -6,6 +6,7 @@ namespace App\Services\Pos;
 
 use App\Domain\Contracts\CalculaImpuestos;
 use App\Domain\Exceptions\PagosNoCuadranException;
+use App\Domain\Exceptions\PedidoNoAnulableException;
 use App\Domain\Exceptions\VentaSinLineasException;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
@@ -76,6 +77,46 @@ final class VentaService
             $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden);
 
             return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
+        });
+    }
+
+    /**
+     * Anula un pedido que nunca se cobró: el cliente se fue, el mesero se
+     * equivocó, el pedido no se hizo. Se MARCA, no se borra — queda quién y
+     * cuándo para poder revisarlo después.
+     *
+     * Una vez anulada, `scopePendientes()` la deja fuera: si el pedido no se
+     * hizo, no hay nada que cobrar.
+     *
+     * @throws PedidoNoAnulableException si ya se cobró o ya estaba anulada
+     */
+    public function anularPendiente(Venta $venta, int $usuarioId, ?string $motivo = null): Venta
+    {
+        return DB::transaction(function () use ($venta, $usuarioId, $motivo): Venta {
+            // Recarga con bloqueo: dos cajas no pueden anular y cobrar a la vez.
+            $fresca = Venta::query()->whereKey($venta->id)->lockForUpdate()->firstOrFail();
+
+            if ($fresca->pagada) {
+                throw new PedidoNoAnulableException('ya se cobró, para deshacerlo hay que anular la factura.');
+            }
+
+            if ($fresca->anulada) {
+                throw new PedidoNoAnulableException('ya estaba anulado.');
+            }
+
+            $fresca->update([
+                'anulada'          => true,
+                'anulada_at'       => now(),
+                'anulada_por'      => $usuarioId,
+                'motivo_anulacion' => $motivo,
+            ]);
+
+            activity()
+                ->performedOn($fresca)
+                ->withProperties(['motivo' => $motivo, 'usuario_id' => $usuarioId])
+                ->log('pedido_anulado');
+
+            return $fresca;
         });
     }
 

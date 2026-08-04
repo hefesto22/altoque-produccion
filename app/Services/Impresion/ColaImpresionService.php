@@ -149,6 +149,19 @@ final class ColaImpresionService
             ->update(['estado' => 'cancelado', 'updated_at' => now()]) === 1;
     }
 
+    /**
+     * Descarta lo que quede pendiente de un documento concreto. Se usa cuando
+     * el pedido se anula: ese papel ya no tiene para qué salir.
+     */
+    public function cancelarDe(string $tipo, int $referenciaId): int
+    {
+        return Impresion::query()
+            ->where('tipo', $tipo)
+            ->where('referencia_id', $referenciaId)
+            ->where('estado', 'pendiente')
+            ->update(['estado' => 'cancelado', 'updated_at' => now()]);
+    }
+
     /** @return Collection<int, Impresion> */
     public function pendientes(): Collection
     {

@@ -184,6 +184,16 @@
                                         <x-filament::button size="xs" color="success" wire:click="confirmarTransferenciaPendiente">Cobrar</x-filament::button>
                                         <x-filament::button size="xs" color="gray" wire:click="cancelarTransferenciaPendiente">Cancelar</x-filament::button>
                                     </div>
+                                @elseif ($anulandoPendienteId === $p->id)
+                                    {{-- Anular no es cobrar de menos: es decir que el pedido
+                                         no se hizo. Por eso pide confirmación. --}}
+                                    <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+                                        <span style="font-size:.8rem; font-weight:700; color:#ef4444;">
+                                            ¿Anular este pedido? Deja de aparecer para cobrar.
+                                        </span>
+                                        <x-filament::button size="xs" color="danger" wire:click="confirmarAnularPendiente">Sí, anular</x-filament::button>
+                                        <x-filament::button size="xs" color="gray" wire:click="cancelarAnulacionPendiente">No</x-filament::button>
+                                    </div>
                                 @elseif ($cobrandoMixtoId === $p->id)
                                     {{-- Reparto del pago entre varios métodos. Los montos usan
                                          los mismos campos del carrito; el banco va aparte. --}}
@@ -232,6 +242,7 @@
                                         <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
                                         <x-filament::button size="xs" color="primary" outlined wire:click="pedirMixtoPendiente({{ $p->id }})">Mixto</x-filament::button>
                                         <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
+                                        <x-filament::button size="xs" color="danger" outlined wire:click="pedirAnularPendiente({{ $p->id }})">Anular</x-filament::button>
                                     </div>
                                 @endif
                             </div>
