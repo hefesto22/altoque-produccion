@@ -309,6 +309,67 @@ it('cobrar, imprimir y cerrar turno son de la caja, no del salón', function () 
         ->and(Acceso::puede('ViewAny:Venta'))->toBeFalse(); // no ve el histórico
 });
 
+it('un pendiente se puede cobrar repartido entre efectivo, tarjeta y transferencia', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    if (Cai::query()->count() === 0) {
+        Cai::factory()->create();
+    }
+
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $producto = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 100.00]);
+    $venta = app(VentaService::class)->registrarPendiente(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        'llevar',
+    );
+
+    $pos = Livewire::actingAs($cajero)->test(PuntoDeVenta::class)
+        ->call('pedirMixtoPendiente', $venta->id)
+        ->set('mixtoEfectivo', '40')
+        ->set('mixtoTarjeta', '30')
+        ->set('mixtoTransfer', '30')
+        ->set('cobroBanco', 'Banco de Occidente')
+        ->call('confirmarMixtoPendiente');
+
+    $venta->refresh();
+
+    expect($venta->pagada)->toBeTrue()
+        ->and($venta->forma_pago)->toBe('mixto')
+        ->and($venta->pagos()->sum('monto'))->toEqual(100.00)
+        ->and($venta->pagos()->pluck('metodo')->sort()->values()->all())
+        ->toBe(['efectivo', 'tarjeta', 'transferencia'])
+        // El formulario se cierra solo cuando el cobro salió bien.
+        ->and($pos->get('cobrandoMixtoId'))->toBeNull();
+});
+
+it('el mixto de un pendiente no cobra si los montos no cuadran', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    if (Cai::query()->count() === 0) {
+        Cai::factory()->create();
+    }
+
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $producto = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 100.00]);
+    $venta = app(VentaService::class)->registrarPendiente(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $cajero->id,
+        'llevar',
+    );
+
+    Livewire::actingAs($cajero)->test(PuntoDeVenta::class)
+        ->call('pedirMixtoPendiente', $venta->id)
+        ->set('mixtoEfectivo', '40')
+        ->call('confirmarMixtoPendiente');
+
+    expect($venta->fresh()->pagada)->toBeFalse();
+});
+
 it('el mesero no puede cobrar ni facturar desde la tablet', function () {
     $mesero = usuarioDeRol('mesero');
 
@@ -373,6 +434,30 @@ it('la poda diaria nunca borra un pendiente', function () {
 
     expect($podables)->toContain($viejoImpreso->id)
         ->and($podables)->not->toContain($viejoPendiente->id);
+});
+
+it('la cola muestra el nombre del cliente para poder reimprimir el correcto', function () {
+    $mesero = usuarioDeRol('mesero');
+    Auth::login($mesero);
+
+    $producto = Producto::factory()->proteina()->create(['nombre' => 'Pollo', 'precio' => 100.00]);
+    $venta = app(VentaService::class)->registrarPendiente(
+        [new LineaVenta($producto->id, 'Pollo', 100.00, 1, gravaIsv: false)],
+        $mesero->id,
+        'llevar',
+        nombreCliente: 'Doña Marta',
+    );
+    $comanda = app(ComandaService::class)->crear($venta, 'llevar', [['nombre' => 'Pollo', 'cantidad' => 1, 'detalle' => []]]);
+
+    app(ColaImpresionService::class)->enviar(
+        'comanda',
+        $comanda->id,
+        "Orden {$venta->numero_orden} · ".$comanda->tipoLabel(),
+        mb_strtoupper((string) $venta->nombre_orden).' · 1 plato(s)',
+    );
+
+    // El nombre va PRIMERO: es lo que identifica el pedido en la caja.
+    expect(Impresion::query()->firstOrFail()->detalle)->toBe('DOÑA MARTA · 1 plato(s)');
 });
 
 it('el ticket de comanda dice quién atendió el pedido', function () {

@@ -152,6 +152,9 @@
                             <div style="flex:1 1 14rem; min-width:11rem; font-size:.8rem; font-weight:700;">
                                 {{ $r->etiqueta }}
                                 <span style="font-weight:600; opacity:.6;">· {{ $r->tipoLabel() }}</span>
+                                @if ($r->detalle)
+                                    <div style="font-size:.72rem; font-weight:600; opacity:.7;">{{ $r->detalle }}</div>
+                                @endif
                             </div>
                             <span style="font-size:.72rem; opacity:.55;">{{ $r->impreso_at?->format('h:i a') }}</span>
                             <x-filament::button size="xs" color="gray" outlined

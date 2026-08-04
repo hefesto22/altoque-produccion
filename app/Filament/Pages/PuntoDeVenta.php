@@ -209,6 +209,9 @@ class PuntoDeVenta extends Page
     /** Forma de pago que se está cobrando con banco (solo transferencia). */
     public string $cobroFormaPendiente = '';
 
+    /** Pendiente al que se le está repartiendo el pago entre varios métodos. */
+    public ?int $cobrandoMixtoId = null;
+
     /** @var array<int, int> ids de productos con alerta de reposición activa */
     public array $productosBajos = [];
 
@@ -1019,6 +1022,7 @@ class PuntoDeVenta extends Page
         $this->costoViaje = '';
         $this->cobrandoPendienteId = null;
         $this->cobrandoTransferId = null;
+        $this->cobrandoMixtoId = null;
         $this->cobroFormaPendiente = '';
         $this->cobroBanco = '';
     }
@@ -1120,6 +1124,17 @@ class PuntoDeVenta extends Page
     }
 
     // ── Totales en vivo ─────────────────────────────────────────────────
+
+    /**
+     * Detalle que ve la caja en la cola. El nombre del cliente va PRIMERO: es
+     * lo que identifica el pedido cuando alguien pide que se lo reimpriman.
+     */
+    private function detalleCola(?string $nombre, string $resto): string
+    {
+        $nombre = mb_strtoupper(trim((string) $nombre));
+
+        return $nombre !== '' ? $nombre.' · '.$resto : $resto;
+    }
 
     /** @return array<int, LineaVenta> */
     private function lineasDelCarrito(): array
@@ -1230,30 +1245,46 @@ class PuntoDeVenta extends Page
     }
 
     /**
+     * El banco del pago mixto. Los montos se comparten entre el carrito y el
+     * cobro de un pendiente, pero el banco vive en campos distintos.
+     */
+    private function bancoMixto(): string
+    {
+        return trim($this->cobrandoMixtoId !== null ? $this->cobroBanco : $this->banco);
+    }
+
+    /**
      * Filas de pago para el service: null si el cobro es de un solo método.
-     * El banco elegido aplica a la porción por transferencia.
+     * El banco elegido aplica a la porción por tarjeta y transferencia.
+     *
+     * @param string|null $forma forma de pago a evaluar; null = la del carrito
      *
      * @return array<int, array{metodo: string, banco?: string|null, monto: float}>|null
      */
-    private function pagosMixtos(): ?array
+    private function pagosMixtos(?string $forma = null): ?array
     {
-        if ($this->formaPago !== 'mixto') {
+        if (($forma ?? $this->formaPago) !== 'mixto') {
             return null;
         }
 
         $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
+        $banco = $this->bancoMixto() !== '' ? $this->bancoMixto() : null;
 
         return [
             ['metodo' => 'efectivo', 'monto' => $n($this->mixtoEfectivo)],
-            ['metodo' => 'tarjeta', 'banco' => trim($this->banco) !== '' ? trim($this->banco) : null, 'monto' => $n($this->mixtoTarjeta)],
-            ['metodo' => 'transferencia', 'banco' => trim($this->banco) !== '' ? trim($this->banco) : null, 'monto' => $n($this->mixtoTransfer)],
+            ['metodo' => 'tarjeta', 'banco' => $banco, 'monto' => $n($this->mixtoTarjeta)],
+            ['metodo' => 'transferencia', 'banco' => $banco, 'monto' => $n($this->mixtoTransfer)],
         ];
     }
 
-    /** Valida el pago mixto contra el total antes de cobrar. Notifica si falla. */
-    private function pagoMixtoValido(float $total): bool
+    /**
+     * Valida el pago mixto contra el total antes de cobrar. Notifica si falla.
+     *
+     * @param string|null $forma forma de pago a evaluar; null = la del carrito
+     */
+    private function pagoMixtoValido(float $total, ?string $forma = null): bool
     {
-        if ($this->formaPago !== 'mixto') {
+        if (($forma ?? $this->formaPago) !== 'mixto') {
             return true;
         }
 
@@ -1271,7 +1302,7 @@ class PuntoDeVenta extends Page
 
         $n = static fn (string $v): float => is_numeric($v) ? round((float) $v, 2) : 0.0;
 
-        if ($n($this->mixtoTransfer) > 0 && trim($this->banco) === '') {
+        if ($n($this->mixtoTransfer) > 0 && $this->bancoMixto() === '') {
             Notification::make()->title('Elegí el banco de la transferencia')->warning()->seconds(3)->send();
 
             return false;
@@ -1321,7 +1352,7 @@ class PuntoDeVenta extends Page
                 'comanda',
                 (int) $comanda->id,
                 "Orden {$venta->numero_orden} · ".$comanda->tipoLabel(),
-                $platos.' plato(s)'.(trim($this->domNombre) !== '' ? ' · '.trim($this->domNombre) : ''),
+                $this->detalleCola($venta->nombre_orden, $platos.' plato(s)'),
             );
 
             if ($url !== null) {
@@ -1376,8 +1407,57 @@ class PuntoDeVenta extends Page
         abort_unless(Acceso::puede('Cobrar'), 403);
 
         $this->cobrandoTransferId = $ventaId;
+        $this->cobrandoMixtoId = null;
         $this->cobroFormaPendiente = $forma;
         $this->cobroBanco = '';
+    }
+
+    /**
+     * Abre el reparto de pago de un pendiente entre efectivo, tarjeta y
+     * transferencia. Los montos se llevan en los mismos campos del carrito.
+     */
+    public function pedirMixtoPendiente(int $ventaId): void
+    {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
+        $this->cobrandoMixtoId = $ventaId;
+        $this->cobrandoTransferId = null;
+        $this->mixtoEfectivo = '';
+        $this->mixtoTarjeta = '';
+        $this->mixtoTransfer = '';
+        $this->cobroBanco = '';
+    }
+
+    public function cancelarMixtoPendiente(): void
+    {
+        $this->cobrandoMixtoId = null;
+        $this->mixtoEfectivo = '';
+        $this->mixtoTarjeta = '';
+        $this->mixtoTransfer = '';
+        $this->cobroBanco = '';
+    }
+
+    /** Confirma el cobro repartido. La validación vive en ejecutarCobroPendiente. */
+    public function confirmarMixtoPendiente(): void
+    {
+        abort_unless(Acceso::puede('Cobrar'), 403);
+
+        if ($this->cobrandoMixtoId === null) {
+            return;
+        }
+
+        $ok = $this->ejecutarCobroPendiente(
+            $this->cobrandoMixtoId,
+            null,
+            'Consumidor Final',
+            'mixto',
+            false,
+            $this->cobroBanco,
+        );
+
+        if ($ok) {
+            $this->cancelarMixtoPendiente();
+        }
     }
 
     public function cancelarTransferenciaPendiente(): void
@@ -1444,7 +1524,7 @@ class PuntoDeVenta extends Page
             return false;
         }
 
-        if ($formaPago === 'mixto' && ! $this->pagoMixtoValido((float) $venta->total)) {
+        if ($formaPago === 'mixto' && ! $this->pagoMixtoValido((float) $venta->total, $formaPago)) {
             return false;
         }
 
@@ -1457,7 +1537,7 @@ class PuntoDeVenta extends Page
                 $formaPago,
                 $detallada,
                 $formaPago === 'transferencia' ? $banco : null,
-                $formaPago === 'mixto' ? $this->pagosMixtos() : null,
+                $formaPago === 'mixto' ? $this->pagosMixtos($formaPago) : null,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->seconds(3)->send();
@@ -1472,7 +1552,7 @@ class PuntoDeVenta extends Page
             'factura',
             (int) $factura->id,
             "Factura {$factura->numero} · Orden {$factura->venta->numero_orden}",
-            'L. '.number_format((float) $factura->total, 2),
+            $this->detalleCola($factura->venta->nombre_orden, 'L. '.number_format((float) $factura->total, 2)),
         );
 
         if ($url !== null) {
@@ -1684,7 +1764,7 @@ class PuntoDeVenta extends Page
             $comanda !== null ? 'documentos' : 'factura',
             (int) $factura->id,
             "Factura {$factura->numero} · Orden {$factura->venta->numero_orden}",
-            'L. '.number_format((float) $factura->total, 2),
+            $this->detalleCola($factura->venta->nombre_orden, 'L. '.number_format((float) $factura->total, 2)),
         );
 
         if ($url !== null) {

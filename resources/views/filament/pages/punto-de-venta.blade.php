@@ -184,13 +184,53 @@
                                         <x-filament::button size="xs" color="success" wire:click="confirmarTransferenciaPendiente">Cobrar</x-filament::button>
                                         <x-filament::button size="xs" color="gray" wire:click="cancelarTransferenciaPendiente">Cancelar</x-filament::button>
                                     </div>
+                                @elseif ($cobrandoMixtoId === $p->id)
+                                    {{-- Reparto del pago entre varios métodos. Los montos usan
+                                         los mismos campos del carrito; el banco va aparte. --}}
+                                    @php($faltaMixto = round((float) $p->total - $this->mixtoSuma, 2))
+                                    <div style="flex:1 1 100%; display:flex; gap:.4rem; align-items:flex-end; flex-wrap:wrap; padding-top:.4rem;">
+                                        @foreach (['mixtoEfectivo' => 'Efectivo', 'mixtoTarjeta' => 'Tarjeta', 'mixtoTransfer' => 'Transf.'] as $campo => $lbl)
+                                            <div style="width:7.5rem;">
+                                                <label style="display:block; font-size:.68rem; opacity:.6; margin-bottom:.15rem;">{{ $lbl }}</label>
+                                                <x-filament::input.wrapper>
+                                                    <x-filament::input type="number" step="0.01" min="0" wire:model.live.debounce.600ms="{{ $campo }}" placeholder="0.00" />
+                                                </x-filament::input.wrapper>
+                                            </div>
+                                        @endforeach
+
+                                        @if (is_numeric($mixtoTransfer) && (float) $mixtoTransfer > 0)
+                                            <div style="width:11rem;">
+                                                <label style="display:block; font-size:.68rem; opacity:.6; margin-bottom:.15rem;">Banco</label>
+                                                <x-filament::input.wrapper>
+                                                    <x-filament::input.select wire:model="cobroBanco">
+                                                        <option value="">— Banco —</option>
+                                                        @foreach (config('empresa.bancos', []) as $b)
+                                                            <option value="{{ $b }}">{{ $b }}</option>
+                                                        @endforeach
+                                                    </x-filament::input.select>
+                                                </x-filament::input.wrapper>
+                                            </div>
+                                        @endif
+
+                                        <span style="font-size:.78rem; font-weight:700; padding-bottom:.45rem;
+                                                     color: {{ abs($faltaMixto) < 0.01 ? '#16a34a' : ($faltaMixto < 0 ? '#dc2626' : '#d97706') }};">
+                                            @if (abs($faltaMixto) < 0.01) ✓ Cuadra
+                                            @elseif ($faltaMixto > 0) Faltan L. {{ number_format($faltaMixto, 2) }}
+                                            @else Se pasó L. {{ number_format(abs($faltaMixto), 2) }}
+                                            @endif
+                                        </span>
+
+                                        <div style="display:flex; gap:.3rem; padding-bottom:.35rem;">
+                                            <x-filament::button size="xs" color="success" wire:click="confirmarMixtoPendiente">Cobrar</x-filament::button>
+                                            <x-filament::button size="xs" color="gray" wire:click="cancelarMixtoPendiente">Cancelar</x-filament::button>
+                                        </div>
+                                    </div>
                                 @else
                                     <div style="display:flex; gap:.3rem; flex-wrap:wrap;">
                                         <x-filament::button size="xs" color="success" wire:click="cobrarPendienteCF({{ $p->id }}, 'efectivo')">Efectivo</x-filament::button>
-                                        @if ($p->tipo_orden === 'llevar')
-                                            <x-filament::button size="xs" color="info" wire:click="cobrarPendienteCF({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
-                                        @endif
+                                        <x-filament::button size="xs" color="info" wire:click="cobrarPendienteCF({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
                                         <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
+                                        <x-filament::button size="xs" color="primary" outlined wire:click="pedirMixtoPendiente({{ $p->id }})">Mixto</x-filament::button>
                                         <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
                                     </div>
                                 @endif
