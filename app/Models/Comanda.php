@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\URL;
  * @property int $venta_id
  * @property string $numero
  * @property string $tipo
+ * @property bool $es_ampliacion
  * @property string $estado
  * @property string|null $cliente_nombre
  * @property string|null $cliente_telefono
@@ -38,6 +39,7 @@ class Comanda extends Model
         'venta_id',
         'numero',
         'tipo',
+        'es_ampliacion',
         'estado',
         'items',
         'cliente_nombre',
@@ -52,9 +54,10 @@ class Comanda extends Model
     protected function casts(): array
     {
         return [
-            'items'        => 'array',
-            'listo_at'     => 'datetime',
-            'entregado_at' => 'datetime',
+            'items'         => 'array',
+            'es_ampliacion' => 'boolean',
+            'listo_at'      => 'datetime',
+            'entregado_at'  => 'datetime',
         ];
     }
 
@@ -62,6 +65,15 @@ class Comanda extends Model
     public function venta(): BelongsTo
     {
         return $this->belongsTo(Venta::class);
+    }
+
+    /**
+     * Etiqueta corta para el ticket y el KDS. Una ampliación NO es un pedido
+     * nuevo: es lo que se le sumó a una orden que ya estaba en cocina.
+     */
+    public function esAmpliacion(): bool
+    {
+        return $this->es_ampliacion;
     }
 
     public function esDomicilio(): bool

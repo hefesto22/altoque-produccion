@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Domain\Exceptions\CuentaNoAmpliableException;
 use App\Domain\Exceptions\RestauranteException;
 use App\Domain\ValueObjects\ComponenteLinea;
 use App\Domain\ValueObjects\LineaVenta;
@@ -215,6 +216,17 @@ class PuntoDeVenta extends Page
     /** Pendiente al que se le está confirmando la anulación. */
     public ?int $anulandoPendienteId = null;
 
+    /**
+     * Cuenta ABIERTA a la que se le está agregando (modo AGREGANDO).
+     *
+     * Mientras esté seteada, el POS no cobra ni manda un pedido nuevo: todo
+     * lo que se pique se le SUMA a esa orden y se cobra al final, junto.
+     */
+    public ?int $agregandoAId = null;
+
+    /** Etiqueta de la cuenta abierta (LOC-2 · MAURICIO) para el banner. */
+    public string $agregandoEtiqueta = '';
+
     /** @var array<int, int> ids de productos con alerta de reposición activa */
     public array $productosBajos = [];
 
@@ -358,6 +370,23 @@ class PuntoDeVenta extends Page
     public function puedeCobrar(): bool
     {
         return Acceso::puede('Cobrar');
+    }
+
+    /**
+     * Agregar a una cuenta abierta es del SALÓN, no de la caja: quien está
+     * en la mesa cuando el cliente pide la segunda bebida es el mesero. Por
+     * eso es permiso propio y no `Cobrar` — el mesero suma a la cuenta pero
+     * sigue sin ver ni tocar el dinero.
+     */
+    public function puedeAgregarACuenta(): bool
+    {
+        return Acceso::puede('AgregarACuenta');
+    }
+
+    /** Ve la lista de cuentas abiertas quien puede cobrarlas o ampliarlas. */
+    public function puedeVerPendientes(): bool
+    {
+        return $this->puedeCobrar() || $this->puedeAgregarACuenta();
     }
 
     public function abrirTurno(): void
@@ -1029,6 +1058,9 @@ class PuntoDeVenta extends Page
         $this->anulandoPendienteId = null;
         $this->cobroFormaPendiente = '';
         $this->cobroBanco = '';
+        // OJO: el modo AGREGANDO no se toca acá. "Vaciar" borra lo picado
+        // pero el mesero sigue parado en la misma cuenta abierta; del modo
+        // se sale con "Cancelar" o al agregar con éxito.
     }
 
     /**
@@ -1084,7 +1116,7 @@ class PuntoDeVenta extends Page
      * @param bool $entregada La comanda nace ya entregada (local cobrado):
      *                        imprime su ticket pero no ensucia el KDS.
      */
-    private function enviarAComanda(Venta $venta, bool $incluirLocal = false, bool $entregada = false): ?Comanda
+    private function enviarAComanda(Venta $venta, bool $incluirLocal = false, bool $entregada = false, bool $esAmpliacion = false): ?Comanda
     {
         if ($this->tipoServicio === 'local' && ! $incluirLocal) {
             return null; // ventas de local sin comanda (flag desactivado)
@@ -1106,7 +1138,7 @@ class PuntoDeVenta extends Page
             'nota'     => $i['nota'] ?? '',
         ], array_values($this->carrito));
 
-        $comanda = app(ComandaService::class)->crear($venta, $this->tipoServicio, $items, $datos, $entregada);
+        $comanda = app(ComandaService::class)->crear($venta, $this->tipoServicio, $items, $datos, $entregada, $esAmpliacion);
 
         $etiquetaTipo = match ($this->tipoServicio) {
             'domicilio' => 'Domicilio',
@@ -1118,9 +1150,16 @@ class PuntoDeVenta extends Page
         // ninguna impresora, queda esperando a que la caja la saque.
         $imprimeAca = Acceso::puede('ImprimirDirecto');
 
+        $titulo = match (true) {
+            ! $imprimeAca => 'Comanda a la cola de la caja',
+            $esAmpliacion => 'Agregado enviado a cocina',
+            $entregada    => 'Comanda impresa',
+            default       => 'Enviado a cocina',
+        };
+
         Notification::make()
-            ->title($imprimeAca ? ($entregada ? 'Comanda impresa' : 'Enviado a cocina') : 'Comanda a la cola de la caja')
-            ->body("Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
+            ->title($titulo)
+            ->body(($esAmpliacion ? '+ ' : '')."Comanda {$comanda->numero} · {$etiquetaTipo} · ".count($items).' plato(s)')
             ->success()
             ->seconds(3)->send();
 
@@ -1207,6 +1246,10 @@ class PuntoDeVenta extends Page
     public function facturarConsumidorFinal(): void
     {
         abort_unless(Acceso::puede('Cobrar'), 403);
+
+        if ($this->bloqueadoPorAgregar()) {
+            return;
+        }
 
         // detallada = null → manda el toggle "Detallar productos por defecto"
         // de Datos de la Empresa. El restaurante pidió que las facturas a
@@ -1323,6 +1366,10 @@ class PuntoDeVenta extends Page
      */
     public function pagarDespues(): void
     {
+        if ($this->bloqueadoPorAgregar()) {
+            return;
+        }
+
         if ($this->carrito === [] || ! $this->turnoAbierto || ! $this->domicilioValido(paraCocina: true)) {
             if ($this->carrito === []) {
                 Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
@@ -1379,12 +1426,179 @@ class PuntoDeVenta extends Page
         $this->limpiar();
     }
 
+    // ── Agregar a una cuenta abierta ────────────────────────────────────
+
+    /**
+     * En modo AGREGANDO el carrito es de una cuenta ajena: cobrarlo o
+     * mandarlo aparte partiría en dos lo que el cliente ve como una sola
+     * cuenta. Se avisa y no se hace.
+     */
+    private function bloqueadoPorAgregar(): bool
+    {
+        if ($this->agregandoAId === null) {
+            return false;
+        }
+
+        Notification::make()
+            ->title('Estás agregando a '.$this->agregandoEtiqueta)
+            ->body('Tocá "Agregar a la cuenta" para sumarlo, o "Cancelar" si esto es un pedido aparte.')
+            ->warning()->seconds(4)->send();
+
+        return true;
+    }
+
+    /**
+     * Entra en modo AGREGANDO: lo que se pique se le suma a esta cuenta.
+     *
+     * El carrito NO se toca — si el mesero ya venía picando la bebida, esas
+     * líneas son justo las que va a agregar, y el banner del carrito dice a
+     * qué orden van antes de confirmar.
+     *
+     * El tipo de orden y los datos del cliente se copian de la cuenta: lo
+     * agregado viaja igual que lo original (un domicilio no cambia de casa a
+     * media entrega) y el ticket de cocina sale con el mismo nombre. El
+     * costo de viaje NO se repite: ya se cobró en la orden original.
+     */
+    public function iniciarAgregar(int $ventaId): void
+    {
+        abort_unless(Acceso::puede('AgregarACuenta'), 403);
+
+        $venta = Venta::pendientes()->with('comanda')->find($ventaId);
+
+        if ($venta === null) {
+            Notification::make()->title('Esa cuenta ya no está abierta')->warning()->seconds(3)->send();
+
+            return;
+        }
+
+        $this->agregandoAId = (int) $venta->id;
+        // Sin trim() con separador multibyte: se arma condicional para que
+        // un nombre raro no termine cortado a media letra en el banner.
+        $this->agregandoEtiqueta = ($venta->nombre_orden ?? '') !== ''
+            ? $venta->numero_orden.' · '.$venta->nombre_orden
+            : $venta->numero_orden;
+
+        // Modales de cobro abiertos: no aplican mientras se agrega.
+        $this->cobrandoTransferId = null;
+        $this->cobrandoMixtoId = null;
+        $this->anulandoPendienteId = null;
+
+        $comanda = $venta->comanda;
+
+        $this->tipoServicio = $venta->tipo_orden;
+        $this->domNombre = (string) ($comanda?->cliente_nombre ?: $venta->nombre_orden ?: '');
+        $this->domTelefono = (string) ($comanda?->cliente_telefono ?? '');
+        $this->domIdentidad = (string) ($comanda?->cliente_identidad ?? '');
+        $this->domDireccion = (string) ($comanda?->cliente_direccion ?? '');
+        $this->costoViaje = '';
+    }
+
+    /** Sale del modo AGREGANDO sin tocar el carrito: lo picado no se pierde. */
+    public function cancelarAgregar(): void
+    {
+        $this->agregandoAId = null;
+        $this->agregandoEtiqueta = '';
+    }
+
+    /**
+     * Suma el carrito a la cuenta abierta y manda a cocina SOLO lo nuevo,
+     * marcado como agregado. Acá no se emite nada fiscal: la cuenta se
+     * sigue cobrando de una sola vez desde "Pedidos por cobrar".
+     */
+    public function agregarACuenta(): void
+    {
+        abort_unless(Acceso::puede('AgregarACuenta'), 403);
+
+        if ($this->agregandoAId === null) {
+            return;
+        }
+
+        if ($this->carrito === []) {
+            Notification::make()->title('No hay nada que agregar')->warning()->seconds(3)->send();
+
+            return;
+        }
+
+        if (! $this->domicilioValido(paraCocina: true)) {
+            return;
+        }
+
+        $venta = Venta::pendientes()->find($this->agregandoAId);
+
+        if ($venta === null) {
+            Notification::make()
+                ->title('Esa cuenta ya se cerró')
+                ->body('La caja la cobró o la anuló mientras tanto. Lo del carrito queda intacto: cobralo como pedido aparte.')
+                ->warning()->seconds(6)->send();
+
+            $this->cancelarAgregar();
+
+            return;
+        }
+
+        try {
+            $venta = app(VentaService::class)->agregarACuenta(
+                $venta,
+                $this->lineasDelCarrito(),
+                (int) Auth::id(),
+            );
+        } catch (CuentaNoAmpliableException $e) {
+            // Perdió la carrera contra el cobro: la cuenta ya se cerró.
+            Notification::make()->title('No se pudo agregar')->body($e->getMessage())->danger()->seconds(6)->send();
+            $this->cancelarAgregar();
+
+            return;
+        } catch (Throwable $e) {
+            report($e);
+            Notification::make()->title('No se pudo agregar')
+                ->body('Volvé a intentarlo. El carrito no se perdió.')
+                ->danger()->seconds(5)->send();
+
+            return;
+        }
+
+        $platos = count($this->carrito);
+        $comanda = $this->enviarAComanda($venta, incluirLocal: true, esAmpliacion: true);
+
+        // Igual que un pedido nuevo: si esta máquina no tiene térmica, el
+        // ticket de lo agregado queda en la cola y lo saca la caja.
+        $esperaEnCaja = false;
+
+        if ($comanda !== null) {
+            $url = app(ColaImpresionService::class)->enviar(
+                'comanda',
+                (int) $comanda->id,
+                "+ Agregado a {$venta->numero_orden} · ".$comanda->tipoLabel(),
+                $this->detalleCola($venta->nombre_orden, $platos.' plato(s)'),
+            );
+
+            if ($url !== null) {
+                $this->dispatch('imprimir-comanda', url: $url);
+            } else {
+                $esperaEnCaja = true;
+            }
+        }
+
+        $total = number_format((float) $venta->total, 2);
+
+        Notification::make()
+            ->title("Agregado a {$venta->numero_orden}")
+            ->body($esperaEnCaja
+                ? "La caja imprime lo agregado y lo pasa a cocina. La cuenta va en L. {$total}."
+                : "La cuenta va en L. {$total} y se cobra toda junta al final.")
+            ->success()
+            ->seconds(4)->send();
+
+        $this->cancelarAgregar();
+        $this->limpiar();
+    }
+
     /** @return array<int, Venta> Pedidos pendientes de pago (cualquier cajero: una sola caja). */
     public function getPedidosPendientesProperty(): array
     {
-        // El mesero no cobra: la lista entera desaparece de su POS (el bloque
-        // del blade solo se dibuja cuando hay pendientes).
-        if (! Acceso::puede('Cobrar')) {
+        // Sin permiso de cobrar NI de agregar, la lista entera desaparece
+        // del POS (el bloque del blade solo se dibuja cuando hay pendientes).
+        if (! $this->puedeVerPendientes()) {
             return [];
         }
 
@@ -1637,6 +1851,10 @@ class PuntoDeVenta extends Page
     public function abrirFactura(): void
     {
         abort_unless(Acceso::puede('Cobrar'), 403);
+
+        if ($this->bloqueadoPorAgregar()) {
+            return;
+        }
 
         if ($this->carrito === []) {
             Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();

@@ -282,10 +282,13 @@ class CotizacionResource extends Resource
                 SelectFilter::make('estado')->options(Cotizacion::ESTADOS),
             ])
             ->recordActions([
-                Action::make('pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->url(fn (Cotizacion $record): string => $record->urlPdf(), shouldOpenInNewTab: true),
+                // HTML, no PDF: abre al instante. El PDF levantaba Chromium por
+                // request (~3 s de pantalla en blanco). Descargar lo resuelve el
+                // botón de la propia página con el print del navegador.
+                Action::make('ver')
+                    ->label('Ver')
+                    ->icon('heroicon-o-eye')
+                    ->url(fn (Cotizacion $record): string => $record->urlCliente(), shouldOpenInNewTab: true),
                 Action::make('whatsapp')
                     ->label('WhatsApp')
                     ->icon('heroicon-o-chat-bubble-left-right')

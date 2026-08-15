@@ -254,6 +254,7 @@ return [
         'FacturarEvento'  => 'Facturar eventos (desde cotización)',
         'VerAvisoPago'    => 'Ver el aviso del pago mensual del sistema',
         'ImprimirDirecto' => 'Imprimir directo en la térmica (compu de la caja)',
+        'AgregarACuenta'  => 'Agregar platos a una cuenta abierta (salón)',
     ],
 
     /*

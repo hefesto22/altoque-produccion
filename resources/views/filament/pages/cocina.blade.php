@@ -36,9 +36,16 @@
                                     <span style="font-weight:900; font-size:1.5rem;">{{ $c->venta?->numero_orden ?? $c->numero }}</span>
                                     <div style="font-size:.65rem; opacity:.6;">{{ $c->numero }}</div>
                                 </div>
-                                <x-filament::badge :color="match ($c->tipo) { 'domicilio' => 'info', 'local' => 'warning', default => 'gray' }">
-                                    {{ $c->tipoLabel() }}
-                                </x-filament::badge>
+                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:.25rem;">
+                                    <x-filament::badge :color="match ($c->tipo) { 'domicilio' => 'info', 'local' => 'warning', default => 'gray' }">
+                                        {{ $c->tipoLabel() }}
+                                    </x-filament::badge>
+                                    {{-- No es un pedido nuevo: es lo que se le sumó a esa
+                                         misma orden (otra bebida, algo que faltó). --}}
+                                    @if ($c->esAmpliacion())
+                                        <x-filament::badge color="success">+ Agregado</x-filament::badge>
+                                    @endif
+                                </div>
                             </div>
 
                             <div style="font-size:.72rem; opacity:.7;">{{ $c->created_at->diffForHumans() }}</div>

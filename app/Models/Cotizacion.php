@@ -165,16 +165,36 @@ class Cotizacion extends Model
         return ($this->created_at ?? now())->copy()->addDays($this->validez_dias);
     }
 
-    /** URL firmada del PDF — pública pero no adivinable (compartible). */
+    /**
+     * URL firmada del PDF (lo arma Chromium, ~3 s).
+     *
+     * Ya NO se le ofrece a nadie: la vista del cliente resuelve el guardado
+     * con el diálogo de impresión del teléfono, que no gasta CPU del servidor
+     * ni deja un archivo por cotización en el disco. Queda como endpoint por
+     * si alguna vez hace falta el archivo desde el servidor.
+     */
     public function urlPdf(): string
     {
         return URL::signedRoute('cotizaciones.pdf', ['cotizacion' => $this->id]);
     }
 
-    /** Link de WhatsApp con el mensaje y la URL del PDF para el cliente. */
+    /**
+     * URL firmada de la cotización para EL CLIENTE (la que va por WhatsApp).
+     *
+     * Es el HTML, no el PDF: abre al instante en el teléfono. El PDF levanta
+     * un Chromium por request (~3 s, y 500 si dos personas abren a la vez) y
+     * el cliente se queda viendo una pantalla en blanco. La página lleva su
+     * propio botón de descarga para quien quiera el archivo.
+     */
+    public function urlCliente(): string
+    {
+        return URL::signedRoute('cotizaciones.ver', ['cotizacion' => $this->id, 'cliente' => 1]);
+    }
+
+    /** Link de WhatsApp con el mensaje y la cotización para el cliente. */
     public function urlWhatsApp(): string
     {
-        $mensaje = "Cotización {$this->numero} — {$this->cliente_nombre}. Descárgala aquí: ".$this->urlPdf();
+        $mensaje = "Cotización {$this->numero} — {$this->cliente_nombre}. Vela aquí: ".$this->urlCliente();
 
         return 'https://wa.me/?text='.rawurlencode($mensaje);
     }

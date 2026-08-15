@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Pos;
 
 use App\Domain\Contracts\CalculaImpuestos;
+use App\Domain\Exceptions\CuentaNoAmpliableException;
 use App\Domain\Exceptions\PagosNoCuadranException;
 use App\Domain\Exceptions\PedidoNoAnulableException;
 use App\Domain\Exceptions\VentaSinLineasException;
@@ -153,6 +154,77 @@ final class VentaService
             $venta->update(['numero_recibo' => sprintf('R-%08d', $correlativo)]);
 
             return $venta;
+        });
+    }
+
+    /**
+     * Agrega líneas a una cuenta ABIERTA (pedido pendiente de pago): el
+     * cliente pidió otra bebida o se le olvidó algo y lo pide después.
+     *
+     * Se suman a la MISMA venta, no se crea otra: al cobrar sale UNA sola
+     * factura con todo, que es lo que el cliente espera y lo que cuadra
+     * fiscalmente. Mientras el pedido está pendiente no se consumió ningún
+     * correlativo CAI, así que la venta todavía se puede tocar.
+     *
+     * El desglose se SUMA en vez de recalcularse desde cero: CalculadorVenta
+     * acumula línea por línea redondeando cada una, así que sumar el resumen
+     * de lo nuevo da EXACTAMENTE lo mismo que recalcular todas las líneas
+     * juntas — cuadra al centavo y no hay que rehidratar los items viejos.
+     *
+     * `vendida_at` no se toca: la cuenta conserva su lugar en la fila de
+     * "Pedidos por cobrar", que se ordena por hora de apertura.
+     *
+     * @param array<int, LineaVenta> $lineas
+     *
+     * @throws VentaSinLineasException
+     * @throws CuentaNoAmpliableException si ya se cobró o está anulada
+     */
+    public function agregarACuenta(Venta $venta, array $lineas, int $usuarioId): Venta
+    {
+        $this->guardarContraVacio($lineas);
+
+        return DB::transaction(function () use ($venta, $lineas, $usuarioId): Venta {
+            // Bloqueo: la caja puede estar cobrando esta misma cuenta en el
+            // mismo segundo desde otra pantalla. O se agrega, o se cobra.
+            $fresca = Venta::query()->whereKey($venta->id)->lockForUpdate()->firstOrFail();
+
+            if ($fresca->pagada) {
+                throw new CuentaNoAmpliableException('ya se cobró — cobrá lo nuevo como pedido aparte.');
+            }
+
+            if ($fresca->anulada) {
+                throw new CuentaNoAmpliableException('ese pedido está anulado.');
+            }
+
+            $resumen = $this->calculador->calcular($lineas);
+
+            $fresca->items()->createMany($this->filasDeItems($lineas));
+
+            $fresca->update([
+                'gravado'        => round((float) $fresca->gravado + $resumen->gravado, 2),
+                'exento'         => round((float) $fresca->exento + $resumen->exento, 2),
+                'isv'            => round((float) $fresca->isv + $resumen->isv, 2),
+                'total'          => round((float) $fresca->total + $resumen->total, 2),
+                'subtotal_lista' => round((float) $fresca->subtotal_lista + $resumen->subtotalLista, 2),
+                'descuento'      => round((float) $fresca->descuento + $resumen->descuento, 2),
+            ]);
+
+            // Que una cuenta abierta crezca es sensible (el cliente paga al
+            // final): queda quién agregó qué y en cuánto quedó el total.
+            activity()
+                ->performedOn($fresca)
+                ->withProperties([
+                    'usuario_id' => $usuarioId,
+                    'agregado'   => round($resumen->total, 2),
+                    'total'      => round((float) $fresca->total, 2),
+                    'items'      => array_map(
+                        static fn (LineaVenta $l): string => $l->cantidad.'x '.$l->nombre,
+                        array_values($lineas),
+                    ),
+                ])
+                ->log('cuenta_ampliada');
+
+            return $fresca;
         });
     }
 
@@ -316,7 +388,26 @@ final class VentaService
             'vendida_at'     => now(),
         ]);
 
-        $venta->items()->createMany(array_map(
+        $venta->items()->createMany($this->filasDeItems($lineas));
+
+        if ($normalizado['filas'] !== []) {
+            $venta->pagos()->createMany($normalizado['filas']);
+        }
+
+        return $venta;
+    }
+
+    /**
+     * Filas de `venta_items` (snapshots congelados) a partir de las líneas.
+     * Lo comparten la venta nueva y la ampliación de una cuenta abierta.
+     *
+     * @param array<int, LineaVenta> $lineas
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function filasDeItems(array $lineas): array
+    {
+        return array_map(
             static fn (LineaVenta $l): array => [
                 'producto_id'     => $l->productoId,
                 'nombre'          => $l->nombre,
@@ -333,13 +424,7 @@ final class VentaService
                 'descuento' => $l->descuento(),
             ],
             $lineas,
-        ));
-
-        if ($normalizado['filas'] !== []) {
-            $venta->pagos()->createMany($normalizado['filas']);
-        }
-
-        return $venta;
+        );
     }
 
     /**

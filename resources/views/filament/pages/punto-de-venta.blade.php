@@ -72,7 +72,10 @@
         <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
             @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
-                <x-filament::button size="sm" :color="$tipoServicio === $val ? 'primary' : 'gray'" wire:click="setTipoServicio('{{ $val }}')">{{ $lbl }}</x-filament::button>
+                {{-- Agregando a una cuenta: el tipo lo manda la orden original
+                     (lo agregado viaja igual que lo que ya salió). --}}
+                <x-filament::button size="sm" :color="$tipoServicio === $val ? 'primary' : 'gray'"
+                    :disabled="$agregandoAId !== null" wire:click="setTipoServicio('{{ $val }}')">{{ $lbl }}</x-filament::button>
             @endforeach
         </div>
 
@@ -160,7 +163,8 @@
                     @if ($mostrarPendientes)
                     <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.6rem;">
                         @foreach ($pendientes as $p)
-                            <div style="border:1.5px solid #f59e0b; border-radius:.6rem; padding:.6rem .75rem; display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; text-transform:uppercase;">
+                            @php($enAgregado = $agregandoAId === $p->id)
+                            <div style="border:1.5px solid {{ $enAgregado ? '#22c55e' : '#f59e0b' }}; background:{{ $enAgregado ? 'rgba(34,197,94,.10)' : 'transparent' }}; border-radius:.6rem; padding:.6rem .75rem; display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; text-transform:uppercase;">
                                 <div style="flex:1 1 12rem; min-width:10rem;">
                                     <span style="font-weight:800; font-size:1.05rem;">{{ $p->numero_orden }}</span>
                                     <span style="font-size:.72rem; opacity:.7;">· {{ $p->tipo_orden }}@if ($p->nombre_cliente) · {{ $p->nombre_cliente }}@endif</span>
@@ -237,12 +241,25 @@
                                     </div>
                                 @else
                                     <div style="display:flex; gap:.3rem; flex-wrap:wrap;">
-                                        <x-filament::button size="xs" color="success" wire:click="cobrarPendienteCF({{ $p->id }}, 'efectivo')">Efectivo</x-filament::button>
-                                        <x-filament::button size="xs" color="info" wire:click="cobrarPendienteCF({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
-                                        <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
-                                        <x-filament::button size="xs" color="primary" outlined wire:click="pedirMixtoPendiente({{ $p->id }})">Mixto</x-filament::button>
-                                        <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
-                                        <x-filament::button size="xs" color="danger" outlined wire:click="pedirAnularPendiente({{ $p->id }})">Anular</x-filament::button>
+                                        {{-- Agregar a la cuenta: lo del salón. El cliente pidió otra
+                                             bebida o se le olvidó algo — se le suma a ESTA orden y se
+                                             cobra todo junto al final, con una sola factura. --}}
+                                        @if ($this->puedeAgregarACuenta())
+                                            @if ($enAgregado)
+                                                <x-filament::button size="xs" color="success" wire:click="cancelarAgregar">✓ Agregando — tocá para salir</x-filament::button>
+                                            @else
+                                                <x-filament::button size="xs" color="primary" wire:click="iniciarAgregar({{ $p->id }})">+ Agregar</x-filament::button>
+                                            @endif
+                                        @endif
+
+                                        @if ($this->puedeCobrar())
+                                            <x-filament::button size="xs" color="success" wire:click="cobrarPendienteCF({{ $p->id }}, 'efectivo')">Efectivo</x-filament::button>
+                                            <x-filament::button size="xs" color="info" wire:click="cobrarPendienteCF({{ $p->id }}, 'tarjeta')">Tarjeta</x-filament::button>
+                                            <x-filament::button size="xs" color="warning" wire:click="pedirBancoPendiente({{ $p->id }}, 'transferencia')">Transferencia</x-filament::button>
+                                            <x-filament::button size="xs" color="primary" outlined wire:click="pedirMixtoPendiente({{ $p->id }})">Mixto</x-filament::button>
+                                            <x-filament::button size="xs" color="gray" outlined wire:click="facturarPendienteRtn({{ $p->id }})">Factura RTN</x-filament::button>
+                                            <x-filament::button size="xs" color="danger" outlined wire:click="pedirAnularPendiente({{ $p->id }})">Anular</x-filament::button>
+                                        @endif
                                     </div>
                                 @endif
                             </div>
@@ -457,12 +474,24 @@
             <x-filament::section>
                 <x-slot name="heading">
                     <div style="display:flex; align-items:center; justify-content:space-between;">
-                        <span>Venta actual</span>
+                        <span>{{ $agregandoAId !== null ? 'Agregando a la cuenta' : 'Venta actual' }}</span>
                         @if (count($carrito))
                             <x-filament::button size="xs" color="danger" outlined wire:click="limpiar">Vaciar</x-filament::button>
                         @endif
                     </div>
                 </x-slot>
+
+                {{-- Modo AGREGANDO: el carrito no es una venta nueva, es lo que
+                     se le suma a una cuenta que ya está abierta en cocina. --}}
+                @if ($agregandoAId !== null)
+                    <div style="margin-bottom:.7rem; padding:.55rem .7rem; border:1.5px solid #22c55e; background:rgba(34,197,94,.12); border-radius:.6rem; display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap;">
+                        <div style="line-height:1.25;">
+                            <div style="font-size:.66rem; opacity:.75; text-transform:uppercase; letter-spacing:.04em;">Se le suma a la orden</div>
+                            <div style="font-weight:800; font-size:1.05rem; text-transform:uppercase;">{{ $agregandoEtiqueta }}</div>
+                        </div>
+                        <x-filament::button size="xs" color="gray" outlined wire:click="cancelarAgregar">Cancelar</x-filament::button>
+                    </div>
+                @endif
 
                 <div style="display:flex; flex-direction:column; gap:.5rem; max-height:20rem; overflow-y:auto;">
                     @forelse ($this->carritoAgrupado as $g)
@@ -524,7 +553,7 @@
 
                 {{-- Todo lo de dinero es de la CAJA. El mesero arma el pedido y lo
                      manda a cocina; el cliente paga al salir. --}}
-                @if ($this->puedeCobrar())
+                @if ($this->puedeCobrar() && $agregandoAId === null)
                 <div style="display:flex; align-items:center; gap:.4rem; margin-top:.75rem; flex-wrap:wrap;">
                     <span style="font-size:.78rem; opacity:.6;">Pago:</span>
                     @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
@@ -569,13 +598,24 @@
                 @endif
 
                 <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.75rem;">
-                    @if ($this->puedeCobrar())
-                        <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
-                        <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
+                    @if ($agregandoAId !== null)
+                        {{-- Una cuenta abierta se cobra de una sola vez: acá no hay
+                             cobro ni pedido nuevo, solo sumar y mandar a cocina. --}}
+                        <x-filament::button wire:click="agregarACuenta" color="success" size="lg" style="width:100%;">
+                            Agregar a la cuenta
+                        </x-filament::button>
+                        <x-filament::button wire:click="cancelarAgregar" color="gray" outlined size="lg" style="width:100%;">
+                            Cancelar — es un pedido aparte
+                        </x-filament::button>
+                    @else
+                        @if ($this->puedeCobrar())
+                            <x-filament::button wire:click="facturarConsumidorFinal" color="primary" size="lg" style="width:100%;">Cobrar y Facturar</x-filament::button>
+                            <x-filament::button wire:click="abrirFactura" color="gray" outlined size="lg" style="width:100%;">Factura con RTN</x-filament::button>
+                        @endif
+                        <x-filament::button wire:click="pagarDespues" color="{{ $this->puedeCobrar() ? 'warning' : 'primary' }}" :outlined="$this->puedeCobrar()" size="lg" style="width:100%;">
+                            {{ $this->puedeCobrar() ? 'Pagar después (a cocina)' : 'Mandar a cocina' }}
+                        </x-filament::button>
                     @endif
-                    <x-filament::button wire:click="pagarDespues" color="{{ $this->puedeCobrar() ? 'warning' : 'primary' }}" :outlined="$this->puedeCobrar()" size="lg" style="width:100%;">
-                        {{ $this->puedeCobrar() ? 'Pagar después (a cocina)' : 'Mandar a cocina' }}
-                    </x-filament::button>
                 </div>
             </x-filament::section>
         </div>

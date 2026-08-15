@@ -123,6 +123,23 @@ class RestauranteAccessSeeder extends Seeder
     ];
 
     /**
+     * Permisos del SALÓN: los tiene quien atiende la mesa, tenga o no caja.
+     *
+     * `AgregarACuenta` (2026-08-15) resuelve el caso real: el cliente ya
+     * pidió, la comanda ya salió a cocina, y a los diez minutos pide otra
+     * bebida. Con este permiso se le SUMA a la misma cuenta (una sola
+     * factura al final) en vez de abrir un pedido aparte. Es propio y no
+     * `Cobrar` a propósito: el mesero agrega pero sigue sin tocar dinero —
+     * en su POS la lista de cuentas abiertas aparece solo con "+ Agregar",
+     * sin los botones de cobro.
+     *
+     * @var array<int, string>
+     */
+    private const PERMISOS_SALON = [
+        'AgregarACuenta',
+    ];
+
+    /**
      * Nombres viejos reemplazados por la convención Shield. Se eliminan de
      * la base en cada corrida (idempotente).
      *
@@ -157,8 +174,9 @@ class RestauranteAccessSeeder extends Seeder
          * gerente: igual que administrador en lo operativo, sin CAI ni
          *   corrección de cortes ni Datos de la Empresa.
          * cajero: opera el POS, cocina y bandeja; ve ventas y su corte.
-         * mesero: SOLO el POS, desde la tablet del salón. Arma el pedido y lo
-         *   manda a cocina, nada más: no cobra (el dinero se recibe en la
+         * mesero: SOLO el POS, desde la tablet del salón. Arma el pedido, lo
+         *   manda a cocina y le agrega a una cuenta ya abierta (la segunda
+         *   bebida de la mesa), nada más: no cobra (el dinero se recibe en la
          *   caja), no imprime (no hay térmica en la tablet: sus comandas van
          *   a la cola y las saca la caja), no cierra turno y no entra al
          *   histórico de ventas.
@@ -183,6 +201,7 @@ class RestauranteAccessSeeder extends Seeder
             'View:DeclaracionIsvMensual', 'View:LibrosFiscales', 'View:DatosEmpresaPage',
             ...self::PERMISOS_EXTRA,
             ...self::PERMISOS_CAJA, // imprime en la térmica y cierra turno
+            ...self::PERMISOS_SALON,
         ]);
 
         $this->rol('gerente', [
@@ -204,6 +223,7 @@ class RestauranteAccessSeeder extends Seeder
             ...self::PERMISOS_EXTRA, // incluye AnularFactura (decisión 2026-07-03)
             ...self::PERMISOS_PROPIOS, // aviso del pago mensual: solo el gerente
             ...self::PERMISOS_CAJA,
+            ...self::PERMISOS_SALON,
         ]);
 
         $this->rol('cajero', [
@@ -212,6 +232,7 @@ class RestauranteAccessSeeder extends Seeder
             'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',
             'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina',
             ...self::PERMISOS_CAJA, // está sentado en la compu de la impresora
+            ...self::PERMISOS_SALON, // también le agrega a una cuenta abierta
         ]);
 
         /*
@@ -226,6 +247,7 @@ class RestauranteAccessSeeder extends Seeder
          */
         $this->rol('mesero', [
             'View:PuntoDeVenta',
+            ...self::PERMISOS_SALON, // suma a una cuenta abierta; sigue sin cobrar
         ]);
 
         $this->rol('contador', [
@@ -266,7 +288,7 @@ class RestauranteAccessSeeder extends Seeder
             );
         }
 
-        foreach ([...self::PERMISOS_EXTRA, ...self::PERMISOS_PROPIOS, ...self::PERMISOS_CAJA] as $permiso) {
+        foreach ([...self::PERMISOS_EXTRA, ...self::PERMISOS_PROPIOS, ...self::PERMISOS_CAJA, ...self::PERMISOS_SALON] as $permiso) {
             Permission::firstOrCreate(['name' => $permiso], ['guard_name' => 'web']);
         }
     }

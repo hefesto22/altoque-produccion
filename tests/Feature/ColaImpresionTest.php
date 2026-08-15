@@ -447,7 +447,7 @@ it('el mesero no puede cobrar ni facturar desde la tablet', function () {
         ->call('cobrarPendienteCF', 1, 'efectivo')->assertForbidden();
 });
 
-it('el mesero ni siquiera ve la lista de pedidos por cobrar', function () {
+it('el mesero ve las cuentas abiertas para agregarles, pero no para cobrarlas', function () {
     $cajero = usuarioDeRol('cajero');
     Auth::login($cajero);
 
@@ -459,11 +459,31 @@ it('el mesero ni siquiera ve la lista de pedidos por cobrar', function () {
         'llevar',
     );
 
-    $enCaja = Livewire::actingAs($cajero)->test(PuntoDeVenta::class)->instance()->pedidosPendientes;
-    $enTablet = Livewire::actingAs(usuarioDeRol('mesero'))->test(PuntoDeVenta::class)->instance()->pedidosPendientes;
+    $enCaja = Livewire::actingAs($cajero)->test(PuntoDeVenta::class)->instance();
+    $enTablet = Livewire::actingAs(usuarioDeRol('mesero'))->test(PuntoDeVenta::class)->instance();
 
-    expect($enCaja)->toHaveCount(1)
-        ->and($enTablet)->toBe([]);
+    /*
+     * Cambio del 2026-08-15: antes la lista entera desaparecía del POS del
+     * mesero. Ahora SÍ la ve, porque es quien está en la mesa cuando el
+     * cliente pide otra bebida y se la agrega a la cuenta abierta. La
+     * frontera del dinero no se movió: sigue sin poder cobrar (en su POS la
+     * fila muestra solo "+ Agregar", sin los botones de cobro).
+     */
+    expect($enCaja->pedidosPendientes)->toHaveCount(1)
+        ->and($enTablet->pedidosPendientes)->toHaveCount(1)
+        ->and($enTablet->puedeAgregarACuenta())->toBeTrue()
+        ->and($enTablet->puedeCobrar())->toBeFalse();
+});
+
+it('el mesero puede pararse en una cuenta abierta para agregarle desde la tablet', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $venta = comandaImprimible($cajero)->venta;
+
+    Livewire::actingAs(usuarioDeRol('mesero'))->test(PuntoDeVenta::class)
+        ->call('iniciarAgregar', $venta->id)
+        ->assertSet('agregandoAId', $venta->id);
 });
 
 it('un mesero no puede cerrar el turno de caja desde la tablet', function () {

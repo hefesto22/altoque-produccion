@@ -71,7 +71,14 @@ Route::get('/impresiones/tanda', [TandaImpresionController::class, 'show'])
     ->name('impresiones.tanda')
     ->middleware('signed');
 
-// PDF de cotización de evento — ruta pública FIRMADA (compartible por WhatsApp).
+// PDF de cotización de evento — ruta pública FIRMADA. Levanta Chromium: ya no
+// se enlaza desde ningún lado, lo que se comparte es el HTML de abajo.
 Route::get('/cotizaciones/{cotizacion}/pdf', [CotizacionPdfController::class, 'show'])
     ->name('cotizaciones.pdf')
+    ->middleware('signed');
+
+// Cotización como HTML (apertura instantánea, sin Chromium) — FIRMADA. Es el
+// link que se manda por WhatsApp y el que abre el botón "Ver" de la tabla.
+Route::get('/cotizaciones/{cotizacion}/ver', [CotizacionPdfController::class, 'ver'])
+    ->name('cotizaciones.ver')
     ->middleware('signed');

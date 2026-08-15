@@ -17,17 +17,27 @@ use Spatie\Browsershot\Browsershot;
  */
 final class CotizacionPdfService
 {
-    public function html(Cotizacion $cotizacion): string
+    /**
+     * Cotización como HTML.
+     *
+     * @param bool $paraCliente vista pública (link de WhatsApp): se lee en el
+     *                          teléfono y se guarda con el diálogo de impresión
+     *                          del propio teléfono ("Guardar como PDF"). En
+     *                          false es el documento carta tal cual — así lo
+     *                          renderiza Browsershot para el PDF.
+     */
+    public function html(Cotizacion $cotizacion, bool $paraCliente = false): string
     {
         $cotizacion->loadMissing('items');
 
         $e = EmpresaSetting::actual();
 
         return view('pdf.cotizacion', [
-            'c'       => $cotizacion,
-            'tasaIsv' => (float) config('honduras.impuestos.isv.tasa_general', 0.15),
-            'logo'    => $this->logoDataUri(),
-            'empresa' => [
+            'c'           => $cotizacion,
+            'paraCliente' => $paraCliente,
+            'tasaIsv'     => (float) config('honduras.impuestos.isv.tasa_general', 0.15),
+            'logo'        => $this->logoDataUri(),
+            'empresa'     => [
                 'nombre'           => $e->nombreMostrar(),
                 'razon_social'     => $e->razon_social,
                 'nombre_comercial' => $e->nombre_comercial,

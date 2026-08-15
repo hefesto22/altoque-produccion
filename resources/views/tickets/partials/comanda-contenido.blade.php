@@ -1,6 +1,12 @@
 {{-- Contenido del ticket de comanda. Compartido por la vista standalone
      y por el documento combinado factura+comanda. --}}
 @php($nombreCliente = trim((string) $comanda->cliente_nombre))
+    {{-- Ampliación: lo que el cliente pidió DESPUÉS sobre una orden que ya
+         está en cocina. Va arriba de todo y en caja alta: si cocina lo lee
+         como un pedido nuevo, vuelve a hacer los platos que ya hizo. --}}
+    @if ($comanda->esAmpliacion())
+        <div class="banner" style="margin-top:0; margin-bottom:6px;">+ AGREGADO A LA ORDEN</div>
+    @endif
     @if ($nombreCliente !== '')
         {{-- Número a la izquierda y NOMBRE en la esquina superior derecha:
              la cocina identifica de quién es el pedido de un vistazo. --}}

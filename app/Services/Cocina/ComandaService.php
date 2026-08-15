@@ -22,17 +22,23 @@ final class ComandaService
      * momento): el ticket se imprime igual pero no aparece en el KDS de
      * cocina, que a 500+ ventas/día se inundaría de comandas sin marcar.
      *
+     * $esAmpliacion = true → lo que el cliente pidió DESPUÉS sobre una
+     * cuenta ya abierta. Lleva SOLO lo nuevo: cocina no vuelve a hacer lo que
+     * ya hizo. Sale marcada en el ticket y en el KDS para que nadie la
+     * confunda con un pedido nuevo.
+     *
      * @param array<int, array{nombre: string, cantidad: int, detalle: array<int, string>}> $items
      * @param array{nombre?: string, telefono?: string, identidad?: string, direccion?: string} $domicilio
      */
-    public function crear(Venta $venta, string $tipo, array $items, array $domicilio = [], bool $entregada = false): Comanda
+    public function crear(Venta $venta, string $tipo, array $items, array $domicilio = [], bool $entregada = false, bool $esAmpliacion = false): Comanda
     {
         $correlativo = (int) DB::selectOne("SELECT nextval('comandas_correlativo_seq') AS n")->n;
 
         return Comanda::create([
-            'venta_id' => $venta->id,
-            'numero'   => sprintf('C-%05d', $correlativo),
-            'tipo'     => $tipo,
+            'venta_id'      => $venta->id,
+            'numero'        => sprintf('C-%05d', $correlativo),
+            'tipo'          => $tipo,
+            'es_ampliacion' => $esAmpliacion,
             // Nace en "preparando": la cocina empieza al toque, sin paso previo.
             'estado'            => $entregada ? 'entregado' : 'preparando',
             'listo_at'          => $entregada ? now() : null,

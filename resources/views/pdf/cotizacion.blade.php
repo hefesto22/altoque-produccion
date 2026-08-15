@@ -2,6 +2,12 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+@if (($paraCliente ?? false))
+    {{-- Sin esto el teléfono renderiza a 980px y la cotización se ve como un
+         sello. Solo va en la vista del cliente: en el PDF el ancho lo manda
+         Browsershot (carta), no el viewport. --}}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+@endif
 <title>Cotización {{ $c->numero }}</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -78,9 +84,93 @@
 
     .pie { margin-top: 22px; text-align: center; font-size: 10px; color: #777; }
     .pie .validez { font-weight: 700; color: #1a1a1a; margin-bottom: 3px; font-size: 11px; }
+
+    /* El precio unitario repetido bajo la descripción: SOLO se usa en el
+       teléfono, donde la columna propia no cabe. En la hoja no existe. */
+    .unit-movil { display: none; }
+
+    /* ------------------------------------------------------------------
+       Vista del CLIENTE (link de WhatsApp, se abre en el teléfono).
+       El documento está armado para una hoja carta: en un celular las filas
+       flex se aplastan y la letra queda diminuta. Acá se acomoda. TODO va
+       bajo body.cliente y dentro de @media screen, así el PDF de Browsershot
+       y la impresión salen exactamente igual que antes.
+    ------------------------------------------------------------------ */
+    @media screen {
+        body.cliente { background: #eceef1; padding: 12px 0 96px; }
+        body.cliente .hoja {
+            width: min(760px, calc(100% - 16px));
+            margin: 0 auto; background: #fff;
+            padding: 24px 22px; border-radius: 12px;
+            box-shadow: 0 2px 14px rgba(0,0,0,.12);
+        }
+        /* Nombres largos de platillos: que partan en vez de desbordar. */
+        body.cliente table.items td { word-break: break-word; }
+        /* Los montos NO se parten: "L. 23,750.00" en dos renglones se lee
+           como dos cifras distintas. La descripción cede el ancho. */
+        body.cliente table.items .num { white-space: nowrap; }
+    }
+
+    /* Teléfono: la hoja carta no cabe en 390px. Se apila lo que allá va
+       lado a lado y se sube la letra a tamaño legible. */
+    @media screen and (max-width: 600px) {
+        body.cliente { font-size: 13.5px; }
+        body.cliente .hoja { padding: 16px 14px; }
+        body.cliente .encabezado { flex-direction: column; align-items: center; text-align: center; }
+        body.cliente .empresa { text-align: center; }
+        body.cliente .empresa div { font-size: 12px; }
+        body.cliente .banda { flex-direction: column; align-items: flex-start; gap: 3px; }
+        body.cliente .meta { flex-direction: column; }
+        body.cliente .cierre { display: block; }
+        body.cliente .totales { width: 100%; }
+        body.cliente .tarjeta .dato { font-size: 13px; }
+        body.cliente table.items thead th { font-size: 10.5px; }
+        body.cliente table.items tbody td { padding: 8px 4px; }
+        /* Cuatro columnas no entran: el unitario se va y reaparece como
+           renglón chico bajo la descripción. El importe sí se queda. */
+        body.cliente table.items .unit { display: none; }
+        body.cliente .unit-movil { display: block; font-size: 11.5px; color: #666; margin-top: 1px; }
+        body.cliente .totales .fila.total { font-size: 15px; }
+    }
 </style>
+@if (($paraCliente ?? false))
+    {{-- Impresión desde el TELÉFONO ("Guardar como PDF"): hoja normal, sin la
+         tarjeta gris de pantalla y sin la barra de acciones. Va después del
+         <style> de arriba a propósito — gana el último. --}}
+    <style>
+        @page { size: auto; margin: 12mm; }
+
+        @media print {
+            html, body { background: #fff; }
+            body.cliente { padding: 0; }
+            body.cliente .hoja {
+                width: auto; margin: 0; padding: 0;
+                background: transparent; box-shadow: none; border-radius: 0;
+            }
+            .acciones { display: none !important; }
+        }
+
+        @media screen {
+            /* Barra fija abajo: el botón queda siempre a mano sin hacer scroll. */
+            .acciones {
+                position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 14px;
+                background: rgba(255,255,255,.97); border-top: 1px solid #e5e7eb;
+                display: flex; flex-direction: column; align-items: center; gap: 5px;
+                font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            }
+            .acciones button {
+                display: block; width: min(420px, 94vw); text-align: center;
+                padding: 13px 16px; border: none; border-radius: 10px; background: #1a1a1a;
+                color: #fff; font-weight: 700; font-size: 15px; cursor: pointer;
+                font-family: inherit;
+            }
+            .acciones .nota { font-size: 11.5px; color: #6b7280; }
+        }
+    </style>
+@endif
 </head>
-<body>
+<body @if (($paraCliente ?? false)) class="cliente" @endif>
+<div class="hoja">
 
     {{-- Encabezado: logo + datos de la empresa --}}
     <div class="encabezado">
@@ -131,7 +221,7 @@
             <tr>
                 <th style="width:8%;" class="num">Cant.</th>
                 <th>Descripción</th>
-                <th style="width:16%;" class="num">Precio unit.</th>
+                <th style="width:16%;" class="num unit">Precio unit.</th>
                 <th style="width:16%;" class="num">Importe</th>
             </tr>
         </thead>
@@ -139,8 +229,10 @@
             @foreach ($c->items as $item)
                 <tr>
                     <td class="num">{{ rtrim(rtrim(number_format((float) $item->cantidad, 2), '0'), '.') }}</td>
-                    <td>{{ $item->descripcion }}</td>
-                    <td class="num">L. {{ number_format((float) $item->precio_unitario, 2) }}</td>
+                    {{-- El span va PEGADO al texto a propósito: un salto de
+                         línea acá mete un espacio y corre la descripción en el PDF. --}}
+                    <td>{{ $item->descripcion }}<span class="unit-movil">L. {{ number_format((float) $item->precio_unitario, 2) }} c/u</span></td>
+                    <td class="num unit">L. {{ number_format((float) $item->precio_unitario, 2) }}</td>
                     <td class="num">L. {{ number_format($item->importe(), 2) }}</td>
                 </tr>
             @endforeach
@@ -179,6 +271,17 @@
         <div class="validez">Precios válidos hasta el {{ $c->validaHasta()->format('d/m/Y') }} ({{ $c->validez_dias }} días).</div>
         <div>Esta cotización no es un documento fiscal. ¡Gracias por preferirnos!</div>
     </div>
+</div>
 
+@if (($paraCliente ?? false))
+    {{-- Guardar la cotización NO pasa por el servidor: se abre el diálogo de
+         impresión del teléfono y ahí el propio sistema ofrece "Guardar como
+         PDF". Antes el link mandaba a una ruta que levantaba Chromium para
+         armar el archivo: tardaba y el cliente veía una pantalla en blanco. --}}
+    <div class="acciones">
+        <button type="button" onclick="window.print()">Descargar PDF</button>
+        <div class="nota">En el diálogo elegí “Guardar como PDF”</div>
+    </div>
+@endif
 </body>
 </html>
