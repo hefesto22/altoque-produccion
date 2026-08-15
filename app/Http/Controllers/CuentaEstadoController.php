@@ -27,7 +27,7 @@ class CuentaEstadoController extends Controller
 
     public function estado(string $token): Response
     {
-        $cuenta = CuentaPrepago::query()->where('token', $token)->firstOrFail();
+        $cuenta = CuentaPrepago::query()->with('cliente:id,nombre,rtn')->where('token', $token)->firstOrFail();
 
         $movimientos = $cuenta->movimientos()
             ->with(['venta.factura:id,venta_id,numero'])

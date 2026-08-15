@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Exceptions\SaldoInsuficienteException;
+use App\Models\Cliente;
 use App\Models\CuentaMovimiento;
 use App\Models\CuentaPrepago;
 use App\Models\User;
@@ -14,10 +15,13 @@ use App\Services\Cuentas\CuentaPrepagoService;
  */
 function cuentaPrepago(array $extra = []): CuentaPrepago
 {
+    // El RTN vive en Clientes: la cuenta apunta al cliente y lee el suyo.
+    $cliente = Cliente::registrar('13212003002192', 'inversiones olympo');
+
     return CuentaPrepago::create([
-        'nombre'   => 'inversiones olympo',
-        'rtn'      => '13212003002192',
-        'telefono' => '33012826',
+        'nombre'     => 'inversiones olympo',
+        'cliente_id' => $cliente->id,
+        'telefono'   => '33012826',
         ...$extra,
     ]);
 }
@@ -27,6 +31,7 @@ it('nace con token propio y el nombre en mayúsculas', function () {
 
     expect($cuenta->token)->toHaveLength(40)
         ->and($cuenta->nombre)->toBe('INVERSIONES OLYMPO')
+        ->and($cuenta->rtn())->toBe('13212003002192')   // sale del cliente, no de una copia
         ->and((float) $cuenta->saldo)->toBe(0.0)
         ->and($cuenta->permite_credito)->toBeFalse();
 });

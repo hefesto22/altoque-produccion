@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
@@ -21,7 +22,7 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $nombre
- * @property string|null $rtn
+ * @property int|null $cliente_id
  * @property string|null $telefono
  * @property string $token
  * @property string $saldo
@@ -39,7 +40,7 @@ class CuentaPrepago extends Model
     /** @var array<int, string> */
     protected $fillable = [
         'nombre',
-        'rtn',
+        'cliente_id',
         'telefono',
         'token',
         'saldo',
@@ -89,6 +90,24 @@ class CuentaPrepago extends Model
 
             $cuenta->nombre = mb_strtoupper(trim($cuenta->nombre));
         });
+    }
+
+    /**
+     * Cliente fiscal al que pertenece la cartera. De acá sale el RTN con el
+     * que se factura cada consumo — no se copia en esta tabla para que no
+     * existan dos versiones del mismo dato.
+     *
+     * @return BelongsTo<Cliente, $this>
+     */
+    public function cliente(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class);
+    }
+
+    /** RTN con el que se factura: el del cliente asociado, si tiene. */
+    public function rtn(): ?string
+    {
+        return $this->cliente?->rtn;
     }
 
     /** @return HasMany<CuentaMovimiento, $this> */

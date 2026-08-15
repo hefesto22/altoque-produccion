@@ -77,7 +77,7 @@
     <div class="saldo">
         <div class="rotulo">Saldo disponible</div>
         <div class="monto {{ $saldo < 0 ? 'rojo' : '' }}">L. {{ number_format($saldo, 2) }}</div>
-        <div class="cuenta">{{ $cuenta->nombre }}@if ($cuenta->rtn) · RTN {{ $cuenta->rtn }}@endif</div>
+        <div class="cuenta">{{ $cuenta->nombre }}@if ($cuenta->rtn()) · RTN {{ $cuenta->rtn() }}@endif</div>
         @if ($saldo < 0)
             <div class="cuenta">Saldo en rojo: pendiente de reponer</div>
         @endif

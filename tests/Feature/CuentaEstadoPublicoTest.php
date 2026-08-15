@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Cliente;
 use App\Models\CuentaPrepago;
 use App\Services\Cuentas\CuentaPrepagoService;
 use Illuminate\Support\Facades\URL;
@@ -14,9 +15,9 @@ use Illuminate\Support\Facades\URL;
 function cuentaConMovimientos(): CuentaPrepago
 {
     $cuenta = CuentaPrepago::create([
-        'nombre'   => 'inversiones olympo',
-        'rtn'      => '13212003002192',
-        'telefono' => '33012826',
+        'nombre'     => 'inversiones olympo',
+        'cliente_id' => Cliente::registrar('13212003002192', 'inversiones olympo')->id,
+        'telefono'   => '33012826',
     ]);
 
     $svc = app(CuentaPrepagoService::class);
@@ -32,6 +33,7 @@ it('muestra el saldo, lo depositado y lo consumido', function () {
     $this->get($cuenta->urlEstado())
         ->assertOk()
         ->assertSee('INVERSIONES OLYMPO')
+        ->assertSee('13212003002192')  // el RTN sale del cliente asociado
         ->assertSee('9,650.00')      // saldo
         ->assertSee('10,000.00')     // depositado
         ->assertSee('350.00')        // consumido
