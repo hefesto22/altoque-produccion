@@ -52,8 +52,8 @@ class RestauranteAccessSeeder extends Seeder
      */
     private const MODELOS = [
         'Activity', 'Cai', 'Cliente', 'Combo', 'ComboEspecial', 'Compra',
-        'CorteCaja', 'Cotizacion', 'EventoArticulo', 'PedidoOnline',
-        'PeriodoFiscal', 'Producto', 'Tier', 'User', 'Venta',
+        'CorteCaja', 'Cotizacion', 'CuentaPrepago', 'EventoArticulo',
+        'PedidoOnline', 'PeriodoFiscal', 'Producto', 'Tier', 'User', 'Venta',
     ];
 
     /**
@@ -191,6 +191,7 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->crud('Cliente'),
             ...$this->crud('Compra'),
             ...$this->crud('Cotizacion'), // cotizaciones de eventos (no fiscal)
+            ...$this->crud('CuentaPrepago'), // cuentas con saldo a favor
             ...$this->crud('EventoArticulo'), // catálogo propio de eventos
             ...$this->lectura('Venta'), // las ventas nacen del POS y no se editan
             'ViewAny:Cai', 'View:Cai', 'Create:Cai', 'Update:Cai', // sin Delete: un rango CAI no se borra
@@ -212,6 +213,7 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->crud('Cliente'),
             ...$this->crud('Compra'),
             ...$this->crud('Cotizacion'), // cotizaciones de eventos (no fiscal)
+            ...$this->crud('CuentaPrepago'), // cuentas con saldo a favor
             ...$this->crud('EventoArticulo'), // catálogo propio de eventos
             ...$this->lectura('Venta'),
             ...$this->lectura('Cai'),
@@ -227,6 +229,9 @@ class RestauranteAccessSeeder extends Seeder
         ]);
 
         $this->rol('cajero', [
+            // Recibe depósitos y consulta el saldo de la empresa que viene a
+            // comer, pero no abre ni borra cuentas: eso es de la gerencia.
+            'ViewAny:CuentaPrepago', 'View:CuentaPrepago', 'Update:CuentaPrepago',
             ...$this->lectura('Venta'),
             ...$this->lectura('CorteCaja'), // ve su corte; VerCortesTodos amplía a todos
             'ViewAny:PedidoOnline', 'View:PedidoOnline', 'Update:PedidoOnline',

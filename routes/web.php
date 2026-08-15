@@ -22,6 +22,7 @@ declare(strict_types=1);
 use App\Http\Controllers\ComandaTicketController;
 use App\Http\Controllers\CorteTicketController;
 use App\Http\Controllers\CotizacionPdfController;
+use App\Http\Controllers\CuentaEstadoController;
 use App\Http\Controllers\FacturaPdfController;
 use App\Http\Controllers\TandaImpresionController;
 use App\Http\Controllers\VerificacionController;
@@ -81,4 +82,10 @@ Route::get('/cotizaciones/{cotizacion}/pdf', [CotizacionPdfController::class, 's
 // link que se manda por WhatsApp y el que abre el botón "Ver" de la tabla.
 Route::get('/cotizaciones/{cotizacion}/ver', [CotizacionPdfController::class, 'ver'])
     ->name('cotizaciones.ver')
+    ->middleware('signed');
+
+// Estado de una cuenta prepago — pública, FIRMADA y por token. El cliente la
+// abre desde su WhatsApp para ver cuánto le queda y en qué se fue.
+Route::get('/cuentas/{token}/estado', [CuentaEstadoController::class, 'estado'])
+    ->name('cuentas.estado')
     ->middleware('signed');
