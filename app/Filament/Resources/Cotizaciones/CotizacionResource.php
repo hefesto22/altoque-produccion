@@ -333,19 +333,25 @@ class CotizacionResource extends Resource
                     ->visible(fn (Cotizacion $record): bool => ! in_array($record->estado, ['completada', 'rechazada'], true)
                         && $record->saldo() > 0.009)
                     ->action(function (Cotizacion $record, array $data): void {
-                        CotizacionPago::create([
-                            'cotizacion_id' => $record->id,
-                            'monto'         => round((float) $data['monto'], 2),
-                            'forma_pago'    => $data['forma_pago'],
-                            'banco'         => in_array($data['forma_pago'], ['tarjeta', 'transferencia'], true) ? ($data['banco'] ?? null) : null,
-                            'notas'         => $data['notas'] ?? null,
-                            'recibido_por'  => Auth::id(),
-                            'recibido_at'   => now(),
-                        ]);
+                        // El estado lo mueve el propio modelo: quien abona aceptó.
+                        $resultado = $record->registrarAbono(
+                            (float) $data['monto'],
+                            $data['forma_pago'],
+                            $data['banco'] ?? null,
+                            $data['notas'] ?? null,
+                            Auth::id(),
+                        );
+
+                        $saldo = 'L. '.number_format($record->fresh()->saldo(), 2);
+                        $cuerpo = 'L. '.number_format((float) $data['monto'], 2).' — saldo restante: '.$saldo;
 
                         Notification::make()
-                            ->title('Abono registrado')
-                            ->body('L. '.number_format((float) $data['monto'], 2).' — saldo restante: L. '.number_format($record->fresh()->saldo(), 2))
+                            ->title($resultado['estadoNuevo'] === null
+                                ? 'Abono registrado'
+                                : 'Abono registrado · cotización aceptada')
+                            ->body($resultado['estadoNuevo'] === null
+                                ? $cuerpo
+                                : $cuerpo.'. El estado pasó solo a Aceptada.')
                             ->success()
                             ->send();
                     }),

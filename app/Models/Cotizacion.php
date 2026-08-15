@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -151,6 +152,42 @@ class Cotizacion extends Model
     public function pagado(): float
     {
         return round((float) $this->pagos()->sum('monto'), 2);
+    }
+
+    /**
+     * Registra un abono y, si hace falta, mueve el estado solo.
+     *
+     * Un cliente que pone plata YA ACEPTÓ: pedirle después a la caja que
+     * además cambie el estado a mano es papeleo que nadie hace, y la lista
+     * termina llena de cotizaciones "borrador" con abonos encima.
+     *
+     * Solo avanza desde borrador/enviada. No toca `rechazada` (si abona una
+     * rechazada, algo raro pasó y lo decide una persona) ni `completada`
+     * (ese estado lo pone únicamente la facturación del evento).
+     *
+     * @return array{pago: CotizacionPago, estadoNuevo: string|null} estadoNuevo = null si no se movió
+     */
+    public function registrarAbono(float $monto, string $formaPago, ?string $banco, ?string $notas, ?int $usuarioId): array
+    {
+        return DB::transaction(function () use ($monto, $formaPago, $banco, $notas, $usuarioId): array {
+            $pago = $this->pagos()->create([
+                'monto'        => round($monto, 2),
+                'forma_pago'   => $formaPago,
+                'banco'        => in_array($formaPago, ['tarjeta', 'transferencia'], true) ? $banco : null,
+                'notas'        => $notas,
+                'recibido_por' => $usuarioId,
+                'recibido_at'  => now(),
+            ]);
+
+            $estadoNuevo = null;
+
+            if (in_array($this->estado, ['borrador', 'enviada'], true)) {
+                $estadoNuevo = 'aceptada';
+                $this->update(['estado' => $estadoNuevo]);
+            }
+
+            return ['pago' => $pago, 'estadoNuevo' => $estadoNuevo];
+        });
     }
 
     /** Saldo pendiente de cobro (total − abonado). */
