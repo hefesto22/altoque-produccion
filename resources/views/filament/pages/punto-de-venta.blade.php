@@ -125,13 +125,16 @@
                 {{-- Agregando a una cuenta: el tipo lo manda la orden original
                      (lo agregado viaja igual que lo que ya salió).
 
-                     Solo se va al servidor cuando se cruza la frontera de
-                     domicilio: ese formulario se arma en el servidor. Entre
-                     "En el local" y "Para llevar" el cambio es instantáneo. --}}
-                @php($cruzaDomicilio = $val === 'domicilio' || $tipoServicio === 'domicilio')
-                <button type="button" class="pos-chip" :class="{ 'pos-chip-activo': tipoOrden === '{{ $val }}' }"
+                     El color activo lo pinta el SERVIDOR (clase estática) y
+                     Alpine solo lo adelanta mientras viaja la petición. Si el
+                     activo viviera solo en Alpine, el morph de Livewire —o el
+                     poll de 15 s— reescribe el atributo class con lo que mandó
+                     el servidor y el chip se queda sin color. --}}
+                <button type="button"
+                    class="pos-chip{{ $tipoServicio === $val ? ' pos-chip-activo' : '' }}"
+                    :class="{ 'pos-chip-activo': tipoOrden === '{{ $val }}' }"
                     @disabled($agregandoAId !== null)
-                    x-on:click="tipoOrden = '{{ $val }}'; $wire.set('tipoServicio', '{{ $val }}', {{ $cruzaDomicilio ? 'true' : 'false' }})">{{ $lbl }}</button>
+                    x-on:click="tipoOrden = '{{ $val }}'; $wire.set('tipoServicio', '{{ $val }}')">{{ $lbl }}</button>
             @endforeach
         </div>
 
