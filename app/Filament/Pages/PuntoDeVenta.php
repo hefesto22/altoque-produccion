@@ -192,9 +192,6 @@ class PuntoDeVenta extends Page
     /** Si se está cobrando un pedido pendiente con RTN, su id (para el modal). */
     public ?int $cobrandoPendienteId = null;
 
-    /** Despliegue de la lista de pedidos por cobrar (colapsada por defecto). */
-    public bool $mostrarPendientes = false;
-
     /** Pendiente al que se le está eligiendo banco para cobrar por transferencia. */
     public ?int $cobrandoTransferId = null;
 

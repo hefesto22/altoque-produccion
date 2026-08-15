@@ -155,13 +155,16 @@
             <div @if (! $mostrarFactura && ! $personalizando && ! $mostrarCierre && ! $mostrarApertura) wire:poll.15s @endif>
             @php($pendientes = $this->pedidosPendientes)
             @if (count($pendientes))
-                <div>
-                    <x-filament::button color="warning" wire:click="$toggle('mostrarPendientes')" style="width:100%; justify-content:space-between;">
+                {{-- Abrir y cerrar es puro UI: lo maneja Alpine en el navegador.
+                     Cuando era wire:click="$toggle(...)" cada toque se iba al
+                     servidor y volvía con el POS entero re-renderizado (~195 KB):
+                     un segundo para desplegar una lista que ya estaba armada. --}}
+                <div x-data="{ abierto: false }">
+                    <x-filament::button color="warning" x-on:click="abierto = ! abierto" style="width:100%; justify-content:space-between;">
                         <span>🧾 Pedidos por cobrar ({{ count($pendientes) }})</span>
-                        <span>{{ $mostrarPendientes ? '▲' : '▼' }}</span>
+                        <span x-text="abierto ? '▲' : '▼'">▼</span>
                     </x-filament::button>
-                    @if ($mostrarPendientes)
-                    <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.6rem;">
+                    <div x-cloak x-show="abierto" style="display:flex; flex-direction:column; gap:.5rem; margin-top:.6rem;">
                         @foreach ($pendientes as $p)
                             @php($enAgregado = $agregandoAId === $p->id)
                             <div style="border:1.5px solid {{ $enAgregado ? '#22c55e' : '#f59e0b' }}; background:{{ $enAgregado ? 'rgba(34,197,94,.10)' : 'transparent' }}; border-radius:.6rem; padding:.6rem .75rem; display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; text-transform:uppercase;">
@@ -265,7 +268,6 @@
                             </div>
                         @endforeach
                     </div>
-                    @endif
                 </div>
             @endif
             </div>
