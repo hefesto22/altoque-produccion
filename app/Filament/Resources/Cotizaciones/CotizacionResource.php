@@ -15,7 +15,6 @@ use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Cliente;
 use App\Models\CorteCaja;
 use App\Models\Cotizacion;
-use App\Models\CotizacionPago;
 use App\Models\EventoArticulo;
 use App\Services\Eventos\FacturadorEvento;
 use App\Support\Acceso;
@@ -359,7 +358,8 @@ class CotizacionResource extends Resource
                     }),
                 // Completar el evento: emite LA factura SAR por el total vía
                 // el flujo normal de ventas (corte del turno, correlativo,
-                // libros y declaración solitas). Si queda saldo, se cobra acá.
+                // libros y declaración solitas). Solo con el saldo en cero: el
+                // saldo se cobra antes con Abono.
                 Action::make('facturar')
                     ->label('Facturar')
                     ->icon('heroicon-o-document-check')
@@ -369,31 +369,33 @@ class CotizacionResource extends Resource
                     ->modalDescription(fn (Cotizacion $record): string => $record->numero.' — '.$record->cliente_nombre
                         .' · Total L. '.number_format((float) $record->total, 2)
                         .' · Abonado L. '.number_format($record->pagado(), 2)
-                        .($record->saldo() > 0.009
-                            ? ' · Se cobrará el saldo de L. '.number_format($record->saldo(), 2).' y se emitirá la factura SAR por el total.'
-                            : ' · Saldo en cero: se emitirá la factura SAR por el total.'))
-                    ->schema(fn (Cotizacion $record): array => $record->saldo() <= 0.009 ? [] : [
-                        ToggleButtons::make('forma_pago_saldo')->label('Forma de pago del saldo (L. '.number_format($record->saldo(), 2).')')
-                            ->options(['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transferencia'])
-                            ->icons([
-                                'efectivo'      => 'heroicon-o-banknotes',
-                                'tarjeta'       => 'heroicon-o-credit-card',
-                                'transferencia' => 'heroicon-o-building-library',
-                            ])
-                            ->inline()
-                            ->default('efectivo')
-                            ->required()
-                            ->live(),
-                        Select::make('banco_saldo')->label('Banco')
-                            ->options(array_combine(config('empresa.bancos', []), config('empresa.bancos', [])))
-                            ->visible(fn (Get $get): bool => in_array($get('forma_pago_saldo'), ['tarjeta', 'transferencia'], true))
-                            ->required(fn (Get $get): bool => in_array($get('forma_pago_saldo'), ['tarjeta', 'transferencia'], true)),
-                    ])
+                        .' · Saldo en cero: se emitirá la factura SAR por el total.')
                     ->visible(fn (Cotizacion $record): bool => $record->estado === 'aceptada'
                         && $record->venta_id === null
                         && Acceso::puede('FacturarEvento'))
-                    ->action(function (Cotizacion $record, array $data): void {
+                    // Regla del negocio (2026-08-15): la factura se emite cuando
+                    // ya pagaron TODO. Con saldo pendiente el botón se ve pero no
+                    // deja darle, y el tooltip dice qué falta — esconderlo dejaría
+                    // a la caja buscando un botón que "desapareció".
+                    ->disabled(fn (Cotizacion $record): bool => $record->saldo() > 0.009)
+                    ->tooltip(fn (Cotizacion $record): ?string => $record->saldo() > 0.009
+                        ? 'Falta cobrar L. '.number_format($record->saldo(), 2).'. Registralo con Abono y el botón se habilita.'
+                        : null)
+                    ->action(function (Cotizacion $record): void {
                         abort_unless(Acceso::puede('FacturarEvento'), 403);
+
+                        // El botón se ve deshabilitado, pero eso es pantalla: la
+                        // regla vive acá. La factura SAR sale cuando ya pagaron
+                        // todo, nunca antes.
+                        if ($record->saldo() > 0.009) {
+                            Notification::make()
+                                ->title('Falta cobrar el saldo')
+                                ->body('Quedan L. '.number_format($record->saldo(), 2).' por cobrar. Registralos con Abono y volvé a darle Facturar.')
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
 
                         // Con la caja cerrada no hay nada que intentar: el aviso
                         // te lleva directo a abrir el turno (una sola caja; el
@@ -420,23 +422,9 @@ class CotizacionResource extends Resource
                         }
 
                         try {
-                            $factura = DB::transaction(function () use ($record, $data) {
-                                // El pago del saldo y la factura son atómicos:
-                                // si la factura falla, el pago no queda registrado.
-                                if ($record->saldo() > 0.009) {
-                                    CotizacionPago::create([
-                                        'cotizacion_id' => $record->id,
-                                        'monto'         => $record->saldo(),
-                                        'forma_pago'    => $data['forma_pago_saldo'],
-                                        'banco'         => in_array($data['forma_pago_saldo'], ['tarjeta', 'transferencia'], true) ? ($data['banco_saldo'] ?? null) : null,
-                                        'notas'         => 'Pago del saldo al facturar el evento',
-                                        'recibido_por'  => Auth::id(),
-                                        'recibido_at'   => now(),
-                                    ]);
-                                }
-
-                                return app(FacturadorEvento::class)->facturar($record->fresh(), (int) Auth::id());
-                            });
+                            $factura = DB::transaction(
+                                static fn () => app(FacturadorEvento::class)->facturar($record->fresh(), (int) Auth::id()),
+                            );
                         } catch (RestauranteException $e) {
                             Notification::make()->title('No se pudo facturar')->body($e->getMessage())->danger()->send();
 
@@ -477,7 +465,12 @@ class CotizacionResource extends Resource
                             ->inline()
                             ->required(),
                     ])
-                    ->visible(fn (Cotizacion $record): bool => $record->estado !== 'completada')
+                    // Con abonos registrados el estado ya no se toca a mano: lo
+                    // manda la plata (abonar acepta, facturar completa). Se
+                    // conserva mientras no haya pagos, que es cuando de verdad
+                    // sirve — ahí se marca "enviada" o "rechazada".
+                    ->visible(fn (Cotizacion $record): bool => $record->estado !== 'completada'
+                        && $record->pagos()->doesntExist())
                     ->action(function (Cotizacion $record, array $data): void {
                         $record->update(['estado' => $data['estado']]);
 
