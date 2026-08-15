@@ -339,7 +339,9 @@ class CotizacionResource extends Resource
                             $data['forma_pago'],
                             $data['banco'] ?? null,
                             $data['notas'] ?? null,
-                            Auth::id(),
+                            // Cast como en el resto del panel: Auth::id() está
+                            // tipado int|string|null y acá siempre hay sesión.
+                            (int) Auth::id(),
                         );
 
                         $saldo = 'L. '.number_format($record->fresh()->saldo(), 2);
