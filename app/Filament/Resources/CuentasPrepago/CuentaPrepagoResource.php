@@ -83,7 +83,11 @@ class CuentaPrepagoResource extends Resource
                                 return;
                             }
 
-                            $set('nombre', (string) (Cliente::find($state)?->nombre ?? ''));
+                            $cliente = Cliente::find($state);
+
+                            if ($cliente !== null) {
+                                $set('nombre', $cliente->nombre);
+                            }
                         })
                         ->columnSpanFull(),
                     TextInput::make('nombre')
