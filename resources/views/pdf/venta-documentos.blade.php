@@ -12,21 +12,26 @@
            lo toma de @page. */
         @page { size: 80mm 250mm; margin: 3mm; }
         * { box-sizing: border-box; }
+        /* Tamaños subidos ~10% el 2026-08-15 a pedido del cliente: en la
+           térmica se leía chico. A 74mm con Courier entran ~40 caracteres por
+           línea (antes ~44); las líneas largas —CAI, rango autorizado,
+           dirección— ya se partían, así que el ticket solo sale un poco más
+           alto. Si se sube más, empiezan a partirse los totales. */
         /* TODO el documento en negrita (pedido del cliente): en térmica la
            letra normal sale tenue; el bold parejo se lee mejor. */
-        html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 10.5px; color: #000; line-height: 1.32; font-weight: 700; }
+        html, body { margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 11.5px; color: #000; line-height: 1.32; font-weight: 700; }
         /* Térmicas que imprimen tenue (3nStar): engrosar además el trazo.
            Complementa el ajuste de densidad del driver de la impresora. */
         body { -webkit-text-stroke: 0.25px #000; }
         .doc { width: 74mm; text-transform: uppercase; }
         .preserve { text-transform: none; }
-        .orden { font-size: 15px; font-weight: bold; text-align: right; }
+        .orden { font-size: 16px; font-weight: bold; text-align: right; }
         .center { text-align: center; }
         .right { text-align: right; }
         .bold { font-weight: bold; }
-        .lg { font-size: 12.5px; }
-        .sm { font-size: 9px; }
-        .xs { font-size: 8px; }
+        .lg { font-size: 13.5px; }
+        .sm { font-size: 10px; }
+        .xs { font-size: 8.5px; }
         .hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
         .hr2 { border: none; border-top: 2px solid #000; margin: 4px 0; }
         table { width: 100%; border-collapse: collapse; }
@@ -37,19 +42,19 @@
         .anulada { color: #b00; border: 2px solid #b00; padding: 3px; text-align: center; font-weight: bold; margin: 5px 0; letter-spacing: 1px; }
         /* ── Comanda (scopeada para no pisar los estilos de la factura) ── */
         .salto { page-break-after: always; }
-        .comanda { width: 72mm; font-size: 12px; line-height: 1.35; font-family: 'Courier New', monospace; }
+        .comanda { width: 72mm; font-size: 13px; line-height: 1.35; font-family: 'Courier New', monospace; }
         .comanda .center { text-align: center; }
-        .comanda .grande { font-size: 20px; font-weight: 700; }
-        .comanda .medio { font-size: 14px; font-weight: 700; }
+        .comanda .grande { font-size: 22px; font-weight: 700; }
+        .comanda .medio { font-size: 15px; font-weight: 700; }
         .comanda .sep { border-top: 1px dashed #000; margin: 6px 0; }
         .comanda table { width: 100%; border-collapse: collapse; }
-        .comanda td.cant { width: 28px; font-weight: 700; vertical-align: top; font-size: 14px; }
-        .comanda td.item { font-size: 14px; font-weight: 700; text-transform: uppercase; }
-        .comanda .detalle { font-size: 11px; padding-left: 28px; }
-        .comanda .nota { font-size: 12px; font-weight: 700; padding-left: 28px; }
+        .comanda td.cant { width: 30px; font-weight: 700; vertical-align: top; font-size: 15.5px; }
+        .comanda td.item { font-size: 15.5px; font-weight: 700; text-transform: uppercase; }
+        .comanda .detalle { font-size: 12px; padding-left: 30px; }
+        .comanda .nota { font-size: 13px; font-weight: 700; padding-left: 30px; }
         .comanda .banner {
             border: 2px solid #000; text-align: center; font-weight: 700;
-            font-size: 14px; padding: 4px; margin-top: 6px;
+            font-size: 15px; padding: 4px; margin-top: 6px;
         }
     </style>
 </head>
