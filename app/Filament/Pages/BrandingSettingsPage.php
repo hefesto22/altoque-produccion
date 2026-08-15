@@ -63,6 +63,7 @@ class BrandingSettingsPage extends Page
         $this->form->fill([
             'logo_path'     => $setting->logo_path,
             'favicon_path'  => $setting->favicon_path,
+            'sello_path'    => $setting->sello_path,
             'primary_color' => $setting->primary_color,
         ]);
     }
@@ -112,6 +113,27 @@ class BrandingSettingsPage extends Page
                     ])
                     ->columns(2),
 
+                Section::make('Sello del negocio')
+                    ->description('El sello de hule que va en los documentos del cliente. Hoy sale en la cotización de eventos, frente a los totales.')
+                    ->schema([
+                        FileUpload::make('sello_path')
+                            ->label('Sello')
+                            ->helperText('Escaneá o fotografiá el sello sobre papel blanco y recortalo. PNG con fondo transparente es lo que mejor se ve. Máximo 5 MB.')
+                            ->image()
+                            ->imageEditor()
+                            ->disk('public')
+                            ->directory('branding')
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->acceptedFileTypes([
+                                'image/png',
+                                'image/jpeg',
+                                'image/svg+xml',
+                                'image/webp',
+                            ])
+                            ->saveUploadedFileUsing(static fn (TemporaryUploadedFile $file): string => ImageOptimizer::toWebp($file, 'branding')),
+                    ]),
+
                 Section::make('Color del panel')
                     ->description('Tono base de botones, acentos y elementos interactivos.')
                     ->schema([
@@ -130,6 +152,7 @@ class BrandingSettingsPage extends Page
         BrandingSetting::current()->update([
             'logo_path'     => $datos['logo_path'] ?? null,
             'favicon_path'  => $datos['favicon_path'] ?? null,
+            'sello_path'    => $datos['sello_path'] ?? null,
             'primary_color' => $datos['primary_color'] ?? '#f59e0b',
         ]);
 

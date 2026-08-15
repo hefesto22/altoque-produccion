@@ -37,6 +37,7 @@ final class CotizacionPdfService
             'paraCliente' => $paraCliente,
             'tasaIsv'     => (float) config('honduras.impuestos.isv.tasa_general', 0.15),
             'logo'        => $this->logoDataUri(),
+            'sello'       => $this->selloDataUri(),
             'empresa'     => [
                 'nombre'           => $e->nombreMostrar(),
                 'razon_social'     => $e->razon_social,
@@ -44,7 +45,9 @@ final class CotizacionPdfService
                 'rtn'              => $e->rtn,
                 'direccion'        => $e->direccion,
                 'telefono'         => $e->telefono,
-                'correo'           => $e->correo,
+                // Comercial, no el fiscal: la cotización no es un documento
+                // del RTN, es la carta de venta del negocio.
+                'correo'           => $e->correoCotizaciones(),
             ],
         ])->render();
     }
@@ -88,9 +91,25 @@ final class CotizacionPdfService
     /** Logo de la empresa como data URI (se embebe en el PDF, sin red). */
     private function logoDataUri(): ?string
     {
-        $path = BrandingSetting::current()->logo_path;
+        return $this->imagenDataUri(BrandingSetting::current()->logo_path);
+    }
 
-        if ($path === null || ! Storage::disk('public')->exists($path)) {
+    /** El sello de hule del negocio, si está cargado en Configuración. */
+    private function selloDataUri(): ?string
+    {
+        return $this->imagenDataUri(BrandingSetting::current()->sello_path);
+    }
+
+    /**
+     * Imagen del disco público como data URI.
+     *
+     * Embebida y no enlazada: Browsershot arma el PDF sin sesión ni acceso a
+     * la app, y el link que abre el cliente tiene que verse completo aunque la
+     * conexión del teléfono sea mala.
+     */
+    private function imagenDataUri(?string $path): ?string
+    {
+        if ($path === null || $path === '' || ! Storage::disk('public')->exists($path)) {
             return null;
         }
 

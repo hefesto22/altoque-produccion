@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $telefono
  * @property string|null $telefono2
  * @property string|null $correo
+ * @property string|null $correo_cotizaciones
  * @property string|null $sitio_web
  * @property string|null $horario
  * @property string|null $formas_pago_texto
@@ -66,6 +67,19 @@ class EmpresaSetting extends Model
     {
         static::saved(static fn () => Cache::forget(self::CACHE_KEY));
         static::deleted(static fn () => Cache::forget(self::CACHE_KEY));
+    }
+
+    /**
+     * Correo para los documentos COMERCIALES (la cotización de eventos).
+     *
+     * `correo` a secas es el fiscal: va en la factura y pertenece al RTN del
+     * emisor. En la cotización el cliente tiene que escribirle al negocio, no
+     * al correo personal de la titular. Si no se configuró uno comercial, cae
+     * al fiscal para no dejar el documento sin contacto.
+     */
+    public function correoCotizaciones(): ?string
+    {
+        return $this->correo_cotizaciones ?: $this->correo;
     }
 
     /** Nombre a mostrar como emisor (comercial si existe, si no la razón social). */

@@ -76,7 +76,10 @@ class DatosEmpresaPage extends Page
                         TextInput::make('direccion')->label('Dirección')->required()->columnSpanFull(),
                         TextInput::make('telefono')->label('Teléfono principal'),
                         TextInput::make('telefono2')->label('Teléfono secundario'),
-                        TextInput::make('correo')->label('Correo electrónico')->email(),
+                        TextInput::make('correo')->label('Correo electrónico (facturas)')->email()
+                            ->helperText('El del RTN del emisor. Sale impreso en la factura.'),
+                        TextInput::make('correo_cotizaciones')->label('Correo para cotizaciones')->email()
+                            ->helperText('El comercial del negocio. Si se deja vacío, la cotización usa el de facturas.'),
                         TextInput::make('sitio_web')->label('Sitio web'),
                     ])->columns(2),
 

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Storage;
  * @property int $id
  * @property string|null $logo_path
  * @property string|null $favicon_path
+ * @property string|null $sello_path
  * @property string $primary_color
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -35,6 +36,7 @@ class BrandingSetting extends Model
     protected $fillable = [
         'logo_path',
         'favicon_path',
+        'sello_path',
         'primary_color',
     ];
 
@@ -87,5 +89,21 @@ class BrandingSetting extends Model
         }
 
         return Storage::disk('public')->url($this->favicon_path);
+    }
+
+    /**
+     * URL pública del sello del negocio, o null si no se ha subido.
+     *
+     * El sello NO se enlaza en los documentos: ahí va embebido como data URI
+     * (ver CotizacionPdfService). Este accesor es para la pantalla de
+     * Configuración.
+     */
+    public function getSelloUrlAttribute(): ?string
+    {
+        if ($this->sello_path === null || $this->sello_path === '') {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->sello_path);
     }
 }

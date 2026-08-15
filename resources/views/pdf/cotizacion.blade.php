@@ -50,7 +50,12 @@
     table.items tbody td { padding: 7px 8px; border-bottom: 1px solid #e7e7e7; vertical-align: top; }
     table.items tbody tr:nth-child(even) { background: #fafafa; }
 
-    .cierre { display: flex; justify-content: flex-end; gap: 14px; }
+    /* El sello se va a la IZQUIERDA con margin-right:auto y los totales
+       siguen pegados a la derecha. Sin sello cargado, la fila queda igual
+       que siempre (el hueco de la izquierda simplemente no se llena). */
+    .cierre { display: flex; justify-content: flex-end; align-items: flex-end; gap: 14px; }
+    .sello { margin-right: auto; }
+    .sello img { width: 118px; height: auto; }
     .totales { width: 260px; }
     .totales .fila { display: flex; justify-content: space-between; padding: 3px 8px; }
     .totales .fila.suave { color: #555; font-size: 11px; }
@@ -123,6 +128,10 @@
         body.cliente .meta { flex-direction: column; }
         body.cliente .cierre { display: block; }
         body.cliente .totales { width: 100%; }
+        /* En el teléfono la fila se apila: el sello queda centrado arriba de
+           los totales en vez de pelearse por el ancho. */
+        body.cliente .sello { margin: 0 0 12px; text-align: center; }
+        body.cliente .sello img { width: 96px; }
         body.cliente .tarjeta .dato { font-size: 13px; }
         body.cliente table.items thead th { font-size: 10.5px; }
         body.cliente table.items tbody td { padding: 8px 4px; }
@@ -241,6 +250,12 @@
 
     {{-- Totales con desglose de ISV (precios con ISV incluido, se desglosa) --}}
     <div class="cierre">
+        @if ($sello ?? null)
+            {{-- Sello de hule del negocio: llena el blanco que queda frente a
+                 los totales y hace que la hoja se lea como un documento
+                 sellado, no como una impresión suelta. --}}
+            <div class="sello"><img src="{{ $sello }}" alt="Sello del negocio"></div>
+        @endif
         <div class="totales">
             <div class="fila"><span>Subtotal</span><span>L. {{ number_format((float) $c->subtotal, 2) }}</span></div>
             @if ((float) $c->descuento > 0)
