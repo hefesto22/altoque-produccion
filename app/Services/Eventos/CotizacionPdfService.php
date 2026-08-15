@@ -47,7 +47,7 @@ final class CotizacionPdfService
                 'telefono'         => $e->telefono,
                 // Comercial, no el fiscal: la cotización no es un documento
                 // del RTN, es la carta de venta del negocio.
-                'correo'           => $e->correoCotizaciones(),
+                'correo' => $e->correoCotizaciones(),
             ],
         ])->render();
     }

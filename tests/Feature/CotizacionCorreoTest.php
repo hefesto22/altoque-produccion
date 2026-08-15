@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Cache;
  * (personal de la titular) y el de la COTIZACIÓN es el comercial del negocio.
  * Confundirlos manda al cliente a escribirle al lugar equivocado.
  */
-
 function cotizacionDePrueba(): Cotizacion
 {
     return Cotizacion::create(['cliente_nombre' => 'INVERSIONES OLYMPO']);
@@ -24,8 +23,14 @@ function cotizacionDePrueba(): Cotizacion
  */
 function empresaConCorreos(string $fiscal, ?string $cotizaciones): void
 {
+    // Flush antes Y después, por lo mismo que en el sello: si el singleton
+    // viene cacheado de otro test, actual() no crea la fila y el update no
+    // encuentra qué tocar.
+    Cache::flush();
+
     EmpresaSetting::actual();
     EmpresaSetting::query()->update(['correo' => $fiscal, 'correo_cotizaciones' => $cotizaciones]);
+
     Cache::flush();
 }
 

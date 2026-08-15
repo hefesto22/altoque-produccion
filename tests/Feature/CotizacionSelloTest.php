@@ -19,9 +19,15 @@ use Illuminate\Support\Facades\Storage;
  */
 function brandingConSello(?string $path): void
 {
-    BrandingSetting::current();                                  // garantiza la fila
-    BrandingSetting::query()->update(['sello_path' => $path]);   // sin pasar por la caché
+    // El flush va PRIMERO: el singleton cacheado sobrevive de un test a otro,
+    // así que sin esto current() daba un cache hit, no creaba la fila, y el
+    // update de abajo no tocaba nada (la base quedaba vacía).
     Cache::flush();
+
+    BrandingSetting::current();                                  // ahora sí garantiza la fila
+    BrandingSetting::query()->update(['sello_path' => $path]);   // sin pasar por la caché
+
+    Cache::flush();                                              // que el servicio relea de la base
 }
 
 it('la cotización sale igual que siempre si no hay sello cargado', function () {
