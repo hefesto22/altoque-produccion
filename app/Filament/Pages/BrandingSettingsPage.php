@@ -118,7 +118,7 @@ class BrandingSettingsPage extends Page
                     ->schema([
                         FileUpload::make('sello_path')
                             ->label('Sello')
-                            ->helperText('Escaneá o fotografiá el sello sobre papel blanco y recortalo. PNG con fondo transparente es lo que mejor se ve. Máximo 5 MB.')
+                            ->helperText('Escaneá o fotografiá el sello y recortalo. PNG con fondo transparente es lo que mejor se ve — la transparencia se respeta. Se convierte automáticamente a WebP optimizado al guardar. Máximo 5 MB.')
                             ->image()
                             ->imageEditor()
                             ->disk('public')
