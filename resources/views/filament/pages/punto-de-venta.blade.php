@@ -26,6 +26,34 @@
         }
         .pos-sugerencias button { color: #111827; }
         .dark .pos-sugerencias button { color: #e7ecf3; }
+
+        /*
+         * Mosaico del catálogo: botón HTML plano en vez de x-filament::button.
+         * Son ~250 por render y cada componente de Filament hay que armarlo en
+         * el servidor y escupe medio KB de clases. Con la clase definida UNA
+         * vez, la respuesta del POS baja casi a la mitad y cada toque deja de
+         * costar 250 componentes Blade. El aspecto queda igual.
+         */
+        .pos-mosaico {
+            display: flex; width: 100%; align-items: center; justify-content: flex-start;
+            gap: .5rem; padding: .5rem .75rem; border-radius: .5rem;
+            font-size: .875rem; font-weight: 600; line-height: 1.25rem;
+            border: 1px solid rgba(128, 128, 128, .28);
+            background: rgba(128, 128, 128, .1); color: inherit;
+            text-align: left; cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+            transition: background-color .12s ease;
+        }
+        .pos-mosaico:hover { background: rgba(128, 128, 128, .2); }
+        .pos-mosaico:active { transform: translateY(1px); }
+        /* Plato del día y proteína seleccionada: color de marca lleno. */
+        .pos-mosaico-marca { background: var(--pos-marca); border-color: transparent; color: #fff; }
+        .pos-mosaico-marca:hover { background: color-mix(in srgb, var(--pos-marca) 88%, #000); }
+        /* Platillos completos: el mismo color, un poco más suave. */
+        .pos-mosaico-combo { background: color-mix(in srgb, var(--pos-marca) 74%, transparent); border-color: transparent; color: #fff; }
+        .pos-mosaico-combo:hover { background: color-mix(in srgb, var(--pos-marca) 88%, transparent); }
+        .pos-mosaico-texto { display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+        .pos-mosaico-precio { font-size: .7rem; opacity: .8; font-weight: 500; }
     </style>
 
     {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja.
@@ -293,15 +321,14 @@
                     <x-slot name="heading">🍽️ Plato del día</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
                         @foreach ($this->platosDelDia as $plato)
-                            <x-filament::button color="gray"
-                                style="width:100%; justify-content:flex-start; background:var(--pos-marca); border-color:transparent; color:#fff;"
+                            <button type="button" class="pos-mosaico pos-mosaico-marca"
                                 x-show="ver({{ \Illuminate\Support\Js::from($plato['nombre']) }})"
                                 wire:click="personalizarPlatillo({{ $plato['id'] }})">
-                                <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
-                                    <span style="font-weight:600;">{{ $plato['nombre'] }}</span>
-                                    <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $plato['precio'], 2) }}</span>
+                                <span class="pos-mosaico-texto">
+                                    <span>{{ $plato['nombre'] }}</span>
+                                    <span class="pos-mosaico-precio">L. {{ number_format((float) $plato['precio'], 2) }}</span>
                                 </span>
-                            </x-filament::button>
+                            </button>
                         @endforeach
                     </div>
                 </x-filament::section>
@@ -313,15 +340,14 @@
                     <x-slot name="heading">⭐ Platillos completos</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
                         @foreach ($this->combos as $combo)
-                            <x-filament::button color="gray"
-                                style="width:100%; justify-content:flex-start; background:color-mix(in srgb, var(--pos-marca) 74%, transparent); border-color:transparent; color:#fff;"
+                            <button type="button" class="pos-mosaico pos-mosaico-combo"
                                 x-show="ver({{ \Illuminate\Support\Js::from($combo['nombre']) }})"
                                 wire:click="personalizarPlatillo({{ $combo['id'] }})">
-                                <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
-                                    <span style="font-weight:600;">{{ $combo['nombre'] }}</span>
-                                    <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $combo['precio'], 2) }}</span>
+                                <span class="pos-mosaico-texto">
+                                    <span>{{ $combo['nombre'] }}</span>
+                                    <span class="pos-mosaico-precio">L. {{ number_format((float) $combo['precio'], 2) }}</span>
                                 </span>
-                            </x-filament::button>
+                            </button>
                         @endforeach
                     </div>
                 </x-filament::section>
@@ -331,15 +357,14 @@
                 <x-slot name="heading">1 · Proteína</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.5rem;">
                     @foreach ($this->proteinas as $p)
-                        <x-filament::button style="width:100%; justify-content:flex-start;"
+                        <button type="button" class="pos-mosaico{{ $proteinaId === $p['id'] ? ' pos-mosaico-marca' : '' }}"
                             x-show="ver({{ \Illuminate\Support\Js::from($p['nombre']) }})"
-                            :color="$proteinaId === $p['id'] ? 'primary' : 'gray'"
                             wire:click="seleccionarProteina({{ $p['id'] }})">
-                            <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
-                                <span style="font-weight:600;">{{ $p['nombre'] }}</span>
-                                <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $p['precio'], 2) }}</span>
+                            <span class="pos-mosaico-texto">
+                                <span>{{ $p['nombre'] }}</span>
+                                <span class="pos-mosaico-precio">L. {{ number_format((float) $p['precio'], 2) }}</span>
                             </span>
-                        </x-filament::button>
+                        </button>
                     @endforeach
                 </div>
             </x-filament::section>
@@ -434,14 +459,14 @@
                     <x-slot name="heading">Bebidas (ISV)</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
                         @forelse ($this->bebidas as $b)
-                            <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
+                            <button type="button" class="pos-mosaico"
                                 x-show="ver({{ \Illuminate\Support\Js::from($b['nombre']) }})"
                                 wire:click="agregarProducto({{ $b['id'] }})">
-                                <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
-                                    <span style="font-weight:600;">{{ $b['nombre'] }}</span>
-                                    <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $b['precio'], 2) }}</span>
+                                <span class="pos-mosaico-texto">
+                                    <span>{{ $b['nombre'] }}</span>
+                                    <span class="pos-mosaico-precio">L. {{ number_format((float) $b['precio'], 2) }}</span>
                                 </span>
-                            </x-filament::button>
+                            </button>
                         @empty
                             <p style="font-size:.8rem; opacity:.6; grid-column:1/-1;">Sin bebidas cargadas.</p>
                         @endforelse
@@ -452,14 +477,14 @@
                     <x-slot name="heading">Extras</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
                         @forelse ($this->extras as $e)
-                            <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
+                            <button type="button" class="pos-mosaico"
                                 x-show="ver({{ \Illuminate\Support\Js::from($e['nombre']) }})"
                                 wire:click="agregarProducto({{ $e['id'] }})">
-                                <span style="display:flex; flex-direction:column; align-items:flex-start; text-align:left;">
-                                    <span style="font-weight:600;">{{ $e['nombre'] }}</span>
-                                    <span style="font-size:.7rem; opacity:.8;">L. {{ number_format((float) $e['precio'], 2) }}</span>
+                                <span class="pos-mosaico-texto">
+                                    <span>{{ $e['nombre'] }}</span>
+                                    <span class="pos-mosaico-precio">L. {{ number_format((float) $e['precio'], 2) }}</span>
                                 </span>
-                            </x-filament::button>
+                            </button>
                         @empty
                             <p style="font-size:.8rem; opacity:.6; grid-column:1/-1;">Sin extras cargados.</p>
                         @endforelse
