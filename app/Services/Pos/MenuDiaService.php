@@ -11,6 +11,7 @@ use App\Models\Producto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Resuelve qué productos del catálogo están disponibles para una fecha y
@@ -26,6 +27,80 @@ use Illuminate\Support\Carbon;
  */
 final class MenuDiaService
 {
+    /** Prefijo de la caché del menú del POS: una entrada por fecha. */
+    private const CACHE_POS = 'pos.menu.';
+
+    /**
+     * Menú del POS agrupado por sección, en ARRAYS PLANOS y cacheado.
+     *
+     * Por qué arrays y no modelos: esto alimenta propiedades computadas de
+     * la página de Livewire. Un modelo Eloquent no se serializa — Livewire
+     * guarda clase+id y lo vuelve a traer de la base en CADA request. Con el
+     * menú viviendo en propiedades públicas, el POS disparaba una consulta
+     * por producto en cada toque de botón, antes de hacer nada de lo que se
+     * le había pedido. Eso era el segundo de espera por acción.
+     *
+     * Por qué cacheado: el catálogo no cambia entre clic y clic. Se guarda
+     * una entrada por fecha (el plato del día depende de la fecha) y muere
+     * sola al terminar el día o cuando alguien toca un producto
+     * (App\Observers\MenuPosObserver).
+     *
+     * @return array{proteinas: list<array<string, mixed>>, complementos: list<array<string, mixed>>, bebidas: list<array<string, mixed>>, extras: list<array<string, mixed>>, combos: list<array<string, mixed>>, platosDelDia: list<array<string, mixed>>}
+     */
+    public function paraElPos(Carbon $fecha): array
+    {
+        /** @var array{proteinas: list<array<string, mixed>>, complementos: list<array<string, mixed>>, bebidas: list<array<string, mixed>>, extras: list<array<string, mixed>>, combos: list<array<string, mixed>>, platosDelDia: list<array<string, mixed>>} $menu */
+        $menu = Cache::remember(
+            self::CACHE_POS.$fecha->toDateString(),
+            $fecha->copy()->endOfDay(),
+            function () use ($fecha): array {
+                $productos = $this->disponibles($fecha, null);
+
+                $seccion = static fn (string $categoria): array => $productos
+                    ->where('categoria', $categoria)
+                    ->map(static fn (Producto $p): array => [
+                        'id'             => (int) $p->id,
+                        'nombre'         => (string) $p->nombre,
+                        'precio'         => (float) $p->precio,
+                        'grava_isv'      => (bool) $p->grava_isv,
+                        'tier_combo'     => $p->tier_combo,
+                        'descripcion'    => $p->descripcion,
+                        'fecha_especial' => $p->fecha_especial?->toDateString(),
+                    ])
+                    ->values()
+                    ->all();
+
+                $combos = collect($seccion('combo'));
+
+                return [
+                    'proteinas'    => $seccion('proteina'),
+                    'complementos' => $seccion('complemento'),
+                    'bebidas'      => $seccion('bebida'),
+                    'extras'       => $seccion('extra'),
+                    // El especial del día va en su propia sección, arriba de
+                    // todo: es lo primero que pregunta el cliente y lo único
+                    // que la cocina hizo solo hoy.
+                    'platosDelDia' => $combos->whereNotNull('fecha_especial')->values()->all(),
+                    'combos'       => $combos->whereNull('fecha_especial')->values()->all(),
+                ];
+            },
+        );
+
+        return $menu;
+    }
+
+    /**
+     * El catálogo cambió: que el POS rearme el menú de hoy.
+     *
+     * Solo aplica a `productos` (precio, nombre, activo, plato del día). Las
+     * filas de `menu_dia` no entran acá: el POS pide el menú con servicio
+     * null y en ese caso `disponibles()` ni las mira.
+     */
+    public static function olvidarCachePos(): void
+    {
+        Cache::forget(self::CACHE_POS.now()->toDateString());
+    }
+
     /**
      * @return Collection<int, Producto>
      */

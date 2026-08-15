@@ -6,6 +6,9 @@ namespace App\Providers;
 
 use App\Domain\Contracts\CalculaImpuestos;
 use App\Listeners\RecordUserLogin;
+use App\Models\ComboEspecial;
+use App\Models\Producto;
+use App\Observers\MenuPosObserver;
 use App\Policies\ActivityPolicy;
 use App\Services\Pos\CalculadorVenta;
 use Carbon\Carbon;
@@ -76,6 +79,15 @@ class AppServiceProvider extends ServiceProvider
         // Con la policy activa, solo quien tenga ViewAny:Activity lo ve
         // (hoy: únicamente super_admin).
         Gate::policy(Activity::class, ActivityPolicy::class);
+
+        // ─── Caché del menú del POS ─────────────────────────────────────
+        // El POS lee el catálogo desde caché para no reconsultarlo en cada
+        // clic. Estos observers son los que la tiran cuando el catálogo
+        // cambia. Van los DOS: ComboEspecial hereda de Producto pero Eloquent
+        // dispara los eventos con la clase concreta, así que el observer del
+        // padre no se entera de lo que hace el hijo.
+        Producto::observe(MenuPosObserver::class);
+        ComboEspecial::observe(MenuPosObserver::class);
 
         // ─── Eventos ────────────────────────────────────────────────────
         Event::listen(Login::class, RecordUserLogin::class);

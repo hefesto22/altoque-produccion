@@ -286,11 +286,11 @@
             </div>
 
             {{-- Plato del día: el especial de hoy, primero de la lista. --}}
-            @if (count($platosDelDia))
-                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($platosDelDia)->pluck('nombre')) }}.some(n => ver(n))">
+            @if (count($this->platosDelDia))
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->platosDelDia)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">🍽️ Plato del día</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
-                        @foreach ($platosDelDia as $plato)
+                        @foreach ($this->platosDelDia as $plato)
                             <x-filament::button color="gray"
                                 style="width:100%; justify-content:flex-start; background:var(--pos-marca); border-color:transparent; color:#fff;"
                                 x-show="ver({{ \Illuminate\Support\Js::from($plato['nombre']) }})"
@@ -306,11 +306,11 @@
             @endif
 
             {{-- Platillos completos: cobro de un toque a precio fijo. --}}
-            @if (count($combos))
-                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($combos)->pluck('nombre')) }}.some(n => ver(n))">
+            @if (count($this->combos))
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->combos)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">⭐ Platillos completos</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.5rem;">
-                        @foreach ($combos as $combo)
+                        @foreach ($this->combos as $combo)
                             <x-filament::button color="gray"
                                 style="width:100%; justify-content:flex-start; background:color-mix(in srgb, var(--pos-marca) 74%, transparent); border-color:transparent; color:#fff;"
                                 x-show="ver({{ \Illuminate\Support\Js::from($combo['nombre']) }})"
@@ -325,10 +325,10 @@
                 </x-filament::section>
             @endif
 
-            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($proteinas)->pluck('nombre')) }}.some(n => ver(n))">
+            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->proteinas)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">1 · Proteína</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.5rem;">
-                    @foreach ($proteinas as $p)
+                    @foreach ($this->proteinas as $p)
                         <x-filament::button style="width:100%; justify-content:flex-start;"
                             x-show="ver({{ \Illuminate\Support\Js::from($p['nombre']) }})"
                             :color="$proteinaId === $p['id'] ? 'primary' : 'gray'"
@@ -388,10 +388,10 @@
                 </div>
             @endif
 
-            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($complementos)->pluck('nombre')) }}.some(n => ver(n))">
+            <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->complementos)->pluck('nombre')) }}.some(n => ver(n))">
                 <x-slot name="heading">2 · Complementos</x-slot>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr)); gap:.5rem;">
-                    @foreach ($complementos as $c)
+                    @foreach ($this->complementos as $c)
                         @php($n = $this->contarComplemento($c['id']))
                         @php($bajo = in_array($c['id'], $productosBajos, true))
                         {{-- TODA la tarjeta agrega el complemento. Los botones internos
@@ -428,10 +428,10 @@
             </x-filament::section>
 
             <div style="display:flex; flex-direction:column; gap:1.5rem;">
-                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($bebidas)->pluck('nombre')) }}.some(n => ver(n))">
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->bebidas)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Bebidas (ISV)</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
-                        @forelse ($bebidas as $b)
+                        @forelse ($this->bebidas as $b)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
                                 x-show="ver({{ \Illuminate\Support\Js::from($b['nombre']) }})"
                                 wire:click="agregarProducto({{ $b['id'] }})">
@@ -446,10 +446,10 @@
                     </div>
                 </x-filament::section>
 
-                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($extras)->pluck('nombre')) }}.some(n => ver(n))">
+                <x-filament::section x-show="filtro === '' || {{ \Illuminate\Support\Js::from(collect($this->extras)->pluck('nombre')) }}.some(n => ver(n))">
                     <x-slot name="heading">Extras</x-slot>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(9rem,1fr)); gap:.5rem;">
-                        @forelse ($extras as $e)
+                        @forelse ($this->extras as $e)
                             <x-filament::button style="width:100%; justify-content:flex-start;" color="gray"
                                 x-show="ver({{ \Illuminate\Support\Js::from($e['nombre']) }})"
                                 wire:click="agregarProducto({{ $e['id'] }})">
@@ -672,7 +672,7 @@
                             </x-filament::input.wrapper>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:.5rem; margin-top:.4rem; max-height:32vh; overflow-y:auto;">
-                            @foreach (['Proteínas' => $proteinas, 'Complementos' => $complementos, 'Bebidas' => $bebidas] as $titulo => $lista)
+                            @foreach (['Proteínas' => $this->proteinas, 'Complementos' => $this->complementos, 'Bebidas' => $this->bebidas] as $titulo => $lista)
                                 @if (count($lista))
                                     <div x-show="{{ \Illuminate\Support\Js::from(collect($lista)->pluck('nombre')) }}.some(n => ver(n))">
                                         <div style="font-size:.72rem; opacity:.6; margin-bottom:.2rem;">{{ $titulo }}</div>
@@ -689,7 +689,7 @@
                                 @endif
                             @endforeach
                             <div x-cloak
-                                x-show="q !== '' && ! {{ \Illuminate\Support\Js::from(collect($proteinas)->merge($complementos)->merge($bebidas)->pluck('nombre')) }}.some(n => ver(n))"
+                                x-show="q !== '' && ! {{ \Illuminate\Support\Js::from(collect($this->proteinas)->merge($this->complementos)->merge($this->bebidas)->pluck('nombre')) }}.some(n => ver(n))"
                                 style="opacity:.55; font-size:.82rem; text-align:center; padding:.5rem;">
                                 Sin resultados para “<span x-text="q"></span>”.
                             </div>

@@ -158,24 +158,18 @@ class PuntoDeVenta extends Page
     /** @var array<int, array{rtn: string, nombre: string}> sugerencias de clientes */
     public array $sugerencias = [];
 
-    // ── Menú cargado una vez (cambia poco) ──────────────────────────────
-    /** @var array<int, Producto> */
-    public array $proteinas = [];
-
-    /** @var array<int, Producto> */
-    public array $complementos = [];
-
-    /** @var array<int, Producto> */
-    public array $bebidas = [];
-
-    /** @var array<int, Producto> */
-    public array $extras = [];
-
-    /** @var array<int, Producto> combos promocionales con nombre */
-    public array $combos = [];
-
-    /** @var array<int, Producto> especiales atados solo a la fecha de hoy */
-    public array $platosDelDia = [];
+    /**
+     * Memo del menú para ESTE request (privado: Livewire no lo serializa).
+     *
+     * El menú dejó de ser estado de la página. Cuando vivía en propiedades
+     * públicas —arrays de modelos Eloquent— Livewire lo mandaba y lo traía
+     * en cada request y, peor, rehidrataba cada Producto con su propio
+     * SELECT: una consulta por producto en CADA toque de botón. Ahora se lee
+     * una sola vez por request desde la caché y no viaja en el snapshot.
+     *
+     * @var array<string, list<array<string, mixed>>>|null
+     */
+    private ?array $menuMemo = null;
 
     /**
      * Tipo de orden: 'local' (se consume en el local; cada línea define
@@ -271,7 +265,6 @@ class PuntoDeVenta extends Page
         $this->productosBajos = app(ReposicionService::class)->productosConAlerta();
 
         $this->cargarTurno();
-        $this->cargarMenu();
 
         // Si se viene de "Anular y corregir", precarga ese pedido al carrito.
         $rehacer = request()->integer('rehacer');
@@ -582,19 +575,52 @@ class PuntoDeVenta extends Page
      * El Menú del Día NO desaparece: sigue mandando en la pantalla /menu de
      * la TV, que es donde el cliente ve qué hay hoy por servicio.
      */
-    private function cargarMenu(): void
+    /**
+     * El menú del día, ya agrupado por sección. Una lectura de caché por
+     * request (MenuDiaService::paraElPos) y memo para que da igual cuántas
+     * veces lo pida el blade.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function menu(): array
     {
-        $productos = app(MenuDiaService::class)->disponibles(now(), null);
+        return $this->menuMemo ??= app(MenuDiaService::class)->paraElPos(now());
+    }
 
-        $this->proteinas = $productos->where('categoria', 'proteina')->values()->all();
-        $this->complementos = $productos->where('categoria', 'complemento')->values()->all();
-        $this->bebidas = $productos->where('categoria', 'bebida')->values()->all();
-        $this->extras = $productos->where('categoria', 'extra')->values()->all();
-        // El especial del día va en su propia sección, arriba de todo: es lo
-        // primero que pregunta el cliente y lo único que la cocina hizo solo hoy.
-        $combos = $productos->where('categoria', 'combo');
-        $this->platosDelDia = $combos->whereNotNull('fecha_especial')->values()->all();
-        $this->combos = $combos->whereNull('fecha_especial')->values()->all();
+    /** @return list<array<string, mixed>> */
+    public function getProteinasProperty(): array
+    {
+        return $this->menu()['proteinas'];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function getComplementosProperty(): array
+    {
+        return $this->menu()['complementos'];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function getBebidasProperty(): array
+    {
+        return $this->menu()['bebidas'];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function getExtrasProperty(): array
+    {
+        return $this->menu()['extras'];
+    }
+
+    /** @return list<array<string, mixed>> combos promocionales con nombre */
+    public function getCombosProperty(): array
+    {
+        return $this->menu()['combos'];
+    }
+
+    /** @return list<array<string, mixed>> especiales atados solo a la fecha de hoy */
+    public function getPlatosDelDiaProperty(): array
+    {
+        return $this->menu()['platosDelDia'];
     }
 
     // ── Construcción del plato ──────────────────────────────────────────
@@ -631,9 +657,12 @@ class PuntoDeVenta extends Page
             return;
         }
 
+        // Desde PHP se llama al getter, no a $this->complementos: la
+        // propiedad computada es magia de Livewire y el análisis estático
+        // no la ve (misma convención que getMixtoSumaProperty()).
         $ids = array_map(
-            static fn (Producto $c): int => (int) $c->id,
-            array_slice($this->complementos, 0, max(0, $n)),
+            static fn (array $c): int => (int) $c['id'],
+            array_slice($this->getComplementosProperty(), 0, max(0, $n)),
         );
 
         if (count($ids) < $n) {
