@@ -513,11 +513,6 @@ class PuntoDeVenta extends Page
         $this->cargarTurno();
     }
 
-    public function setTipoServicio(string $tipo): void
-    {
-        $this->tipoServicio = $tipo;
-    }
-
     /**
      * Alterna el aviso de reposición de un complemento: si no estaba bajo,
      * avisa a cocina; si ya estaba avisado, lo quita (ya se repuso).
@@ -1084,6 +1079,10 @@ class PuntoDeVenta extends Page
         $this->anulandoPendienteId = null;
         $this->cobroFormaPendiente = '';
         $this->cobroBanco = '';
+        // El chip de tipo de orden lo pinta Alpine: si el servidor lo resetea
+        // sin avisar, la pantalla queda diciendo "Para llevar" mientras la
+        // próxima venta sale como "En el local".
+        $this->sincronizarTipoOrden();
         // OJO: el modo AGREGANDO no se toca acá. "Vaciar" borra lo picado
         // pero el mesero sigue parado en la misma cuenta abierta; del modo
         // se sale con "Cancelar" o al agregar con éxito.
@@ -1517,6 +1516,22 @@ class PuntoDeVenta extends Page
         $this->domIdentidad = (string) ($comanda?->cliente_identidad ?? '');
         $this->domDireccion = (string) ($comanda?->cliente_direccion ?? '');
         $this->costoViaje = '';
+
+        // El tipo lo manda la cuenta abierta: hay que reflejarlo en pantalla.
+        $this->sincronizarTipoOrden();
+    }
+
+    /**
+     * Le dice a la pantalla en qué tipo de orden quedó el servidor.
+     *
+     * Los chips "En el local / Para llevar / A domicilio" los pinta Alpine
+     * para que el toque sea instantáneo; cuando el tipo cambia del lado del
+     * servidor (al limpiar la venta o al pararse en una cuenta abierta) hay
+     * que sincronizarlo o la caja ve una cosa y factura otra.
+     */
+    private function sincronizarTipoOrden(): void
+    {
+        $this->dispatch('pos-tipo-orden', tipo: $this->tipoServicio);
     }
 
     /** Sale del modo AGREGANDO sin tocar el carrito: lo picado no se pierde. */

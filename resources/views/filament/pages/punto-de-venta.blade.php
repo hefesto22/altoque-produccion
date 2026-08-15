@@ -54,12 +54,34 @@
         .pos-mosaico-combo:hover { background: color-mix(in srgb, var(--pos-marca) 88%, transparent); }
         .pos-mosaico-texto { display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
         .pos-mosaico-precio { font-size: .7rem; opacity: .8; font-weight: 500; }
+
+        /* Chips de tipo de orden: el estado activo lo pinta Alpine, no el servidor. */
+        .pos-chip {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: .35rem .75rem; border-radius: .5rem;
+            font-size: .8rem; font-weight: 600; line-height: 1.2;
+            border: 1px solid rgba(128, 128, 128, .28);
+            background: rgba(128, 128, 128, .1); color: inherit;
+            cursor: pointer; white-space: nowrap;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+            transition: background-color .12s ease;
+        }
+        .pos-chip:hover { background: rgba(128, 128, 128, .2); }
+        .pos-chip-activo { background: var(--pos-marca); border-color: transparent; color: #fff; }
+        .pos-chip:disabled { opacity: .5; cursor: not-allowed; }
     </style>
 
     {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja.
          --pos-marca sale del color configurado en Sistema → Configuración: los
          mosaicos se pintan con tonos de ESE color, no con naranjas fijos. --}}
-    <div style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
+    {{-- `tipoOrden` en Alpine: cambiar En el local / Para llevar es puro UI y
+         se pinta al instante. El servidor se entera con la siguiente acción
+         ($wire.set diferido). Si el POS resetea el tipo (al terminar una venta
+         o al pararse en una cuenta abierta) avisa por `pos-tipo-orden` para que
+         la pantalla no quede diciendo una cosa y el servidor otra. --}}
+    <div x-data="{ tipoOrden: @js($tipoServicio) }"
+         x-on:pos-tipo-orden.window="tipoOrden = $event.detail.tipo"
+         style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
 
     {{-- Cola de impresión: lo que se pidió desde las tablets y todavía no
          salió en papel. Componente Livewire aparte, con su propio poll, para
@@ -101,9 +123,15 @@
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
             @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
                 {{-- Agregando a una cuenta: el tipo lo manda la orden original
-                     (lo agregado viaja igual que lo que ya salió). --}}
-                <x-filament::button size="sm" :color="$tipoServicio === $val ? 'primary' : 'gray'"
-                    :disabled="$agregandoAId !== null" wire:click="setTipoServicio('{{ $val }}')">{{ $lbl }}</x-filament::button>
+                     (lo agregado viaja igual que lo que ya salió).
+
+                     Solo se va al servidor cuando se cruza la frontera de
+                     domicilio: ese formulario se arma en el servidor. Entre
+                     "En el local" y "Para llevar" el cambio es instantáneo. --}}
+                @php($cruzaDomicilio = $val === 'domicilio' || $tipoServicio === 'domicilio')
+                <button type="button" class="pos-chip" :class="{ 'pos-chip-activo': tipoOrden === '{{ $val }}' }"
+                    @disabled($agregandoAId !== null)
+                    x-on:click="tipoOrden = '{{ $val }}'; $wire.set('tipoServicio', '{{ $val }}', {{ $cruzaDomicilio ? 'true' : 'false' }})">{{ $lbl }}</button>
             @endforeach
         </div>
 
@@ -114,16 +142,15 @@
             <div style="width:1px; height:1.6rem; background:rgba(128,128,128,.3);"></div>
             <div style="display:flex; align-items:center; gap:.5rem; flex:1; min-width:20rem;">
                 <x-filament::icon icon="heroicon-o-user" style="width:1.25rem; height:1.25rem; opacity:.65; flex-shrink:0;" />
-                <span style="font-size:.78rem; opacity:.6; white-space:nowrap;">Cliente{{ $tipoServicio === 'llevar' ? ' *' : '' }}:</span>
+                <span style="font-size:.78rem; opacity:.6; white-space:nowrap;">Cliente<span x-show="tipoOrden === 'llevar'"> *</span>:</span>
                 <div style="flex:1; max-width:22rem;">
                     <x-filament::input.wrapper>
                         <x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" />
                     </x-filament::input.wrapper>
                 </div>
                 <span style="font-size:.66rem; opacity:.5; line-height:1.2;">
-                    {{ $tipoServicio === 'llevar'
-                        ? 'Para llamarlo cuando esté listo'
-                        : 'Obligatorio al mandar a cocina (sale en la comanda)' }}
+                    <span x-show="tipoOrden === 'llevar'">Para llamarlo cuando esté listo</span>
+                    <span x-show="tipoOrden !== 'llevar'">Obligatorio al mandar a cocina (sale en la comanda)</span>
                 </span>
             </div>
         @endif
