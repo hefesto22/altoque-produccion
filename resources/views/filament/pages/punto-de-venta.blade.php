@@ -74,14 +74,7 @@
     {{-- Todo el POS en MAYÚSCULAS para lectura rápida en caja.
          --pos-marca sale del color configurado en Sistema → Configuración: los
          mosaicos se pintan con tonos de ESE color, no con naranjas fijos. --}}
-    {{-- `tipoOrden` en Alpine: cambiar En el local / Para llevar es puro UI y
-         se pinta al instante. El servidor se entera con la siguiente acción
-         ($wire.set diferido). Si el POS resetea el tipo (al terminar una venta
-         o al pararse en una cuenta abierta) avisa por `pos-tipo-orden` para que
-         la pantalla no quede diciendo una cosa y el servidor otra. --}}
-    <div x-data="{ tipoOrden: @js($tipoServicio) }"
-         x-on:pos-tipo-orden.window="tipoOrden = $event.detail.tipo"
-         style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
+    <div style="text-transform:uppercase; --pos-marca: {{ $this->marcaColor }};">
 
     {{-- Cola de impresión: lo que se pidió desde las tablets y todavía no
          salió en papel. Componente Livewire aparte, con su propio poll, para
@@ -118,23 +111,26 @@
          de servicio (Desayuno/Almuerzo/Cena) ya no está: el POS muestra TODO
          el catálogo y el cajero filtra con el buscador; el Menú del Día sigue
          mandando en la pantalla /menu de la TV, no acá. --}}
-    <div style="display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin-bottom:1rem;">
+    <div x-data style="display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; margin-bottom:1rem;">
         <div style="display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;">
             <span style="font-size:.78rem; opacity:.6;">Orden:</span>
             @foreach (['local' => 'En el local', 'llevar' => 'Para llevar', 'domicilio' => 'A domicilio'] as $val => $lbl)
                 {{-- Agregando a una cuenta: el tipo lo manda la orden original
                      (lo agregado viaja igual que lo que ya salió).
 
-                     El color activo lo pinta el SERVIDOR (clase estática) y
-                     Alpine solo lo adelanta mientras viaja la petición. Si el
-                     activo viviera solo en Alpine, el morph de Livewire —o el
-                     poll de 15 s— reescribe el atributo class con lo que mandó
-                     el servidor y el chip se queda sin color. --}}
+                     UNA sola fuente de verdad: `$wire.tipoServicio` es la
+                     propiedad de Livewire leída de forma reactiva desde Alpine.
+                     Asignarla repinta el chip en el acto y manda el cambio al
+                     servidor. Antes había una copia en Alpine y la copia se
+                     desincronizaba: el resaltado quedaba un clic atrasado.
+
+                     La clase estática la sigue poniendo el servidor para que el
+                     chip nazca pintado, antes de que Alpine arranque. --}}
                 <button type="button"
                     class="pos-chip{{ $tipoServicio === $val ? ' pos-chip-activo' : '' }}"
-                    :class="{ 'pos-chip-activo': tipoOrden === '{{ $val }}' }"
+                    :class="{ 'pos-chip-activo': $wire.tipoServicio === '{{ $val }}' }"
                     @disabled($agregandoAId !== null)
-                    x-on:click="tipoOrden = '{{ $val }}'; $wire.set('tipoServicio', '{{ $val }}')">{{ $lbl }}</button>
+                    x-on:click="$wire.tipoServicio = '{{ $val }}'">{{ $lbl }}</button>
             @endforeach
         </div>
 
@@ -145,15 +141,15 @@
             <div style="width:1px; height:1.6rem; background:rgba(128,128,128,.3);"></div>
             <div style="display:flex; align-items:center; gap:.5rem; flex:1; min-width:20rem;">
                 <x-filament::icon icon="heroicon-o-user" style="width:1.25rem; height:1.25rem; opacity:.65; flex-shrink:0;" />
-                <span style="font-size:.78rem; opacity:.6; white-space:nowrap;">Cliente<span x-show="tipoOrden === 'llevar'"> *</span>:</span>
+                <span style="font-size:.78rem; opacity:.6; white-space:nowrap;">Cliente<span x-show="$wire.tipoServicio === 'llevar'"> *</span>:</span>
                 <div style="flex:1; max-width:22rem;">
                     <x-filament::input.wrapper>
                         <x-filament::input type="text" wire:model="domNombre" placeholder="Nombre del cliente" />
                     </x-filament::input.wrapper>
                 </div>
                 <span style="font-size:.66rem; opacity:.5; line-height:1.2;">
-                    <span x-show="tipoOrden === 'llevar'">Para llamarlo cuando esté listo</span>
-                    <span x-show="tipoOrden !== 'llevar'">Obligatorio al mandar a cocina (sale en la comanda)</span>
+                    <span x-show="$wire.tipoServicio === 'llevar'">Para llamarlo cuando esté listo</span>
+                    <span x-show="$wire.tipoServicio !== 'llevar'">Obligatorio al mandar a cocina (sale en la comanda)</span>
                 </span>
             </div>
         @endif
