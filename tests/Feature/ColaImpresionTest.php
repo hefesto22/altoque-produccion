@@ -554,3 +554,115 @@ it('el ticket de comanda dice quién atendió el pedido', function () {
         ->assertOk()
         ->assertSee('CARLOS MESERO');
 });
+
+/*
+ * ── Reimprimir media orden ───────────────────────────────────────────────
+ *
+ * El documento combinado lleva factura Y comanda, pero cada papel termina en
+ * un lugar distinto: el cliente y la cocina. Si la cocina pierde su comanda no
+ * hay por qué volver a sacar la factura fiscal, y al revés.
+ */
+
+/** Factura cobrada que SÍ tiene comanda: la orden completa del local. */
+function ordenConComanda(User $autor): Factura
+{
+    if (Cai::query()->count() === 0) {
+        Cai::factory()->create();
+    }
+
+    app(CorteCajaService::class)->abrir($autor->id, 0.0);
+
+    $comanda = comandaImprimible($autor);
+
+    return app(VentaService::class)->cobrarPendiente(
+        $comanda->venta,
+        $autor->id,
+        null,
+        'Consumidor Final',
+        'efectivo',
+    );
+}
+
+it('de una orden se puede reimprimir solo la factura', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $factura = ordenConComanda($cajero);
+    app(ColaImpresionService::class)->enviar('documentos', (int) $factura->id, 'Orden LL-1', 'L. 80.00');
+
+    $fila = Impresion::query()->where('tipo', 'documentos')->firstOrFail();
+
+    Livewire::actingAs($cajero)
+        ->test(ColaImpresion::class)
+        ->call('reimprimirParte', $fila->id, 'factura')
+        ->assertDispatched(
+            'imprimir-factura',
+            fn (string $evento, array $params): bool => str_contains((string) $params['url'], '/facturas/'.$factura->id.'/ticket'),
+        );
+});
+
+it('de una orden se puede reimprimir solo la comanda', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $factura = ordenConComanda($cajero);
+    $comandaId = $factura->venta->comanda?->id;
+
+    app(ColaImpresionService::class)->enviar('documentos', (int) $factura->id, 'Orden LL-1', 'L. 80.00');
+    $fila = Impresion::query()->where('tipo', 'documentos')->firstOrFail();
+
+    Livewire::actingAs($cajero)
+        ->test(ColaImpresion::class)
+        ->call('reimprimirParte', $fila->id, 'comanda')
+        ->assertDispatched(
+            'imprimir-factura',
+            fn (string $evento, array $params): bool => str_contains((string) $params['url'], '/comandas/'.$comandaId),
+        );
+});
+
+it('una parte inventada cae al documento completo, no a un error', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $factura = ordenConComanda($cajero);
+    app(ColaImpresionService::class)->enviar('documentos', (int) $factura->id, 'Orden LL-1', 'L. 80.00');
+    $fila = Impresion::query()->where('tipo', 'documentos')->firstOrFail();
+
+    // El nombre de la parte llega del navegador: lista blanca en el servidor.
+    Livewire::actingAs($cajero)
+        ->test(ColaImpresion::class)
+        ->call('reimprimirParte', $fila->id, 'lo-que-sea')
+        ->assertDispatched(
+            'imprimir-factura',
+            fn (string $evento, array $params): bool => str_contains((string) $params['url'], '/facturas/'.$factura->id.'/documentos'),
+        );
+});
+
+it('si la orden no tiene comanda, no manda papel en blanco a la térmica', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    // Cobrada al momento sin comanda (el flag de comanda en local, apagado).
+    $factura = facturaImprimible($cajero);
+    app(ColaImpresionService::class)->enviar('documentos', (int) $factura->id, 'Orden LL-1', 'L. 80.00');
+    $fila = Impresion::query()->where('tipo', 'documentos')->firstOrFail();
+
+    Livewire::actingAs($cajero)
+        ->test(ColaImpresion::class)
+        ->call('reimprimirParte', $fila->id, 'comanda')
+        ->assertNotDispatched('imprimir-factura');
+});
+
+it('el mesero no puede reimprimir partes desde la tablet', function () {
+    $cajero = usuarioDeRol('cajero');
+    Auth::login($cajero);
+
+    $factura = ordenConComanda($cajero);
+    app(ColaImpresionService::class)->enviar('documentos', (int) $factura->id, 'Orden LL-1', 'L. 80.00');
+    $fila = Impresion::query()->where('tipo', 'documentos')->firstOrFail();
+
+    Livewire::actingAs(usuarioDeRol('mesero'))
+        ->test(ColaImpresion::class)
+        ->call('reimprimirParte', $fila->id, 'factura')
+        ->assertForbidden();
+});

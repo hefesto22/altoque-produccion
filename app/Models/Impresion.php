@@ -95,6 +95,41 @@ class Impresion extends Model
         };
     }
 
+    /**
+     * URL de UNA parte del documento combinado (factura + comanda).
+     *
+     * El cliente pidió poder sacar solo el papel que hace falta: si la
+     * cocina perdió su comanda no hay por qué volver a imprimir la factura
+     * fiscal, y al revés. En cualquier otro tipo la parte se ignora — un
+     * ticket suelto no tiene mitades.
+     *
+     * La comanda sale de la misma relación que usa el documento combinado
+     * (`venta.comanda`), así que reimprimir "solo la comanda" da exactamente
+     * el papel que salió pegado a la factura.
+     *
+     * @param string $parte 'factura' | 'comanda' | cualquier otra cosa = ambas
+     */
+    public function urlParte(string $parte): ?string
+    {
+        if (! $this->esCombinada()) {
+            return $this->url();
+        }
+
+        $factura = Factura::find($this->referencia_id);
+
+        return match ($parte) {
+            'factura' => $factura?->urlTicket(),
+            'comanda' => $factura?->venta?->comanda?->urlTicket(),
+            default   => $factura?->urlDocumentos(),
+        };
+    }
+
+    /** ¿Es el documento de factura + comanda, el único que se puede partir? */
+    public function esCombinada(): bool
+    {
+        return $this->tipo === 'documentos';
+    }
+
     public function tipoLabel(): string
     {
         return match ($this->tipo) {

@@ -110,6 +110,44 @@ class ColaImpresion extends Component
     }
 
     /**
+     * Reimprime SOLO una parte del documento combinado (factura + comanda).
+     *
+     * Va solo en la lista de recientes, no en la de pendientes: un pendiente
+     * se marca impreso al reclamarlo, así que sacar media orden dejaría la
+     * otra mitad marcada como impresa y sin papel — y una comanda que no sale
+     * es un pedido perdido en cocina. Acá no se toca ningún estado.
+     */
+    public function reimprimirParte(int $id, string $parte): void
+    {
+        abort_unless(Acceso::puede('ImprimirDirecto'), 403);
+
+        // Lista blanca: el nombre de la parte viene del navegador.
+        if (! in_array($parte, ['factura', 'comanda', 'ambas'], true)) {
+            $parte = 'ambas';
+        }
+
+        $impresion = Impresion::find($id);
+
+        if ($impresion === null) {
+            return;
+        }
+
+        $url = $impresion->urlParte($parte);
+
+        if ($url === null) {
+            Notification::make()
+                ->title($parte === 'comanda' ? 'Esa orden no tiene comanda' : 'Ese documento ya no existe')
+                ->body($impresion->etiqueta)
+                ->danger()
+                ->seconds(4)->send();
+
+            return;
+        }
+
+        $this->dispatch('imprimir-factura', url: $url);
+    }
+
+    /**
      * Vuelve a sacar TODA la lista de recientes en un solo documento. Es el
      * rescate cuando alguien cancela el diálogo a mitad de una tanda: los
      * trabajos ya quedaron marcados impresos y de a uno serían veinte clics.

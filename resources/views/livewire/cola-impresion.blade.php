@@ -157,10 +157,30 @@
                                 @endif
                             </div>
                             <span style="font-size:.72rem; opacity:.55;">{{ $r->impreso_at?->format('h:i a') }}</span>
-                            <x-filament::button size="xs" color="gray" outlined
-                                wire:click="reimprimir({{ $r->id }})">
-                                Reimprimir
-                            </x-filament::button>
+                            @if ($r->esCombinada())
+                                {{-- Factura + comanda: el papel de cada una termina en un
+                                     lugar distinto (el cliente y la cocina), así que se
+                                     puede sacar solo la que falta. Pedido del cliente. --}}
+                                <div style="display:flex; gap:.3rem; flex-wrap:wrap;">
+                                    <x-filament::button size="xs" color="gray" outlined
+                                        wire:click="reimprimirParte({{ $r->id }}, 'factura')">
+                                        Solo factura
+                                    </x-filament::button>
+                                    <x-filament::button size="xs" color="warning" outlined
+                                        wire:click="reimprimirParte({{ $r->id }}, 'comanda')">
+                                        Solo comanda
+                                    </x-filament::button>
+                                    <x-filament::button size="xs" color="gray" outlined
+                                        wire:click="reimprimirParte({{ $r->id }}, 'ambas')">
+                                        Ambas
+                                    </x-filament::button>
+                                </div>
+                            @else
+                                <x-filament::button size="xs" color="gray" outlined
+                                    wire:click="reimprimir({{ $r->id }})">
+                                    Reimprimir
+                                </x-filament::button>
+                            @endif
                         </div>
                     @endforeach
                 </div>
