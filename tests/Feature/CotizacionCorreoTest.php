@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\Cotizacion;
 use App\Models\EmpresaSetting;
 use App\Services\Eventos\CotizacionPdfService;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Dos correos distintos: el de la FACTURA pertenece al RTN del emisor
@@ -17,11 +18,19 @@ function cotizacionDePrueba(): Cotizacion
     return Cotizacion::create(['cliente_nombre' => 'INVERSIONES OLYMPO']);
 }
 
+/**
+ * `EmpresaSetting::actual()` es un singleton cacheado: se toca la fila directo
+ * y se limpia la caché para que el test no dependa del orden de ejecución.
+ */
+function empresaConCorreos(string $fiscal, ?string $cotizaciones): void
+{
+    EmpresaSetting::actual();
+    EmpresaSetting::query()->update(['correo' => $fiscal, 'correo_cotizaciones' => $cotizaciones]);
+    Cache::flush();
+}
+
 it('la cotización usa el correo comercial, no el fiscal de las facturas', function () {
-    EmpresaSetting::actual()->update([
-        'correo'              => 'fiscal@hotmail.com',
-        'correo_cotizaciones' => 'negocio@icloud.com',
-    ]);
+    empresaConCorreos('fiscal@hotmail.com', 'negocio@icloud.com');
 
     $html = app(CotizacionPdfService::class)->html(cotizacionDePrueba());
 
@@ -30,10 +39,7 @@ it('la cotización usa el correo comercial, no el fiscal de las facturas', funct
 });
 
 it('sin correo comercial cargado, la cotización cae al fiscal', function () {
-    EmpresaSetting::actual()->update([
-        'correo'              => 'fiscal@hotmail.com',
-        'correo_cotizaciones' => null,
-    ]);
+    empresaConCorreos('fiscal@hotmail.com', null);
 
     expect(app(CotizacionPdfService::class)->html(cotizacionDePrueba()))
         ->toContain('fiscal@hotmail.com');

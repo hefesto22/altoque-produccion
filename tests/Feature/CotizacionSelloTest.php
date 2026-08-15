@@ -5,14 +5,28 @@ declare(strict_types=1);
 use App\Models\BrandingSetting;
 use App\Models\Cotizacion;
 use App\Services\Eventos\CotizacionPdfService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 /**
  * El sello de hule del negocio en la cotización que ve el cliente.
  * Se sube una sola vez en Configuración y sale frente a los totales.
+ *
+ * OJO con el arreglo: `BrandingSetting::current()` es un singleton CACHEADO.
+ * Actualizarlo a través de esa instancia deja la caché y la base desalineadas
+ * según el orden en que corran los tests, así que acá se toca la fila directo
+ * y se limpia la caché a mano.
  */
+function brandingConSello(?string $path): void
+{
+    BrandingSetting::current();                                  // garantiza la fila
+    BrandingSetting::query()->update(['sello_path' => $path]);   // sin pasar por la caché
+    Cache::flush();
+}
 
 it('la cotización sale igual que siempre si no hay sello cargado', function () {
+    brandingConSello(null);
+
     $cotizacion = Cotizacion::create(['cliente_nombre' => 'INVERSIONES OLYMPO']);
 
     expect(app(CotizacionPdfService::class)->html($cotizacion))
@@ -23,7 +37,10 @@ it('embebe el sello cargado en Configuración, no lo enlaza', function () {
     Storage::fake('public');
     Storage::disk('public')->put('branding/sello.webp', 'imagen-de-prueba');
 
-    BrandingSetting::current()->update(['sello_path' => 'branding/sello.webp']);
+    brandingConSello('branding/sello.webp');
+
+    // Guarda del arreglo: si esto falla, el problema no está en la vista.
+    expect(BrandingSetting::current()->sello_path)->toBe('branding/sello.webp');
 
     $cotizacion = Cotizacion::create(['cliente_nombre' => 'INVERSIONES OLYMPO']);
     $html = app(CotizacionPdfService::class)->html($cotizacion);
