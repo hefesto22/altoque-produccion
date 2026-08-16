@@ -24,41 +24,102 @@ use Spatie\Permission\PermissionRegistrar;
 beforeEach(function () {
     config()->set('cobro.inicio', '2026-08');
     config()->set('cobro.etapas', [
-        ['meses' => 24, 'monto' => 5000.00, 'concepto' => 'Desarrollo, servidor y mantenimiento'],
+        ['meses' => 12, 'monto' => 5000.00, 'concepto' => 'Desarrollo, servidor y mantenimiento'],
+        ['meses' => 12, 'monto' => 3450.00, 'concepto' => 'Servidor y mantenimiento (L. 3,000 + 15%)'],
     ]);
 });
 
-it('genera las 24 cuotas del contrato desde agosto 2026', function () {
+it('genera las 24 cuotas en dos tramos: 5,000 el primer año y 3,450 el segundo', function () {
     $creadas = app(PagoSistemaService::class)->sincronizarPlan();
 
+    // 12 x 5,000 + 12 x 3,450 = 101,400.
     expect($creadas)->toBe(24)
         ->and(PagoSistema::query()->count())->toBe(24)
-        ->and(round((float) PagoSistema::query()->sum('monto'), 2))->toBe(120000.00);
+        ->and(round((float) PagoSistema::query()->sum('monto'), 2))->toBe(101400.00);
 
     $primera = PagoSistema::query()->orderBy('periodo')->firstOrFail();
+    $ultimaDelAno1 = PagoSistema::query()->where('numero', 12)->firstOrFail();
+    $primeraDelAno2 = PagoSistema::query()->where('numero', 13)->firstOrFail();
     $ultima = PagoSistema::query()->orderByDesc('periodo')->firstOrFail();
 
     expect($primera->periodo->toDateString())->toBe('2026-08-01')
-        ->and($primera->numero)->toBe(1)
+        ->and((float) $primera->monto)->toBe(5000.00)
         ->and($primera->concepto)->toBe('Desarrollo, servidor y mantenimiento')
-        // 24 meses desde agosto 2026 terminan en julio de 2028.
+        // El tramo caro termina en julio 2027 y el barato arranca en agosto.
+        ->and($ultimaDelAno1->periodo->toDateString())->toBe('2027-07-01')
+        ->and((float) $ultimaDelAno1->monto)->toBe(5000.00)
+        ->and($primeraDelAno2->periodo->toDateString())->toBe('2027-08-01')
+        ->and((float) $primeraDelAno2->monto)->toBe(3450.00)
         ->and($ultima->periodo->toDateString())->toBe('2028-07-01')
         ->and($ultima->numero)->toBe(24);
 });
 
-it('sincronizar dos veces no duplica ni pisa lo ya cobrado', function () {
+it('un cargo extra se suma al total sin deformar el contrato', function () {
     app(PagoSistemaService::class)->sincronizarPlan();
 
-    $cuota = PagoSistema::query()->orderBy('periodo')->firstOrFail();
-    app(PagoSistemaService::class)->marcarPagada($cuota, 5000.00, 'transferencia');
+    app(PagoSistemaService::class)->agregarCargo(
+        'Módulo de inventario',
+        15000.00,
+        Carbon::parse('2026-11-01'),
+        'Lo pidió el cliente en octubre',
+    );
 
-    // Cambia el contrato: lo ya creado NO se reescribe (es historia).
+    $r = PagoSistema::resumen();
+
+    expect($r['contrato'])->toBe(101400.00)   // el contrato NO se movió
+        ->and($r['extras'])->toBe(15000.00)
+        ->and($r['total'])->toBe(116400.00)
+        ->and($r['cuotas'])->toBe(24)         // el extra no es una cuota
+        ->and(PagoSistema::query()->extras()->count())->toBe(1);
+
+    // Y sincronizar de nuevo no lo toca ni lo borra.
+    app(PagoSistemaService::class)->sincronizarPlan();
+
+    expect(PagoSistema::query()->extras()->count())->toBe(1)
+        ->and(PagoSistema::resumen()['total'])->toBe(116400.00);
+});
+
+it('un extra pagado NO tapa el aviso de la mensualidad de ese mes', function () {
+    Carbon::setTestNow(Carbon::parse('2026-11-05 18:00:00'));
+
+    app(PagoSistemaService::class)->sincronizarPlan();
+
+    $extra = app(PagoSistemaService::class)->agregarCargo('Módulo nuevo', 15000.00, Carbon::parse('2026-11-01'));
+    app(PagoSistemaService::class)->marcarPagada($extra, 15000.00, 'transferencia');
+
+    // Pagó el módulo, no la mensualidad: el aviso tiene que seguir saliendo.
+    expect(CobroMensual::yaPagado(Carbon::parse('2026-11-01')))->toBeFalse();
+
+    Carbon::setTestNow();
+});
+
+it('si se renegocia el trato: lo pagado queda, lo pendiente se actualiza', function () {
+    app(PagoSistemaService::class)->sincronizarPlan();
+
+    $cuota1 = PagoSistema::query()->where('numero', 1)->firstOrFail();
+    app(PagoSistemaService::class)->marcarPagada($cuota1, 5000.00, 'transferencia');
+
     config()->set('cobro.etapas', [['meses' => 24, 'monto' => 9999.00, 'concepto' => 'Otro']]);
 
     expect(app(PagoSistemaService::class)->sincronizarPlan())->toBe(0)
-        ->and(PagoSistema::query()->count())->toBe(24)
-        ->and((float) $cuota->fresh()->monto)->toBe(5000.00)
-        ->and($cuota->fresh()->pagada)->toBeTrue();
+        ->and(PagoSistema::query()->count())->toBe(24);
+
+    // Agosto ya se cobró: sigue diciendo lo que decía el día que entró la
+    // plata. Septiembre no se ha pagado: sigue el trato nuevo.
+    expect((float) $cuota1->fresh()->monto)->toBe(5000.00)
+        ->and($cuota1->fresh()->pagada)->toBeTrue()
+        ->and((float) PagoSistema::query()->where('numero', 2)->firstOrFail()->monto)->toBe(9999.00);
+});
+
+it('si el contrato se acorta, las cuotas de mas sin pagar se van', function () {
+    app(PagoSistemaService::class)->sincronizarPlan();
+
+    expect(PagoSistema::query()->delPlan()->count())->toBe(24);
+
+    config()->set('cobro.etapas', [['meses' => 6, 'monto' => 5000.00, 'concepto' => 'Recortado']]);
+    app(PagoSistemaService::class)->sincronizarPlan();
+
+    expect(PagoSistema::query()->delPlan()->count())->toBe(6);
 });
 
 it('marcar pagada deja monto, forma, fecha y quien lo marco', function () {
@@ -88,9 +149,9 @@ it('marcar pagada deja monto, forma, fecha y quien lo marco', function () {
 
     $resumen = PagoSistema::resumen();
 
-    expect($resumen['total'])->toBe(120000.00)
+    expect($resumen['total'])->toBe(101400.00)
         ->and($resumen['pagado'])->toBe(5000.00)
-        ->and($resumen['saldo'])->toBe(115000.00)
+        ->and($resumen['saldo'])->toBe(96400.00)
         ->and($resumen['pagadas'])->toBe(1);
 });
 

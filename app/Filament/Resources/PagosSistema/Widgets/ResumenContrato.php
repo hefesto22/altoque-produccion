@@ -9,7 +9,7 @@ use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
- * Los cuatro números del contrato, arriba de la lista.
+ * Los cuatro números del estado de cuenta, arriba de la lista.
  *
  * Vive bajo el Resource y no en app/Filament/Widgets a propósito: ahí lo
  * descubriría el panel y terminaría en el Escritorio, a la vista de todos.
@@ -24,8 +24,10 @@ class ResumenContrato extends StatsOverviewWidget
         $proxima = $r['proxima'];
 
         return [
-            Stat::make('Contrato', 'L. '.number_format($r['total'], 2))
-                ->description($r['cuotas'].' cuotas mensuales')
+            Stat::make('Contrato', 'L. '.number_format($r['contrato'], 2))
+                ->description($r['extras'] > 0
+                    ? $r['cuotas'].' cuotas + L. '.number_format($r['extras'], 2).' en extras'
+                    : $r['cuotas'].' cuotas mensuales')
                 ->descriptionIcon('heroicon-o-document-text')
                 ->color('gray'),
 
@@ -41,8 +43,10 @@ class ResumenContrato extends StatsOverviewWidget
                 ->descriptionIcon($r['atrasadas'] > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-hand-thumb-up')
                 ->color($r['atrasadas'] > 0 ? 'danger' : 'warning'),
 
-            Stat::make('Próxima cuota', $proxima !== null ? 'L. '.number_format((float) $proxima->monto, 2) : '—')
-                ->description($proxima !== null ? $proxima->mesLabel() : 'Contrato completo')
+            Stat::make('Próximo cobro', $proxima !== null ? 'L. '.number_format((float) $proxima->monto, 2) : '—')
+                ->description($proxima !== null
+                    ? $proxima->mesLabel().($proxima->es_extra ? ' · extra' : '')
+                    : 'Contrato completo')
                 ->descriptionIcon('heroicon-o-calendar-days')
                 ->color($proxima !== null ? 'info' : 'success'),
         ];

@@ -45,10 +45,16 @@ class PagoSistemaPolicy
         return $authUser->can('Update:PagoSistema');
     }
 
-    /** Un mes del contrato no se borra: se marca o se deja pendiente. */
+    /**
+     * Un mes del contrato NO se borra: se marca o se deja pendiente. Un cargo
+     * extra sí, mientras nadie lo haya pagado — se agregó a mano y se puede
+     * haber agregado mal.
+     */
     public function delete(AuthUser $authUser, PagoSistema $pagoSistema): bool
     {
-        return false;
+        return $pagoSistema->es_extra
+            && ! $pagoSistema->pagada
+            && $authUser->can('Update:PagoSistema');
     }
 
     public function restore(AuthUser $authUser, PagoSistema $pagoSistema): bool

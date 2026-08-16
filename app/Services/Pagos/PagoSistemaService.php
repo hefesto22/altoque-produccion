@@ -7,6 +7,7 @@ namespace App\Services\Pagos;
 use App\Domain\Exceptions\PagoNoMarcableException;
 use App\Models\PagoSistema;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,11 +21,18 @@ use Illuminate\Support\Facades\DB;
 final class PagoSistemaService
 {
     /**
-     * Crea las cuotas que falten según el contrato. Idempotente: se puede
-     * llamar en cada visita a la pantalla sin duplicar nada.
+     * Pone las cuotas al día con el contrato de config/cobro.php.
      *
-     * Las cuotas que YA existen no se tocan aunque cambie la config: el monto
-     * pactado de un mes pasado es historia, no configuración.
+     * Idempotente y barato: una sola consulta cuando no hay nada que cambiar,
+     * así se puede llamar en cada visita a la pantalla.
+     *
+     * La regla que gobierna esto: **una cuota PAGADA jamás se reescribe**. Lo
+     * que ya se cobró es historia y tiene que seguir diciendo lo que decía el
+     * día que entró el dinero. Las cuotas todavía sin pagar sí se actualizan
+     * — si se renegoció el trato, lo que viene sigue el trato nuevo. Y si el
+     * contrato se acortó, las cuotas sobrantes sin pagar se eliminan.
+     *
+     * Los cargos extra no se tocan nunca acá: no son parte del contrato.
      *
      * @return int cuántas cuotas nuevas creó
      */
@@ -36,29 +44,73 @@ final class PagoSistemaService
             return 0;
         }
 
-        // Salida barata: lo normal es que ya esté todo creado.
-        if (PagoSistema::query()->count() >= count($cuotas)) {
-            return 0;
-        }
+        /** @var Collection<int, PagoSistema> $existentes */
+        $existentes = PagoSistema::query()->delPlan()->get()->keyBy('numero');
 
         $creadas = 0;
 
         foreach ($cuotas as $cuota) {
-            $nueva = PagoSistema::query()->firstOrCreate(
-                ['periodo' => $cuota['periodo']],
-                [
+            $fila = $existentes->get($cuota['numero']);
+
+            if ($fila === null) {
+                PagoSistema::query()->create([
+                    'periodo'  => $cuota['periodo'],
                     'numero'   => $cuota['numero'],
                     'monto'    => $cuota['monto'],
                     'concepto' => $cuota['concepto'],
-                ],
-            );
+                    'es_extra' => false,
+                ]);
 
-            if ($nueva->wasRecentlyCreated) {
                 $creadas++;
+
+                continue;
+            }
+
+            if ($fila->pagada) {
+                continue;   // historia: no se toca
+            }
+
+            $cambio = $fila->periodo->toDateString() !== $cuota['periodo']
+                || abs((float) $fila->monto - $cuota['monto']) > 0.001
+                || $fila->concepto !== $cuota['concepto'];
+
+            if ($cambio) {
+                $fila->update([
+                    'periodo'  => $cuota['periodo'],
+                    'monto'    => $cuota['monto'],
+                    'concepto' => $cuota['concepto'],
+                ]);
             }
         }
 
+        // Contrato acortado: las cuotas de más que nadie pagó ya no existen.
+        PagoSistema::query()
+            ->delPlan()
+            ->where('numero', '>', count($cuotas))
+            ->where('pagada', false)
+            ->delete();
+
         return $creadas;
+    }
+
+    /**
+     * Registra un cobro FUERA del contrato: un módulo nuevo, un trabajo
+     * aparte. No lleva número de cuota y el plan no lo toca nunca.
+     */
+    public function agregarCargo(
+        string $concepto,
+        float $monto,
+        Carbon $mes,
+        ?string $notas = null,
+    ): PagoSistema {
+        return PagoSistema::query()->create([
+            'periodo'  => $mes->copy()->startOfMonth()->toDateString(),
+            'numero'   => null,
+            'monto'    => round($monto, 2),
+            'concepto' => $concepto,
+            'es_extra' => true,
+            'notas'    => $notas,
+        ]);
     }
 
     /**

@@ -78,6 +78,7 @@ final class CobroMensual
     public static function yaPagado(Carbon $periodo): bool
     {
         return PagoSistema::query()
+            ->delPlan()
             ->whereDate('periodo', $periodo)
             ->where('pagada', true)
             ->exists();

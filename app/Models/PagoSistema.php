@@ -18,7 +18,8 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property Carbon $periodo
- * @property int $numero
+ * @property int|null $numero
+ * @property bool $es_extra
  * @property string $monto
  * @property string $concepto
  * @property bool $pagada
@@ -36,7 +37,7 @@ class PagoSistema extends Model
 
     /** @var array<int, string> */
     protected $fillable = [
-        'periodo', 'numero', 'monto', 'concepto', 'pagada', 'pagada_at',
+        'periodo', 'numero', 'monto', 'concepto', 'es_extra', 'pagada', 'pagada_at',
         'monto_pagado', 'forma_pago', 'banco', 'referencia', 'notas', 'marcada_por',
     ];
 
@@ -45,6 +46,7 @@ class PagoSistema extends Model
     {
         return [
             'periodo'      => 'date',
+            'es_extra'     => 'boolean',
             'pagada'       => 'boolean',
             'pagada_at'    => 'datetime',
             'monto'        => 'decimal:2',
@@ -108,6 +110,26 @@ class PagoSistema extends Model
         return ucfirst($this->periodo->translatedFormat('F \d\e Y'));
     }
 
+    /**
+     * Cuotas del contrato (no los cargos extra).
+     *
+     * @param Builder<PagoSistema> $query
+     */
+    public function scopeDelPlan(Builder $query): void
+    {
+        $query->where('es_extra', false);
+    }
+
+    /**
+     * Cobros fuera del contrato: un módulo nuevo, un trabajo aparte.
+     *
+     * @param Builder<PagoSistema> $query
+     */
+    public function scopeExtras(Builder $query): void
+    {
+        $query->where('es_extra', true);
+    }
+
     /** @param Builder<PagoSistema> $query */
     public function scopePagadas(Builder $query): void
     {
@@ -131,25 +153,61 @@ class PagoSistema extends Model
     }
 
     /**
-     * Foto del contrato completo.
+     * Foto de todo lo que el restaurante debe: el contrato y los extras.
      *
-     * @return array{total: float, pagado: float, saldo: float, cuotas: int, pagadas: int, atrasadas: int, proxima: PagoSistema|null}
+     * `contrato` y `extras` van separados a propósito — meter un módulo
+     * nuevo dentro del contrato haría imposible saber qué se pactó y qué se
+     * agregó después.
+     *
+     * @return array{contrato: float, extras: float, total: float, pagado: float, saldo: float, cuotas: int, pagadas: int, atrasadas: int, proxima: PagoSistema|null}
      */
     public static function resumen(): array
     {
-        $total = round((float) self::query()->sum('monto'), 2);
+        $contrato = round((float) self::query()->delPlan()->sum('monto'), 2);
+        $extras = round((float) self::query()->extras()->sum('monto'), 2);
         // Lo que de verdad entró, no lo pactado: si un mes se pagó de menos,
         // el saldo tiene que reflejarlo.
         $pagado = round((float) self::query()->pagadas()->sum('monto_pagado'), 2);
 
         return [
-            'total'     => $total,
+            'contrato'  => $contrato,
+            'extras'    => $extras,
+            'total'     => round($contrato + $extras, 2),
             'pagado'    => $pagado,
-            'saldo'     => round($total - $pagado, 2),
-            'cuotas'    => self::query()->count(),
+            'saldo'     => round($contrato + $extras - $pagado, 2),
+            'cuotas'    => self::query()->delPlan()->count(),
             'pagadas'   => self::query()->pagadas()->count(),
             'atrasadas' => self::query()->atrasadas()->count(),
             'proxima'   => self::query()->pendientes()->orderBy('periodo')->first(),
         ];
+    }
+
+    /**
+     * El contrato explicado en una línea, armado desde config/cobro.php para
+     * que la pantalla no pueda decir algo distinto de lo pactado.
+     */
+    public static function contratoEnPalabras(): string
+    {
+        /** @var array<int, array{meses: int, monto: float, concepto: string}> $etapas */
+        $etapas = config('cobro.etapas', []);
+
+        $partes = [];
+        $total = 0.0;
+
+        foreach ($etapas as $etapa) {
+            $meses = (int) $etapa['meses'];
+            $monto = (float) $etapa['monto'];
+            $total += $meses * $monto;
+
+            $partes[] = 'L. '.number_format($monto, 2).' al mes por '.$meses
+                .' meses ('.$etapa['concepto'].')';
+        }
+
+        if ($partes === []) {
+            return 'No hay contrato configurado.';
+        }
+
+        return implode(', después ', $partes).'. Total del contrato: L. '.number_format($total, 2)
+            .'. Los módulos nuevos se cobran aparte, como cargo extra.';
     }
 }

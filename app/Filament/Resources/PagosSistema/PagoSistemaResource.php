@@ -76,6 +76,9 @@ class PagoSistemaResource extends Resource
                 TextColumn::make('numero')
                     ->label('Cuota')
                     ->alignCenter()
+                    ->formatStateUsing(fn (?int $state): string => $state === null ? 'Extra' : (string) $state)
+                    ->badge(fn (PagoSistema $record): bool => $record->es_extra)
+                    ->color(fn (PagoSistema $record): string => $record->es_extra ? 'info' : 'gray')
                     ->sortable(),
                 TextColumn::make('periodo')
                     ->label('Mes')
@@ -99,6 +102,17 @@ class PagoSistemaResource extends Resource
                 TextColumn::make('notas')->label('Nota')->placeholder('—')->wrap()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('tipo')
+                    ->label('Tipo')
+                    ->options([
+                        'plan'  => 'Cuotas del contrato',
+                        'extra' => 'Cargos extra',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'plan'  => $query->where('es_extra', false),
+                        'extra' => $query->where('es_extra', true),
+                        default => $query,
+                    }),
                 SelectFilter::make('estado')
                     ->label('Estado')
                     ->options([
@@ -198,6 +212,27 @@ class PagoSistemaResource extends Resource
                         }
 
                         Notification::make()->title('Pago deshecho')->success()->send();
+                    }),
+
+                // Solo para extras sin pagar: una cuota del contrato no se
+                // borra nunca (lo impide la policy).
+                Action::make('borrarExtra')
+                    ->label('Borrar')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Borrar este cargo extra')
+                    ->modalDescription(fn (PagoSistema $record): string => $record->concepto
+                        .' · L. '.number_format((float) $record->monto, 2))
+                    ->visible(fn (PagoSistema $record): bool => $record->es_extra
+                        && ! $record->pagada
+                        && Acceso::puede('Update:PagoSistema'))
+                    ->action(function (PagoSistema $record): void {
+                        abort_unless(Acceso::puede('Update:PagoSistema'), 403);
+
+                        $record->delete();
+
+                        Notification::make()->title('Cargo borrado')->success()->send();
                     }),
             ]);
     }
