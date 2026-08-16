@@ -13,6 +13,7 @@ use App\Models\Producto;
 use App\Models\User;
 use App\Services\Caja\CorteCajaService;
 use App\Services\Cuentas\CuentaPrepagoService;
+use App\Services\Facturacion\FacturacionSarService;
 use App\Services\Pos\VentaService;
 
 /**
@@ -185,4 +186,58 @@ it('cobrar un pedido PENDIENTE con saldo también descuenta de la cuenta', funct
     expect($factura->venta->forma_pago)->toBe('saldo')
         ->and((float) $cuenta->fresh()->saldo)->toBe(9750.00)
         ->and($cuenta->movimientos()->where('tipo', 'consumo')->value('venta_id'))->toBe($venta->id);
+});
+
+it('anular la factura le devuelve el saldo a la cuenta', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $cuenta = cuentaConSaldo(10000.00);
+
+    $factura = app(VentaService::class)->registrarFactura(
+        lineaDeSaldo(400.00),
+        $cajero->id,
+        new RTN('13212003002192'),
+        'INVERSIONES OLYMPO',
+        'saldo',
+        cuentaSaldo: $cuenta,
+    );
+
+    expect((float) $cuenta->fresh()->saldo)->toBe(9600.00);
+
+    // Anular sin devolver dejaria al cliente pagando algo que ya no existe.
+    app(FacturacionSarService::class)->anular($factura, 'pedido equivocado', $cajero->id);
+
+    expect((float) $cuenta->fresh()->saldo)->toBe(10000.00);
+
+    // Y queda el rastro de por que volvio: numero de factura y venta.
+    $devolucion = $cuenta->movimientos()->where('tipo', 'ajuste')->latest('id')->firstOrFail();
+    expect((float) $devolucion->monto)->toBe(400.00)
+        ->and($devolucion->venta_id)->toBe($factura->venta_id)
+        ->and($devolucion->notas)->toContain($factura->numero);
+});
+
+it('anular una factura cobrada en efectivo no toca ninguna cuenta', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    // Mismo cliente, misma cuenta, pero la venta se pago en efectivo: la
+    // devolucion NO puede regalarle saldo que nunca uso.
+    $cuenta = cuentaConSaldo(10000.00);
+    $movimientos = $cuenta->movimientos()->count();
+
+    $factura = app(VentaService::class)->registrarFactura(
+        lineaDeSaldo(400.00),
+        $cajero->id,
+        new RTN('13212003002192'),
+        'INVERSIONES OLYMPO',
+        'efectivo',
+    );
+
+    app(FacturacionSarService::class)->anular($factura, 'se equivoco la caja', $cajero->id);
+
+    expect((float) $cuenta->fresh()->saldo)->toBe(10000.00)
+        ->and($cuenta->movimientos()->count())->toBe($movimientos);
 });

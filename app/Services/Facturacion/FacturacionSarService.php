@@ -11,10 +11,13 @@ use App\Domain\ValueObjects\RTN;
 use App\Events\FacturaEmitida;
 use App\Models\Cai;
 use App\Models\Cliente;
+use App\Models\CuentaMovimiento;
+use App\Models\CuentaPrepago;
 use App\Models\EmpresaSetting;
 use App\Models\Factura;
 use App\Models\PeriodoFiscal;
 use App\Models\Venta;
+use App\Services\Cuentas\CuentaPrepagoService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +36,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class FacturacionSarService
 {
+    public function __construct(
+        private readonly CuentaPrepagoService $cuentas,
+    ) {}
+
     /**
      * @throws SinCaiActivoException
      * @throws RangoCaiAgotadoException
@@ -142,6 +149,10 @@ final class FacturacionSarService
                 'anulada_at'       => now(),
             ]);
 
+            // Si la venta salio de una cuenta prepago, la plata vuelve. Anular
+            // sin devolver deja al cliente pagando algo que ya no existe.
+            $this->devolverSaldo($factura, $usuarioId);
+
             activity()
                 ->performedOn($factura)
                 ->withProperties(['motivo' => $motivo, 'usuario_id' => $usuarioId])
@@ -149,6 +160,46 @@ final class FacturacionSarService
 
             return $factura;
         });
+    }
+
+    /**
+     * Le devuelve a la cuenta prepago lo que esta venta le habia descontado.
+     *
+     * Se busca por el movimiento de consumo y NO por el RTN: la plata vuelve
+     * exactamente a la cuenta de donde salio, aunque despues le hayan cambiado
+     * el cliente. Anular esta bloqueado si la factura ya estaba anulada, asi
+     * que no hay forma de devolver dos veces.
+     */
+    private function devolverSaldo(Factura $factura, ?int $usuarioId): void
+    {
+        $consumo = CuentaMovimiento::query()
+            ->where('venta_id', $factura->venta_id)
+            ->where('tipo', 'consumo')
+            ->first();
+
+        if ($consumo === null) {
+            return;   // no se pago con saldo: no hay nada que devolver
+        }
+
+        $total = round((float) CuentaMovimiento::query()
+            ->where('venta_id', $factura->venta_id)
+            ->where('tipo', 'consumo')
+            ->sum('monto'), 2);   // viene negativo
+
+        if ($total >= 0) {
+            return;
+        }
+
+        /** @var CuentaPrepago $cuenta */
+        $cuenta = CuentaPrepago::query()->whereKey($consumo->cuenta_prepago_id)->firstOrFail();
+
+        $this->cuentas->ajustar(
+            $cuenta,
+            abs($total),
+            'Devolucion por anulacion de la factura '.$factura->numero,
+            $usuarioId,
+            $factura->venta,
+        );
     }
 
     /** Devuelve el motivo por el que NO se puede anular, o null si sí se puede. */

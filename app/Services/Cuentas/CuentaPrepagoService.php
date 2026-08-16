@@ -80,9 +80,12 @@ final class CuentaPrepagoService
      *
      * @throws SaldoInsuficienteException
      */
-    public function ajustar(CuentaPrepago $cuenta, float $monto, string $motivo, ?int $usuarioId = null): CuentaMovimiento
+    public function ajustar(CuentaPrepago $cuenta, float $monto, string $motivo, ?int $usuarioId = null, ?Venta $venta = null): CuentaMovimiento
     {
-        return $this->registrar($cuenta, 'ajuste', round($monto, 2), ['notas' => $motivo], $usuarioId);
+        return $this->registrar($cuenta, 'ajuste', round($monto, 2), [
+            'notas'    => $motivo,
+            'venta_id' => $venta?->id,
+        ], $usuarioId);
     }
 
     /**
