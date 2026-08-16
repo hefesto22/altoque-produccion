@@ -925,6 +925,14 @@
                                         · Con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
                                     @endif
                                 </div>
+                                {{-- Se dice en letras que esta venta sale de la cuenta:
+                                     el botón verde solo no alcanza, la caja cobraba en
+                                     efectivo por costumbre y el saldo no se movía. --}}
+                                @if ($formaPago === 'saldo')
+                                    <div style="font-size:.78rem; font-weight:800; margin-top:.2rem;">
+                                        ✓ Esta venta se descuenta de esta cuenta.
+                                    </div>
+                                @endif
                                 @if ($entraAlCredito)
                                     <div style="font-size:.78rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
                                         Queda en rojo L. {{ number_format(abs($quedaEn), 2) }} — avisale al cliente.

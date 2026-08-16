@@ -160,3 +160,29 @@ it('el corte NO cuenta el saldo como efectivo en gaveta', function () {
         ->and((float) $cerrado->total_saldo)->toBe(100.00)
         ->and((float) $cerrado->diferencia)->toBe(0.0);
 });
+
+it('cobrar un pedido PENDIENTE con saldo también descuenta de la cuenta', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    $cuenta = cuentaConSaldo(10000.00);
+
+    // El caso real del buffet: la empresa pide, come y paga al final. Si este
+    // camino no descuenta, la venta queda marcada 'saldo' en el corte y la
+    // cuenta del cliente intacta: dinero cobrado dos veces.
+    $venta = app(VentaService::class)->registrarPendiente(lineaDeSaldo(250.00), $cajero->id, 'local');
+
+    $factura = app(VentaService::class)->cobrarPendiente(
+        $venta,
+        $cajero->id,
+        new RTN('13212003002192'),
+        'INVERSIONES OLYMPO',
+        'saldo',
+        cuentaSaldo: $cuenta,
+    );
+
+    expect($factura->venta->forma_pago)->toBe('saldo')
+        ->and((float) $cuenta->fresh()->saldo)->toBe(9750.00)
+        ->and($cuenta->movimientos()->where('tipo', 'consumo')->value('venta_id'))->toBe($venta->id);
+});

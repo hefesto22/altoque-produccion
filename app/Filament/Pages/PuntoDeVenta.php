@@ -1833,6 +1833,15 @@ class PuntoDeVenta extends Page
             return false;
         }
 
+        // El pendiente es el caso NORMAL de una empresa con cuenta: piden,
+        // comen y pagan al final. Sin esto el pago se guardaba como 'saldo'
+        // y la cuenta del cliente no se movía ni un centavo.
+        $cuenta = $this->cuentaDeCobro($formaPago, (float) $venta->total);
+
+        if ($cuenta === false) {
+            return false;
+        }
+
         try {
             $factura = app(VentaService::class)->cobrarPendiente(
                 $venta,
@@ -1843,6 +1852,7 @@ class PuntoDeVenta extends Page
                 $detallada,
                 $formaPago === 'transferencia' ? $banco : null,
                 $formaPago === 'mixto' ? $this->pagosMixtos($formaPago) : null,
+                $cuenta,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->seconds(3)->send();
@@ -1919,6 +1929,7 @@ class PuntoDeVenta extends Page
         }
 
         $this->cuentaBuscada = true;
+        $this->cuentaMemo = null;
         $rtn = trim($this->rtnInput);
 
         if (strlen($rtn) !== 14) {
@@ -1934,6 +1945,78 @@ class PuntoDeVenta extends Page
         return $this->cuentaMemo;
     }
 
+    /**
+     * Cuenta contra la que se cobra, ya validada.
+     *
+     * Devuelve null cuando no se cobra con saldo y false cuando se eligió
+     * saldo pero no se puede (ya se le avisó al cajero en pantalla).
+     *
+     * Recibe la forma de pago como parámetro en vez de leer $this->formaPago:
+     * el cobro rápido de un pendiente manda la suya y no puede terminar
+     * descontándole a una cuenta por un 'saldo' que quedó en la página.
+     */
+    private function cuentaDeCobro(string $formaPago, float $total): CuentaPrepago|false|null
+    {
+        if ($formaPago !== 'saldo') {
+            return null;
+        }
+
+        $cuenta = $this->getCuentaSaldoProperty();
+
+        if ($cuenta === null) {
+            Notification::make()
+                ->title('Ese RTN no tiene cuenta con saldo')
+                ->body('Escribí el RTN de la empresa o cobrá con otra forma de pago.')
+                ->warning()->seconds(4)->send();
+
+            return false;
+        }
+
+        if (! $cuenta->alcanzaPara($total)) {
+            Notification::make()
+                ->title('No alcanza el saldo')
+                ->body($cuenta->nombre.' tiene disponible L. '.number_format($cuenta->disponible(), 2)
+                    .' y la venta es de L. '.number_format($total, 2).'. Registrá un depósito o cobrá de otra forma.')
+                ->warning()->seconds(6)->send();
+
+            return false;
+        }
+
+        return $cuenta;
+    }
+
+    /**
+     * Deja la forma de pago en "Saldo" sola cuando el RTN tiene cuenta y alcanza.
+     *
+     * Detectar la cuenta y no usarla no sirve de nada: el recuadro verde sale
+     * con los L. 10,000 de la empresa, el cajero cobra en efectivo por
+     * costumbre y el saldo del cliente queda intacto. Si el RTN cambia a uno
+     * sin cuenta vuelve a efectivo, para que no quede un "Saldo" pegado de la
+     * venta anterior.
+     *
+     * Solo pisa 'efectivo' (el valor por defecto): si el cajero ya eligió
+     * tarjeta o transferencia a mano, esa decisión manda.
+     */
+    private function ajustarFormaPagoPorSaldo(): void
+    {
+        // El RTN cambió: lo que se buscó antes en esta misma petición ya no vale.
+        $this->cuentaBuscada = false;
+        $this->cuentaMemo = null;
+
+        $cuenta = $this->getCuentaSaldoProperty();
+        $cubre = $cuenta !== null && $cuenta->alcanzaPara($this->getTotalModalProperty());
+
+        if ($cubre && in_array($this->formaPago, ['efectivo', 'saldo'], true)) {
+            $this->formaPago = 'saldo';
+
+            return;
+        }
+
+        if (! $cubre && $this->formaPago === 'saldo') {
+            $this->formaPago = 'efectivo';
+        }
+    }
+
     /** Al escribir el RTN completo, trae el nombre del cliente si ya existe. */
     public function updatedRtnInput(string $value): void
     {
@@ -1947,6 +2030,8 @@ class PuntoDeVenta extends Page
                 $this->sugerencias = [];
             }
         }
+
+        $this->ajustarFormaPagoPorSaldo();
     }
 
     /**
@@ -1982,6 +2067,9 @@ class PuntoDeVenta extends Page
         $this->rtnInput = $rtn;
         $this->nombreInput = $nombre;
         $this->sugerencias = [];
+
+        // Se llena el RTN por código: updatedRtnInput() NO corre acá.
+        $this->ajustarFormaPagoPorSaldo();
     }
 
     /** Emite la factura con el RTN ingresado en el modal. */
@@ -2063,29 +2151,10 @@ class PuntoDeVenta extends Page
         }
 
         // Cobro contra la cuenta prepago del cliente.
-        $cuenta = $this->formaPago === 'saldo' ? $this->getCuentaSaldoProperty() : null;
+        $cuenta = $this->cuentaDeCobro($this->formaPago, $this->getResumenProperty()['total']);
 
-        if ($this->formaPago === 'saldo') {
-            $total = $this->getResumenProperty()['total'];
-
-            if ($cuenta === null) {
-                Notification::make()
-                    ->title('Ese RTN no tiene cuenta con saldo')
-                    ->body('Escribí el RTN de la empresa o cobrá con otra forma de pago.')
-                    ->warning()->seconds(4)->send();
-
-                return false;
-            }
-
-            if (! $cuenta->alcanzaPara($total)) {
-                Notification::make()
-                    ->title('No alcanza el saldo')
-                    ->body($cuenta->nombre.' tiene disponible L. '.number_format($cuenta->disponible(), 2)
-                        .' y la venta es de L. '.number_format($total, 2).'. Registrá un depósito o cobrá de otra forma.')
-                    ->warning()->seconds(6)->send();
-
-                return false;
-            }
+        if ($cuenta === false) {
+            return false;
         }
 
         try {

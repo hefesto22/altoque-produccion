@@ -267,9 +267,9 @@ final class VentaService
      *
      * @throws VentaSinLineasException
      */
-    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null): Factura
+    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null, ?CuentaPrepago $cuentaSaldo = null): Factura
     {
-        return DB::transaction(function () use ($venta, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
+        return DB::transaction(function () use ($venta, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos, $cuentaSaldo): Factura {
             // UNA sola caja: la venta entra al turno abierto del sistema
             // (quién cobró queda en cajero_id).
             $corteId = CorteCaja::query()
@@ -299,6 +299,11 @@ final class VentaService
                 ->where('venta_id', $venta->id)
                 ->whereIn('estado', ['pendiente', 'preparando', 'listo'])
                 ->update(['estado' => 'entregado', 'entregado_at' => now()]);
+
+            // Mismo orden que en registrarFactura: primero se descuenta el
+            // saldo y después se emite. El correlativo SAR sale de una
+            // secuencia de Postgres y un rollback NO lo devuelve.
+            $this->cobrarConSaldo($venta, $cuentaSaldo, $cajeroId);
 
             // update() ya refrescó los atributos en memoria; el desglose
             // (gravado/isv/total) no cambia, solo el estado de pago.
