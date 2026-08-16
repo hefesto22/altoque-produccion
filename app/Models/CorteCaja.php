@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\URL;
  * @property float $total_efectivo
  * @property float $total_tarjeta
  * @property float $total_transferencia
+ * @property float $total_saldo
  * @property float $total_isv
  * @property int $cantidad_ventas
  * @property float|null $efectivo_contado
@@ -38,7 +39,7 @@ class CorteCaja extends Model
     /** @var array<int, string> */
     protected $fillable = [
         'cajero_id', 'fondo_inicial', 'fondo_terminal', 'terminal_final', 'estado', 'cierre_automatico', 'abierto_at', 'cerrado_at',
-        'total_ventas', 'total_efectivo', 'total_tarjeta', 'total_transferencia', 'total_isv',
+        'total_ventas', 'total_efectivo', 'total_tarjeta', 'total_transferencia', 'total_saldo', 'total_isv',
         'cantidad_ventas', 'efectivo_contado', 'diferencia', 'notas',
     ];
 
@@ -56,6 +57,7 @@ class CorteCaja extends Model
             'total_efectivo'      => 'decimal:2',
             'total_tarjeta'       => 'decimal:2',
             'total_transferencia' => 'decimal:2',
+            'total_saldo'         => 'decimal:2',
             'total_isv'           => 'decimal:2',
             'cantidad_ventas'     => 'integer',
             'efectivo_contado'    => 'decimal:2',

@@ -14,6 +14,7 @@ use App\Models\Cliente;
 use App\Models\Comanda;
 use App\Models\ComboEspecial;
 use App\Models\CorteCaja;
+use App\Models\CuentaPrepago;
 use App\Models\EmpresaSetting;
 use App\Models\Producto;
 use App\Models\Venta;
@@ -157,6 +158,11 @@ class PuntoDeVenta extends Page
 
     /** @var array<int, array{rtn: string, nombre: string}> sugerencias de clientes */
     public array $sugerencias = [];
+
+    /** Cuenta prepago detectada por el RTN, memo de ESTE request. */
+    private ?CuentaPrepago $cuentaMemo = null;
+
+    private bool $cuentaBuscada = false;
 
     /**
      * Memo del menú para ESTE request (privado: Livewire no lo serializa).
@@ -1897,6 +1903,37 @@ class PuntoDeVenta extends Page
         $this->sugerencias = [];
     }
 
+    /**
+     * Cuenta prepago del RTN que se está facturando, si existe y está activa.
+     *
+     * El RTN es la llave: si la empresa dejó dinero adelantado, la caja no
+     * tiene que buscarla en ningún lado — se entera sola al facturar.
+     *
+     * Es propiedad computada y NO estado: el saldo cambia con cada consumo y
+     * una copia guardada en la página mostraría un número viejo.
+     */
+    public function getCuentaSaldoProperty(): ?CuentaPrepago
+    {
+        if ($this->cuentaBuscada) {
+            return $this->cuentaMemo;
+        }
+
+        $this->cuentaBuscada = true;
+        $rtn = trim($this->rtnInput);
+
+        if (strlen($rtn) !== 14) {
+            return null;
+        }
+
+        $this->cuentaMemo = CuentaPrepago::query()
+            ->activas()
+            ->with('cliente')
+            ->whereHas('cliente', static fn ($q) => $q->where('rtn', $rtn))
+            ->first();
+
+        return $this->cuentaMemo;
+    }
+
     /** Al escribir el RTN completo, trae el nombre del cliente si ya existe. */
     public function updatedRtnInput(string $value): void
     {
@@ -2025,6 +2062,32 @@ class PuntoDeVenta extends Page
             return false;
         }
 
+        // Cobro contra la cuenta prepago del cliente.
+        $cuenta = $this->formaPago === 'saldo' ? $this->getCuentaSaldoProperty() : null;
+
+        if ($this->formaPago === 'saldo') {
+            $total = $this->getResumenProperty()['total'];
+
+            if ($cuenta === null) {
+                Notification::make()
+                    ->title('Ese RTN no tiene cuenta con saldo')
+                    ->body('Escribí el RTN de la empresa o cobrá con otra forma de pago.')
+                    ->warning()->seconds(4)->send();
+
+                return false;
+            }
+
+            if (! $cuenta->alcanzaPara($total)) {
+                Notification::make()
+                    ->title('No alcanza el saldo')
+                    ->body($cuenta->nombre.' tiene disponible L. '.number_format($cuenta->disponible(), 2)
+                        .' y la venta es de L. '.number_format($total, 2).'. Registrá un depósito o cobrá de otra forma.')
+                    ->warning()->seconds(6)->send();
+
+                return false;
+            }
+        }
+
         try {
             $factura = app(VentaService::class)->registrarFactura(
                 $this->lineasDelCarrito(),
@@ -2038,6 +2101,7 @@ class PuntoDeVenta extends Page
                 $this->costoViajeNumerico(),
                 $this->pagosMixtos(),
                 trim($this->domNombre) !== '' ? $this->domNombre : null,
+                $cuenta,
             );
         } catch (RestauranteException $e) {
             Notification::make()

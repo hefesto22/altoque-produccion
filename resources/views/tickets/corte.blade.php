@@ -82,6 +82,13 @@
         @foreach ($transferBanco as $b)
             <tr><td class="sub">· {{ mb_strtoupper($b['banco']) }}</td><td class="der chico">L. {{ number_format($b['total'], 2) }}</td></tr>
         @endforeach
+        {{-- Saldo a favor: la venta es de hoy, pero el dinero entró el día del
+             depósito. No está en la gaveta ni en el terminal — va aparte para
+             que la suma de arriba cuadre con el total de ventas. --}}
+        @if ((float) $corte->total_saldo > 0)
+            <tr><td>SALDO A FAVOR (CUENTAS)</td><td class="der">L. {{ number_format((float) $corte->total_saldo, 2) }}</td></tr>
+            <tr><td colspan="2" class="chico">NO ES DINERO DE HOY: SE DEPOSITÓ ANTES.</td></tr>
+        @endif
         @if ($transferSinBanco > 0)
             <tr><td class="sub">· SIN BANCO</td><td class="der chico">L. {{ number_format($transferSinBanco, 2) }}</td></tr>
         @endif

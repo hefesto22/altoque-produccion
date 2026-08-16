@@ -89,7 +89,10 @@ final class CorteCajaService
                 SELECT
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS efectivo,
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS tarjeta,
-                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia
+                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia,
+                    -- Saldo a favor: la venta existe pero el dinero entró el
+                    -- día del depósito. NO es efectivo en gaveta ni terminal.
+                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'saldo'), 0)          AS saldo
                 FROM venta_pagos vp
                 JOIN ventas v ON v.id = vp.venta_id
                 WHERE v.corte_caja_id = ? AND v.pagada = true
@@ -115,6 +118,7 @@ final class CorteCajaService
                 'total_efectivo'      => $totalEfectivo,
                 'total_tarjeta'       => (float) ($pagos->tarjeta ?? 0),
                 'total_transferencia' => (float) ($pagos->transferencia ?? 0),
+                'total_saldo'         => (float) ($pagos->saldo ?? 0),
                 'terminal_final'      => $terminalFinal,
                 'cierre_automatico'   => $automatico,
                 'efectivo_contado'    => $efectivoContado,

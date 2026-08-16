@@ -904,6 +904,29 @@
                                 </div>
                             @endif
                         </div>
+                        {{-- Cuenta prepago: se detecta SOLA por el RTN. La caja no
+                             tiene que buscarla en ningún lado ni acordarse de que
+                             esa empresa dejó dinero adelantado. --}}
+                        @php($cuentaSaldo = $this->cuentaSaldo)
+                        @if ($cuentaSaldo !== null)
+                            @php($alcanza = $cuentaSaldo->alcanzaPara($this->totalModal))
+                            <div style="border:1.5px solid {{ $alcanza ? '#22c55e' : '#f59e0b' }}; background:{{ $alcanza ? 'rgba(34,197,94,.10)' : 'rgba(245,158,11,.10)' }}; border-radius:.6rem; padding:.55rem .7rem;">
+                                <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; opacity:.75;">Cuenta prepago</div>
+                                <div style="font-weight:800;">{{ $cuentaSaldo->nombre }}</div>
+                                <div style="font-size:.8rem;">
+                                    Saldo L. {{ number_format((float) $cuentaSaldo->saldo, 2) }}
+                                    @if ($cuentaSaldo->permite_credito)
+                                        · Disponible con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
+                                    @endif
+                                </div>
+                                @unless ($alcanza)
+                                    <div style="font-size:.75rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
+                                        No alcanza para esta venta — cobrala de otra forma o registrá un depósito.
+                                    </div>
+                                @endunless
+                            </div>
+                        @endif
+
                         {{-- Forma de pago de la factura (efectivo / tarjeta / transferencia) --}}
                         <div>
                             <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">Forma de pago</label>
@@ -911,6 +934,13 @@
                                 @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
                                     <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                                 @endforeach
+                                {{-- "Saldo" solo aparece si hay cuenta Y alcanza: un botón
+                                     que al tocarlo va a fallar es peor que no tenerlo. --}}
+                                @if ($cuentaSaldo !== null && $cuentaSaldo->alcanzaPara($this->totalModal))
+                                    <x-filament::button size="sm" :color="$formaPago === 'saldo' ? 'success' : 'gray'" wire:click="$set('formaPago','saldo')">
+                                        Saldo
+                                    </x-filament::button>
+                                @endif
                             </div>
                             @if ($formaPago === 'mixto')
                                 <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:.4rem; margin-top:.5rem;">

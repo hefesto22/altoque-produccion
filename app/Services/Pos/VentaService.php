@@ -13,8 +13,10 @@ use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
 use App\Models\Comanda;
 use App\Models\CorteCaja;
+use App\Models\CuentaPrepago;
 use App\Models\Factura;
 use App\Models\Venta;
+use App\Services\Cuentas\CuentaPrepagoService;
 use App\Services\Facturacion\FacturacionSarService;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +34,7 @@ final class VentaService
         private readonly CalculaImpuestos $calculador,
         private readonly FacturacionSarService $facturacion,
         private readonly TicketDiarioService $tickets,
+        private readonly CuentaPrepagoService $cuentas,
     ) {}
 
     /**
@@ -70,15 +73,42 @@ final class VentaService
      *
      * @throws VentaSinLineasException
      */
-    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null): Factura
+    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null, ?CuentaPrepago $cuentaSaldo = null): Factura
     {
         $this->guardarContraVacio($lineas);
 
-        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden): Factura {
+        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden, $cuentaSaldo): Factura {
             $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden);
+
+            // El saldo se descuenta ANTES de emitir la factura, a propósito:
+            // el correlativo SAR sale de una secuencia de Postgres y un
+            // rollback NO lo devuelve. Si el saldo no alcanzara, esta
+            // transacción muere sin haber quemado un número de factura.
+            $this->cobrarConSaldo($venta, $cuentaSaldo, $cajeroId);
 
             return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
         });
+    }
+
+    /**
+     * Descuenta de la cuenta prepago la porción de la venta pagada con saldo.
+     *
+     * El movimiento queda atado a la venta: un descuento sin factura detrás
+     * es un agujero por donde se va la plata del cliente.
+     */
+    private function cobrarConSaldo(Venta $venta, ?CuentaPrepago $cuenta, int $cajeroId): void
+    {
+        if ($cuenta === null) {
+            return;
+        }
+
+        $monto = round((float) $venta->pagos()->where('metodo', 'saldo')->sum('monto'), 2);
+
+        if ($monto <= 0) {
+            return;
+        }
+
+        $this->cuentas->consumir($cuenta, $monto, $venta, $cajeroId);
     }
 
     /**
