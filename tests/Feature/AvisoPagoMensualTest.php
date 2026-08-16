@@ -15,10 +15,11 @@ use Spatie\Permission\PermissionRegistrar;
 /**
  * Aviso del pago mensual del sistema (2026-08-01).
  *
- * Contrato: L. 5,000 mensuales de agosto 2026 a julio 2027 (Sistema) y
- * L. 3,000 de agosto 2027 a julio 2029 (Servidor). El aviso sale el día 1 a
- * las 5:00 p.m., solo al gerente, y se esconde hasta el mes siguiente cuando
- * lo marca como recibido.
+ * Contrato (2026-08-15): L. 5,000 mensuales de agosto 2026 a julio 2028 —
+ * 24 meses parejos que cubren desarrollo, servidor y mantenimiento juntos,
+ * L. 120,000 en total. El aviso sale el día 1 a las 5:00 p.m., solo al
+ * gerente, y se esconde hasta el mes siguiente cuando lo marca como
+ * recibido (o cuando el pago de ese mes queda registrado en Pagos).
  */
 beforeEach(function () {
     Role::firstOrCreate(['name' => 'panel_user', 'guard_name' => 'web']);
@@ -34,13 +35,16 @@ function usuario(string $rol): User
     return $user;
 }
 
-it('cobra 5,000 el primer año y 3,000 los dos siguientes', function () {
-    expect(CobroMensual::monto(Carbon::parse('2026-08-01')))->toBe(5000.00)
-        ->and(CobroMensual::monto(Carbon::parse('2027-07-01')))->toBe(5000.00)   // último del año
-        ->and(CobroMensual::monto(Carbon::parse('2027-08-01')))->toBe(3000.00)   // arranca servidor
-        ->and(CobroMensual::monto(Carbon::parse('2029-07-01')))->toBe(3000.00)   // último mes
-        ->and(CobroMensual::monto(Carbon::parse('2029-08-01')))->toBeNull()      // contrato terminado
+it('cobra 5,000 parejos durante los 24 meses del contrato', function () {
+    expect(CobroMensual::monto(Carbon::parse('2026-08-01')))->toBe(5000.00)      // primer mes
+        ->and(CobroMensual::monto(Carbon::parse('2027-08-01')))->toBe(5000.00)   // a mitad de camino
+        ->and(CobroMensual::monto(Carbon::parse('2028-07-01')))->toBe(5000.00)   // último mes
+        ->and(CobroMensual::monto(Carbon::parse('2028-08-01')))->toBeNull()      // contrato terminado
         ->and(CobroMensual::monto(Carbon::parse('2026-07-01')))->toBeNull();     // antes del inicio
+
+    // Una sola etapa: nunca cambia de concepto ni de monto a mitad del trato.
+    expect(CobroMensual::concepto(Carbon::parse('2026-08-01')))
+        ->toBe(CobroMensual::concepto(Carbon::parse('2028-07-01')));
 });
 
 it('el día 1 no aparece antes de las 5 de la tarde', function () {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\AvisoPago;
+use App\Models\PagoSistema;
 use Illuminate\Support\Carbon;
 
 /**
@@ -66,6 +67,20 @@ final class CobroMensual
     public static function yaConfirmado(Carbon $periodo): bool
     {
         return AvisoPago::query()->whereDate('periodo', $periodo)->exists();
+    }
+
+    /**
+     * ¿La cuota de ese mes ya quedó marcada como pagada?
+     *
+     * Si el dinero ya llegó y se registró en Pagos, seguir recordándole al
+     * gerente que pague es cobrarle dos veces.
+     */
+    public static function yaPagado(Carbon $periodo): bool
+    {
+        return PagoSistema::query()
+            ->whereDate('periodo', $periodo)
+            ->where('pagada', true)
+            ->exists();
     }
 
     /**

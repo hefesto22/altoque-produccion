@@ -62,7 +62,10 @@ class AvisoPagoMensual extends Component
         }
 
         $ahora = now();
+        $periodo = CobroMensual::periodo($ahora);
 
-        return CobroMensual::toca($ahora) && ! CobroMensual::yaConfirmado(CobroMensual::periodo($ahora));
+        return CobroMensual::toca($ahora)
+            && ! CobroMensual::yaPagado($periodo)
+            && ! CobroMensual::yaConfirmado($periodo);
     }
 }

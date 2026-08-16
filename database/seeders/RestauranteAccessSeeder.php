@@ -53,7 +53,8 @@ class RestauranteAccessSeeder extends Seeder
     private const MODELOS = [
         'Activity', 'Cai', 'Cliente', 'Combo', 'ComboEspecial', 'Compra',
         'CorteCaja', 'Cotizacion', 'CuentaPrepago', 'EventoArticulo',
-        'PedidoOnline', 'PeriodoFiscal', 'Producto', 'Tier', 'User', 'Venta',
+        'PagoSistema', 'PedidoOnline', 'PeriodoFiscal', 'Producto', 'Tier',
+        'User', 'Venta',
     ];
 
     /**
@@ -222,6 +223,10 @@ class RestauranteAccessSeeder extends Seeder
             ...$this->lectura('PeriodoFiscal'),
             'View:PuntoDeVenta', 'View:BandejaPedidos', 'View:Cocina', 'View:MenuDelDia',
             'View:DeclaracionIsvMensual', 'View:LibrosFiscales',
+            // Pagos del sistema: SOLO lectura y SOLO el gerente. Marcar una
+            // cuota como pagada es del super_admin (quien recibe el dinero);
+            // por eso Update:PagoSistema no se le da a ningún rol.
+            ...$this->lectura('PagoSistema'),
             ...self::PERMISOS_EXTRA, // incluye AnularFactura (decisión 2026-07-03)
             ...self::PERMISOS_PROPIOS, // aviso del pago mensual: solo el gerente
             ...self::PERMISOS_CAJA,

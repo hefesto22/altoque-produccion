@@ -23,10 +23,21 @@ return [
     /*
      * Etapas del contrato, en orden. Cada una dura `meses` a `monto` por mes.
      * Al terminar la última el aviso deja de aparecer solo.
+     *
+     * Acuerdo del 2026-08-15: UNA sola cuota de L. 5,000 al mes durante 24
+     * meses — L. 120,000 en total. Esa cuota cubre todo junto: el desarrollo
+     * del sistema, el servidor y el mantenimiento. No se desglosa ni se
+     * cobra nada aparte.
+     *
+     * Los montos van SIN impuestos: el ISV de este contrato lo declara el
+     * desarrollador por su cuenta, a mano.
+     *
+     * De acá sale también el plan de la pantalla Pagos (ver
+     * PagoSistemaService::sincronizarPlan). OJO: las cuotas ya creadas NO se
+     * reescriben si esto cambia — lo pactado de un mes pasado es historia.
      */
     'etapas' => [
-        ['meses' => 12, 'monto' => 5000.00, 'concepto' => 'Sistema'],
-        ['meses' => 24, 'monto' => 3000.00, 'concepto' => 'Servidor'],
+        ['meses' => 24, 'monto' => 5000.00, 'concepto' => 'Desarrollo, servidor y mantenimiento'],
     ],
 
     // Hora del día 1 a partir de la cual aparece el aviso (0-23).
