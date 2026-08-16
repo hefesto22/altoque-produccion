@@ -33,7 +33,9 @@ it('nace con token propio y el nombre en mayúsculas', function () {
         ->and($cuenta->nombre)->toBe('INVERSIONES OLYMPO')
         ->and($cuenta->rtn())->toBe('13212003002192')   // sale del cliente, no de una copia
         ->and((float) $cuenta->saldo)->toBe(0.0)
-        ->and($cuenta->permite_credito)->toBeFalse();
+        // Nace CON crédito para que la caja no se trabe; el tope es el freno.
+        ->and($cuenta->permite_credito)->toBeTrue()
+        ->and((float) $cuenta->limite_credito)->toBe(1000.00);
 });
 
 it('un depósito sube el saldo y queda en el libro con su forma de pago', function () {
@@ -75,7 +77,7 @@ it('un consumo descuenta y queda en negativo en el libro', function () {
 });
 
 it('el saldo siempre es la suma de los movimientos', function () {
-    $cuenta = cuentaPrepago();
+    $cuenta = cuentaPrepago(['permite_credito' => false, 'limite_credito' => 0]);
     $svc = app(CuentaPrepagoService::class);
 
     $svc->depositar($cuenta, 10000.00, 'cheque', null, 'CH-114');
@@ -92,7 +94,7 @@ it('el saldo siempre es la suma de los movimientos', function () {
 });
 
 it('sin crédito no se puede consumir más de lo depositado', function () {
-    $cuenta = cuentaPrepago();
+    $cuenta = cuentaPrepago(['permite_credito' => false, 'limite_credito' => 0]);
     $svc = app(CuentaPrepagoService::class);
 
     $svc->depositar($cuenta, 500.00, 'efectivo');

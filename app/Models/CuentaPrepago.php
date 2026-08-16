@@ -37,6 +37,9 @@ class CuentaPrepago extends Model
 {
     protected $table = 'cuentas_prepago';
 
+    /** Tope de crédito con el que nace una cuenta nueva (decisión del negocio). */
+    public const CREDITO_POR_DEFECTO = 1000.00;
+
     /** @var array<int, string> */
     protected $fillable = [
         'nombre',
@@ -60,9 +63,12 @@ class CuentaPrepago extends Model
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'saldo'           => 0,
-        'permite_credito' => false,
-        'limite_credito'  => 0,
+        'saldo' => 0,
+        // Las cuentas nacen CON crédito: si el saldo no alcanza, el consumo
+        // pasa igual y queda en rojo, en vez de dejar al cliente esperando en
+        // la caja. El tope es el freno (ver la migración del 2026-08-15).
+        'permite_credito' => true,
+        'limite_credito'  => self::CREDITO_POR_DEFECTO,
         'activa'          => true,
     ];
 

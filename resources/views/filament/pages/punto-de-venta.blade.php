@@ -910,20 +910,30 @@
                         @php($cuentaSaldo = $this->cuentaSaldo)
                         @if ($cuentaSaldo !== null)
                             @php($alcanza = $cuentaSaldo->alcanzaPara($this->totalModal))
-                            <div style="border:1.5px solid {{ $alcanza ? '#22c55e' : '#f59e0b' }}; background:{{ $alcanza ? 'rgba(34,197,94,.10)' : 'rgba(245,158,11,.10)' }}; border-radius:.6rem; padding:.55rem .7rem;">
+                            {{-- Tres estados, no dos: alcanza con saldo (verde), alcanza
+                                 pero entra al crédito y queda en rojo (ámbar, hay que
+                                 decírselo al cliente en el momento), o se pasa del tope. --}}
+                            @php($quedaEn = round((float) $cuentaSaldo->saldo - $this->totalModal, 2))
+                            @php($entraAlCredito = $alcanza && $quedaEn < 0)
+                            @php($color = ! $alcanza || $entraAlCredito ? '#f59e0b' : '#22c55e')
+                            <div style="border:1.5px solid {{ $color }}; background:{{ $color }}1a; border-radius:.6rem; padding:.55rem .7rem;">
                                 <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; opacity:.75;">Cuenta prepago</div>
                                 <div style="font-weight:800;">{{ $cuentaSaldo->nombre }}</div>
                                 <div style="font-size:.8rem;">
                                     Saldo L. {{ number_format((float) $cuentaSaldo->saldo, 2) }}
                                     @if ($cuentaSaldo->permite_credito)
-                                        · Disponible con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
+                                        · Con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
                                     @endif
                                 </div>
-                                @unless ($alcanza)
-                                    <div style="font-size:.75rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
-                                        No alcanza para esta venta — cobrala de otra forma o registrá un depósito.
+                                @if ($entraAlCredito)
+                                    <div style="font-size:.78rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
+                                        Queda en rojo L. {{ number_format(abs($quedaEn), 2) }} — avisale al cliente.
                                     </div>
-                                @endunless
+                                @elseif (! $alcanza)
+                                    <div style="font-size:.75rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
+                                        Se pasa del tope de crédito — cobrala de otra forma o registrá un depósito.
+                                    </div>
+                                @endif
                             </div>
                         @endif
 

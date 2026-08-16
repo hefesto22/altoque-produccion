@@ -101,15 +101,17 @@ class CuentaPrepagoResource extends Resource
 
             Section::make('Crédito')
                 ->icon('heroicon-o-scale')
-                ->description('Por defecto solo se puede consumir lo que hay depositado. El crédito es para empresas de confianza: deja que el saldo quede en rojo hasta el tope.')
+                ->description('Si el saldo no alcanza, el consumo pasa igual y la cuenta queda en rojo hasta el tope — así la caja no se traba con el cliente enfrente. El tope es el freno: sin él estarías prestando sin límite.')
                 ->schema([
                     Toggle::make('permite_credito')
                         ->label('Permitir consumir sin saldo')
+                        ->default(true)
                         ->live()
                         ->inline(false),
                     MontoField::make('limite_credito', 'Tope de crédito')
+                        ->default(CuentaPrepago::CREDITO_POR_DEFECTO)
                         ->visible(fn (Get $get): bool => (bool) $get('permite_credito'))
-                        ->helperText('Hasta cuánto puede quedar en rojo la cuenta.'),
+                        ->helperText('Hasta cuánto puede quedar en rojo la cuenta. Se sube o se baja según la confianza.'),
                 ])->columns(2),
 
             Section::make('Estado')

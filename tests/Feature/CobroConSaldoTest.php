@@ -73,12 +73,13 @@ it('la venta con saldo emite factura normal y descuenta de la cuenta', function 
         ->and($mov->venta_id)->toBe($factura->venta_id);
 });
 
-it('si el saldo no alcanza no se emite factura ni se quema correlativo', function () {
+it('si se pasa del tope no se emite factura ni se quema correlativo', function () {
     Cai::factory()->create();
     $cajero = User::factory()->create();
     app(CorteCajaService::class)->abrir($cajero->id, 0.0);
 
-    $cuenta = cuentaConSaldo(50.00);
+    // Sin crédito: el tope es cero, así que 100 sobre 50 no pasa.
+    $cuenta = cuentaConSaldo(50.00, ['permite_credito' => false, 'limite_credito' => 0]);
 
     expect(fn () => app(VentaService::class)->registrarFactura(
         lineaDeSaldo(100.00),
@@ -95,7 +96,28 @@ it('si el saldo no alcanza no se emite factura ni se quema correlativo', functio
         ->and($cuenta->movimientos()->where('tipo', 'consumo')->count())->toBe(0);
 });
 
-it('con crédito habilitado la venta pasa y el saldo queda en rojo', function () {
+it('con el crédito por defecto la venta pasa sin preguntar y queda en rojo', function () {
+    Cai::factory()->create();
+    $cajero = User::factory()->create();
+    app(CorteCajaService::class)->abrir($cajero->id, 0.0);
+
+    // Cuenta recién creada: nace con L. 1,000 de crédito para que la caja no
+    // se trabe con el cliente enfrente.
+    $cuenta = cuentaConSaldo(50.00);
+
+    app(VentaService::class)->registrarFactura(
+        lineaDeSaldo(100.00),
+        $cajero->id,
+        new RTN('13212003002192'),
+        'INVERSIONES OLYMPO',
+        'saldo',
+        cuentaSaldo: $cuenta,
+    );
+
+    expect((float) $cuenta->fresh()->saldo)->toBe(-50.00);
+});
+
+it('con un tope más alto la venta pasa igual', function () {
     Cai::factory()->create();
     $cajero = User::factory()->create();
     app(CorteCajaService::class)->abrir($cajero->id, 0.0);
