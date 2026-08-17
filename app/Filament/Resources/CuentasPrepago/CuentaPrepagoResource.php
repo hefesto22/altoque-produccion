@@ -16,6 +16,7 @@ use App\Services\Pos\VentaService;
 use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\Action as NotificationAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -31,6 +32,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
 
 /**
  * Cuentas prepago: empresas y personas que dejan dinero por adelantado y
@@ -184,7 +186,7 @@ class CuentaPrepagoResource extends Resource
                         TextInput::make('notas')->label('Nota (opcional)')->maxLength(255),
                     ])
                     ->visible(fn (): bool => Acceso::puede('Update:CuentaPrepago'))
-                    ->action(function (CuentaPrepago $record, array $data): void {
+                    ->action(function (CuentaPrepago $record, array $data, Component $livewire): void {
                         abort_unless(Acceso::puede('Update:CuentaPrepago'), 403);
 
                         // El depósito ES la venta: acá se emite la única
@@ -210,7 +212,8 @@ class CuentaPrepagoResource extends Resource
                             return;
                         }
 
-                        // La factura se encola: la saca la caja desde el POS.
+                        // Queda en la cola igual, como respaldo: si el navegador
+                        // bloquea la ventana, la caja la saca desde el POS.
                         app(ColaImpresionService::class)->enviar(
                             'factura',
                             (int) $factura->id,
@@ -218,12 +221,31 @@ class CuentaPrepagoResource extends Resource
                             'L. '.number_format((float) $factura->total, 2),
                         );
 
+                        // Y se abre sola para imprimir, como en el POS: el ticket
+                        // trae window.print() al cargar. Esta pantalla no es el
+                        // POS y no tiene su listener, así que se abre en pestaña.
+                        $ticket = $factura->urlTicket();
+
+                        if ($ticket !== null) {
+                            $livewire->js("window.open('".addslashes($ticket)."', '_blank')");
+                        }
+
                         Notification::make()
                             ->title("Depósito facturado · N° {$factura->numero}")
-                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2)
-                                .' · La factura quedó en la cola de impresión de la caja.')
+                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2))
+                            ->actions([
+                                NotificationAction::make('imprimir')
+                                    ->label('Imprimir factura')
+                                    ->icon('heroicon-o-printer')
+                                    ->color('success')
+                                    ->url($ticket, shouldOpenInNewTab: true),
+                                NotificationAction::make('whatsapp')
+                                    ->label('Enviar por WhatsApp')
+                                    ->icon('heroicon-o-chat-bubble-left-right')
+                                    ->url($factura->urlWhatsApp(), shouldOpenInNewTab: true),
+                            ])
                             ->success()
-                            ->seconds(6)
+                            ->seconds(10)
                             ->send();
                     }),
 

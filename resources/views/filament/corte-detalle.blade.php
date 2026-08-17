@@ -156,10 +156,15 @@
                 </tr>
             </thead>
             <tbody>
-                {{-- Las anuladas se listan tachadas (transparencia para auditar) pero NO suman en los totales de arriba. --}}
+                {{-- Se listan TODAS para poder auditar, pero las que no suman a los
+                     totales de arriba se marcan: las anuladas van tachadas y los
+                     consumos de cuenta prepago llevan su etiqueta. --}}
                 @forelse ($corte->ventas()->with('factura:id,venta_id,numero,anulada')->orderBy('vendida_at')->get() as $v)
-                    @php $anulada = (bool) ($v->factura->anulada ?? false); @endphp
-                    <tr style="border-top:1px solid rgba(128,128,128,.12); {{ $anulada ? 'opacity:.45;' : '' }}">
+                    @php
+                        $anulada = (bool) ($v->factura->anulada ?? false);
+                        $consumo = $v->esConsumoDeCuenta();
+                    @endphp
+                    <tr style="border-top:1px solid rgba(128,128,128,.12); {{ $anulada || $consumo ? 'opacity:.55;' : '' }}">
                         <td style="padding:.35rem .2rem; {{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ $v->vendida_at->format('h:i A') }}</td>
                         <td style="padding:.35rem .2rem;">
                             @if ($v->factura !== null)
@@ -172,6 +177,12 @@
                             @endif
                             @if ($anulada)
                                 <span style="margin-left:.35rem; padding:.05rem .45rem; border-radius:999px; font-size:.62rem; font-weight:700; text-transform:uppercase; background:rgba(239,68,68,.15); color:#ef4444;">Anulada</span>
+                            @endif
+                            @if ($consumo)
+                                <span style="margin-left:.35rem; padding:.05rem .45rem; border-radius:999px; font-size:.62rem; font-weight:700; text-transform:uppercase; background:rgba(59,130,246,.15); color:#3b82f6;">Ya pagado en su cuenta</span>
+                                <div style="font-size:.68rem; opacity:.7; margin-top:.1rem;">
+                                    {{ $v->nombre_cliente }} · se facturó al depositar · NO suma a las ventas del día
+                                </div>
                             @endif
                         </td>
                         <td style="padding:.35rem .2rem; {{ $anulada ? 'text-decoration:line-through;' : '' }}">{{ ucfirst($v->forma_pago) }}{{ $v->banco ? ' · '.$v->banco : '' }}</td>
