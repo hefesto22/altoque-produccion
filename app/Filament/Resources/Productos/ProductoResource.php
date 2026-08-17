@@ -94,6 +94,9 @@ class ProductoResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // "Abono a cuenta de consumo" no es comida: es el concepto con el
+            // que se factura un depósito. No tiene nada que hacer en el menú.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('es_sistema', false))
             ->columns([
                 TextColumn::make('nombre')->label('Nombre')->searchable()->sortable()->weight('bold'),
                 TextColumn::make('categoria')

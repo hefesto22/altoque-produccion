@@ -1834,12 +1834,16 @@ class PuntoDeVenta extends Page
         }
 
         // El pendiente es el caso NORMAL de una empresa con cuenta: piden,
-        // comen y pagan al final. Sin esto el pago se guardaba como 'saldo'
-        // y la cuenta del cliente no se movía ni un centavo.
+        // comen y pagan al final. Igual que en el carrito, esto NO factura:
+        // el pedido pasa de recibo pendiente a consumo de cuenta.
         $cuenta = $this->cuentaDeCobro($formaPago, (float) $venta->total);
 
         if ($cuenta === false) {
             return false;
+        }
+
+        if ($cuenta !== null) {
+            return $this->cobrarPendienteConSaldo($venta, $cuenta);
         }
 
         try {
@@ -1852,7 +1856,6 @@ class PuntoDeVenta extends Page
                 $detallada,
                 $formaPago === 'transferencia' ? $banco : null,
                 $formaPago === 'mixto' ? $this->pagosMixtos($formaPago) : null,
-                $cuenta,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->seconds(3)->send();
@@ -2157,6 +2160,13 @@ class PuntoDeVenta extends Page
             return false;
         }
 
+        // Consumo contra cuenta prepago: NO se factura. Ese dinero ya se
+        // facturó el día del depósito; volver a facturarlo declararía dos
+        // veces el mismo lempira. Sale nota de consumo, no factura.
+        if ($cuenta !== null) {
+            return $this->procesarConsumo($cuenta);
+        }
+
         try {
             $factura = app(VentaService::class)->registrarFactura(
                 $this->lineasDelCarrito(),
@@ -2170,7 +2180,6 @@ class PuntoDeVenta extends Page
                 $this->costoViajeNumerico(),
                 $this->pagosMixtos(),
                 trim($this->domNombre) !== '' ? $this->domNombre : null,
-                $cuenta,
             );
         } catch (RestauranteException $e) {
             Notification::make()
@@ -2224,5 +2233,92 @@ class PuntoDeVenta extends Page
         $this->limpiar();
 
         return true;
+    }
+
+    /**
+     * Consumo contra cuenta prepago: descuenta, manda a cocina e imprime la
+     * nota NO fiscal. No emite factura ni quema correlativo — ese dinero ya
+     * se facturó cuando la empresa hizo su depósito.
+     */
+    private function procesarConsumo(CuentaPrepago $cuenta): bool
+    {
+        try {
+            $venta = app(VentaService::class)->registrarConsumo(
+                $this->lineasDelCarrito(),
+                (int) Auth::id(),
+                $cuenta,
+                $this->tipoServicio,
+                $this->costoViajeNumerico(),
+                trim($this->domNombre) !== '' ? $this->domNombre : null,
+            );
+        } catch (RestauranteException $e) {
+            Notification::make()
+                ->title('No se pudo cargar a la cuenta')
+                ->body($e->getMessage())
+                ->danger()->seconds(4)->send();
+
+            return false;
+        }
+
+        $this->enviarAComanda(
+            $venta,
+            incluirLocal: EmpresaSetting::actual()->imprimeComandaEnLocal(),
+            entregada: $this->tipoServicio === 'local',
+        );
+
+        $this->imprimirNotaConsumo($venta, $cuenta);
+        $this->limpiar();
+
+        return true;
+    }
+
+    /** Cobra un pendiente contra la cuenta: tampoco factura. */
+    private function cobrarPendienteConSaldo(Venta $venta, CuentaPrepago $cuenta): bool
+    {
+        try {
+            $consumo = app(VentaService::class)->cobrarPendienteConSaldo($venta, $cuenta, (int) Auth::id());
+        } catch (RestauranteException $e) {
+            Notification::make()
+                ->title('No se pudo cargar a la cuenta')
+                ->body($e->getMessage())
+                ->danger()->seconds(4)->send();
+
+            return false;
+        }
+
+        $this->imprimirNotaConsumo($consumo, $cuenta);
+
+        $this->cobrandoPendienteId = null;
+        $this->mostrarFactura = false;
+        $this->rtnInput = '';
+        $this->nombreInput = '';
+
+        return true;
+    }
+
+    /** Encola la nota de consumo y avisa cuánto le quedó a la cuenta. */
+    private function imprimirNotaConsumo(Venta $venta, CuentaPrepago $cuenta): void
+    {
+        $url = app(ColaImpresionService::class)->enviar(
+            'nota_consumo',
+            (int) $venta->id,
+            "Nota de consumo · Orden {$venta->numero_orden}",
+            $this->detalleCola($venta->nombre_orden, 'L. '.number_format((float) $venta->total, 2)),
+        );
+
+        if ($url !== null) {
+            $this->dispatch('imprimir-factura', url: $url);
+        }
+
+        $saldo = (float) $cuenta->fresh()->saldo;
+
+        Notification::make()
+            ->title("Cargado a {$cuenta->nombre} · Orden {$venta->numero_orden}")
+            ->body('Consumió L. '.number_format((float) $venta->total, 2)
+                .' · Le queda L. '.number_format($saldo, 2)
+                .($saldo < 0 ? ' — EN ROJO, avisale al cliente' : '')
+                .($url === null ? ' · la nota la imprime la caja' : ''))
+            ->success()
+            ->seconds(4)->send();
     }
 }

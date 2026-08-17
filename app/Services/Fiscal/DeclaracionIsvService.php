@@ -42,6 +42,10 @@ final class DeclaracionIsvService
         // Agregación en SQL, una sola query, columnas explícitas.
         // Las ventas con factura anulada no suman (ver docblock de la clase).
         $fila = Venta::query()
+            // computables(): fuera los consumos contra cuenta prepago. Ese
+            // ISV ya se declaró el día del depósito; declararlo otra vez al
+            // comer sería pagar dos veces por el mismo lempira.
+            ->computables()
             ->whereBetween('vendida_at', [$desde, $hasta])
             ->whereDoesntHave('factura', fn ($q) => $q->where('anulada', true))
             ->selectRaw('

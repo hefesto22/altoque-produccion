@@ -106,7 +106,7 @@ final class MenuDiaService
      */
     public function disponibles(Carbon $fecha, ?int $servicioId): Collection
     {
-        $query = Producto::query()->activos()
+        $query = Producto::query()->vendibles()->activos()
             ->disponibleEn($fecha)
             ->select(['id', 'nombre', 'categoria', 'tier_combo', 'descripcion', 'precio', 'grava_isv', 'fecha_especial'])
             ->orderBy('nombre');

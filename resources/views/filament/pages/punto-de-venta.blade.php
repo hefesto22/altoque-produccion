@@ -925,12 +925,13 @@
                                         · Con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
                                     @endif
                                 </div>
-                                {{-- Se dice en letras que esta venta sale de la cuenta:
-                                     el botón verde solo no alcanza, la caja cobraba en
-                                     efectivo por costumbre y el saldo no se movía. --}}
+                                {{-- Se dice en letras qué va a pasar: el botón verde
+                                     solo no alcanza, la caja cobraba en efectivo por
+                                     costumbre y el saldo no se movía. Y sobre todo, que
+                                     acá NO sale factura: ya se facturó al depositar. --}}
                                 @if ($formaPago === 'saldo')
                                     <div style="font-size:.78rem; font-weight:800; margin-top:.2rem;">
-                                        ✓ Esta venta se descuenta de esta cuenta.
+                                        ✓ Se descuenta de esta cuenta · sale NOTA DE CONSUMO, no factura
                                     </div>
                                 @endif
                                 @if ($entraAlCredito)
@@ -953,7 +954,9 @@
                                     <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                                 @endforeach
                                 {{-- "Saldo" solo aparece si hay cuenta Y alcanza: un botón
-                                     que al tocarlo va a fallar es peor que no tenerlo. --}}
+                                     que al tocarlo va a fallar es peor que no tenerlo.
+                                     OJO: "Saldo" no es una forma de pago de esta factura —
+                                     es cargar a la cuenta, que ya se facturó al depositar. --}}
                                 @if ($cuentaSaldo !== null && $cuentaSaldo->alcanzaPara($this->totalModal))
                                     <x-filament::button size="sm" :color="$formaPago === 'saldo' ? 'success' : 'gray'" wire:click="$set('formaPago','saldo')">
                                         Saldo

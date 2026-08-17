@@ -27,11 +27,16 @@ use Illuminate\Support\Facades\DB;
 final class CuentaPrepagoService
 {
     /**
-     * Entra plata a la cuenta. NO es una venta: no consume CAI ni lleva ISV.
+     * Entra plata a la cuenta.
+     *
+     * ⚠️ Desde 2026-08-17 el depósito SÍ es una venta: se factura al momento
+     * de recibirlo (ver VentaService::registrarDeposito, que es quien debe
+     * llamar a este método). Acá solo se acredita el saldo y se deja el
+     * rastro; la factura y el ISV los maneja la venta.
      *
      * @param string $formaPago efectivo | transferencia | cheque
-     * @param int|null $corteCajaId turno al que entra, si fue EN EFECTIVO (el
-     *                              arqueo tiene que contar ese billete)
+     * @param int|null $corteCajaId turno al que entra (hoy lo maneja la venta)
+     * @param Venta|null $venta la venta con la que se facturó este abono
      */
     public function depositar(
         CuentaPrepago $cuenta,
@@ -42,6 +47,7 @@ final class CuentaPrepagoService
         ?string $notas = null,
         ?int $usuarioId = null,
         ?int $corteCajaId = null,
+        ?Venta $venta = null,
     ): CuentaMovimiento {
         return $this->registrar($cuenta, 'deposito', abs(round($monto, 2)), [
             'forma_pago'    => $formaPago,
@@ -49,6 +55,9 @@ final class CuentaPrepagoService
             'referencia'    => $referencia,
             'notas'         => $notas,
             'corte_caja_id' => $formaPago === 'efectivo' ? $corteCajaId : null,
+            // La venta con la que se facturó el abono: sin factura detrás,
+            // un saldo acreditado es plata que entró sin documento.
+            'venta_id' => $venta?->id,
         ], $usuarioId);
     }
 
@@ -80,12 +89,12 @@ final class CuentaPrepagoService
      *
      * @throws SaldoInsuficienteException
      */
-    public function ajustar(CuentaPrepago $cuenta, float $monto, string $motivo, ?int $usuarioId = null, ?Venta $venta = null): CuentaMovimiento
+    public function ajustar(CuentaPrepago $cuenta, float $monto, string $motivo, ?int $usuarioId = null, ?Venta $venta = null, bool $forzar = false): CuentaMovimiento
     {
         return $this->registrar($cuenta, 'ajuste', round($monto, 2), [
             'notas'    => $motivo,
             'venta_id' => $venta?->id,
-        ], $usuarioId);
+        ], $usuarioId, $forzar);
     }
 
     /**
@@ -96,15 +105,19 @@ final class CuentaPrepagoService
      *
      * @throws SaldoInsuficienteException
      */
-    private function registrar(CuentaPrepago $cuenta, string $tipo, float $monto, array $extra, ?int $usuarioId): CuentaMovimiento
+    private function registrar(CuentaPrepago $cuenta, string $tipo, float $monto, array $extra, ?int $usuarioId, bool $forzar = false): CuentaMovimiento
     {
-        return DB::transaction(function () use ($cuenta, $tipo, $monto, $extra, $usuarioId): CuentaMovimiento {
+        return DB::transaction(function () use ($cuenta, $tipo, $monto, $extra, $usuarioId, $forzar): CuentaMovimiento {
             /** @var CuentaPrepago $fresca */
             $fresca = CuentaPrepago::query()->whereKey($cuenta->id)->lockForUpdate()->firstOrFail();
 
             // Lo que resta (consumo o ajuste negativo) tiene que caber en lo
             // disponible: saldo, más el crédito si la cuenta lo tiene.
-            if ($monto < 0 && ! $fresca->alcanzaPara(abs($monto))) {
+            //
+            // `forzar` existe para UN caso: revertir un depósito cuya factura
+            // se anuló. Ahí el saldo tiene que irse sí o sí — la plata dejó de
+            // estar documentada — aunque la cuenta quede debajo de su tope.
+            if (! $forzar && $monto < 0 && ! $fresca->alcanzaPara(abs($monto))) {
                 throw new SaldoInsuficienteException($fresca->disponible(), abs($monto));
             }
 

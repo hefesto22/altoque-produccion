@@ -8,6 +8,8 @@ use App\Domain\Contracts\CalculaImpuestos;
 use App\Domain\Exceptions\CuentaNoAmpliableException;
 use App\Domain\Exceptions\PagosNoCuadranException;
 use App\Domain\Exceptions\PedidoNoAnulableException;
+use App\Domain\Exceptions\SaldoInsuficienteException;
+use App\Domain\Exceptions\SinCaiActivoException;
 use App\Domain\Exceptions\VentaSinLineasException;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
@@ -15,6 +17,7 @@ use App\Models\Comanda;
 use App\Models\CorteCaja;
 use App\Models\CuentaPrepago;
 use App\Models\Factura;
+use App\Models\Producto;
 use App\Models\Venta;
 use App\Services\Cuentas\CuentaPrepagoService;
 use App\Services\Facturacion\FacturacionSarService;
@@ -73,42 +76,173 @@ final class VentaService
      *
      * @throws VentaSinLineasException
      */
-    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null, ?CuentaPrepago $cuentaSaldo = null): Factura
+    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null): Factura
     {
         $this->guardarContraVacio($lineas);
 
-        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden, $cuentaSaldo): Factura {
+        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden): Factura {
             $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden);
-
-            // El saldo se descuenta ANTES de emitir la factura, a propósito:
-            // el correlativo SAR sale de una secuencia de Postgres y un
-            // rollback NO lo devuelve. Si el saldo no alcanzara, esta
-            // transacción muere sin haber quemado un número de factura.
-            $this->cobrarConSaldo($venta, $cuentaSaldo, $cajeroId);
 
             return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
         });
     }
 
     /**
-     * Descuenta de la cuenta prepago la porción de la venta pagada con saldo.
+     * DEPÓSITO a una cuenta prepago: acá es donde se factura (2026-08-17).
      *
-     * El movimiento queda atado a la venta: un descuento sin factura detrás
-     * es un agujero por donde se va la plata del cliente.
+     * El anticipo ES la venta. Sale UNA factura SAR por el monto depositado,
+     * con el RTN de la empresa y una sola línea —"Abono a cuenta de consumo"—
+     * gravada al 15% con el impuesto ya incluido en el precio, como todo en
+     * este sistema. Después, cuando vengan a comer, no se factura nada más:
+     * solo se descuenta del saldo (ver registrarConsumo).
+     *
+     * Por qué 100% gravado: al depositar todavía no se sabe qué van a
+     * consumir, y el menú mezcla gravado con exento. Pagar ISV de más nunca
+     * lo audita el SAR; pagar de menos sí. La decisión es del negocio y está
+     * documentada en el manual del cliente.
+     *
+     * El dinero del depósito entra al corte del día por su forma de pago
+     * real, como cualquier venta — antes no entraba a ningún arqueo.
+     *
+     * @throws SinCaiActivoException
      */
-    private function cobrarConSaldo(Venta $venta, ?CuentaPrepago $cuenta, int $cajeroId): void
+    public function registrarDeposito(
+        CuentaPrepago $cuenta,
+        float $monto,
+        int $cajeroId,
+        string $formaPago = 'transferencia',
+        ?string $banco = null,
+        ?string $referencia = null,
+        ?string $notas = null,
+    ): Factura {
+        $monto = round($monto, 2);
+
+        return DB::transaction(function () use ($cuenta, $monto, $cajeroId, $formaPago, $banco, $referencia, $notas): Factura {
+            $producto = Producto::abonoACuenta();
+
+            $linea = new LineaVenta(
+                productoId: $producto->id,
+                nombre: 'Abono a cuenta de consumo — '.$cuenta->nombre,
+                precioUnitario: $monto,
+                cantidad: 1,
+                gravaIsv: true,
+            );
+
+            $rtn = $cuenta->rtn();
+
+            $venta = $this->crearVenta(
+                [$linea],
+                $cajeroId,
+                tipo: 'factura',
+                rtn: $rtn !== null ? new RTN($rtn) : null,
+                nombre: mb_strtoupper($cuenta->nombre),
+                formaPago: $formaPago,
+                banco: $banco,
+                tipoOrden: 'local',
+            );
+
+            $factura = $this->facturacion->emitirFactura($venta, $rtn !== null ? new RTN($rtn) : null, mb_strtoupper($cuenta->nombre), true);
+
+            // El saldo se acredita DESPUÉS de emitir: si la factura falla por
+            // falta de CAI, la transacción muere y la cuenta no queda con
+            // dinero que nunca se documentó.
+            $this->cuentas->depositar(
+                $cuenta,
+                $monto,
+                $formaPago,
+                $banco,
+                $referencia,
+                $notas,
+                $cajeroId,
+                null,
+                $venta,
+            );
+
+            return $factura;
+        });
+    }
+
+    /**
+     * CONSUMO contra una cuenta prepago: NO es una venta fiscal.
+     *
+     * Ya se facturó al depositar, así que acá no se emite factura, no se
+     * quema correlativo y no se declara ISV — sería declarar dos veces el
+     * mismo dinero. La venta se registra igual (con `tipo = 'consumo'`)
+     * porque cocina necesita su comanda y el negocio necesita saber qué
+     * comida salió; pero queda fuera de la declaración, del libro de ventas
+     * y del total de ventas del corte.
+     *
+     * Se conserva el desglose gravado/exento a modo informativo: sirve para
+     * revisar, con datos reales, si el 100% gravado del depósito sigue
+     * siendo una aproximación razonable.
+     *
+     * @param array<int, LineaVenta> $lineas
+     *
+     * @throws VentaSinLineasException
+     * @throws SaldoInsuficienteException
+     */
+    public function registrarConsumo(array $lineas, int $cajeroId, CuentaPrepago $cuenta, string $tipoOrden = 'local', float $costoViaje = 0, ?string $nombreOrden = null): Venta
     {
-        if ($cuenta === null) {
-            return;
-        }
+        $this->guardarContraVacio($lineas);
 
-        $monto = round((float) $venta->pagos()->where('metodo', 'saldo')->sum('monto'), 2);
+        return DB::transaction(function () use ($lineas, $cajeroId, $cuenta, $tipoOrden, $costoViaje, $nombreOrden): Venta {
+            $venta = $this->crearVenta(
+                $lineas,
+                $cajeroId,
+                tipo: 'consumo',
+                rtn: ($rtn = $cuenta->rtn()) !== null ? new RTN($rtn) : null,
+                nombre: mb_strtoupper($cuenta->nombre),
+                formaPago: 'saldo',
+                tipoOrden: $tipoOrden,
+                costoViaje: $costoViaje,
+                nombreOrden: $nombreOrden,
+            );
 
-        if ($monto <= 0) {
-            return;
-        }
+            $this->cuentas->consumir($cuenta, (float) $venta->total, $venta, $cajeroId);
 
-        $this->cuentas->consumir($cuenta, $monto, $venta, $cajeroId);
+            return $venta->fresh();
+        });
+    }
+
+    /**
+     * Cobra un pedido PENDIENTE contra la cuenta prepago del cliente.
+     *
+     * Mismo caso que registrarConsumo pero sobre una venta que ya existía
+     * (pidieron, comieron y pagan al final): el pedido deja de ser un recibo
+     * pendiente y pasa a ser un consumo de cuenta. No emite factura.
+     *
+     * @throws SaldoInsuficienteException
+     */
+    public function cobrarPendienteConSaldo(Venta $venta, CuentaPrepago $cuenta, int $cajeroId): Venta
+    {
+        return DB::transaction(function () use ($venta, $cuenta, $cajeroId): Venta {
+            $corteId = CorteCaja::query()->where('estado', 'abierto')->value('id');
+            $rtn = $cuenta->rtn();
+
+            $venta->update([
+                'tipo'           => 'consumo',
+                'forma_pago'     => 'saldo',
+                'banco'          => null,
+                'rtn_cliente'    => $rtn,
+                'nombre_cliente' => mb_strtoupper($cuenta->nombre),
+                'pagada'         => true,
+                'pagada_at'      => now(),
+                'corte_caja_id'  => $corteId,
+            ]);
+
+            $venta->pagos()->delete();
+            $venta->pagos()->create(['metodo' => 'saldo', 'banco' => null, 'monto' => (float) $venta->total]);
+
+            // Pagado = entregado: la comanda sale de la cola de cocina.
+            Comanda::query()
+                ->where('venta_id', $venta->id)
+                ->whereIn('estado', ['pendiente', 'preparando', 'listo'])
+                ->update(['estado' => 'entregado', 'entregado_at' => now()]);
+
+            $this->cuentas->consumir($cuenta, (float) $venta->total, $venta, $cajeroId);
+
+            return $venta->fresh();
+        });
     }
 
     /**
@@ -267,9 +401,9 @@ final class VentaService
      *
      * @throws VentaSinLineasException
      */
-    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null, ?CuentaPrepago $cuentaSaldo = null): Factura
+    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null): Factura
     {
-        return DB::transaction(function () use ($venta, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos, $cuentaSaldo): Factura {
+        return DB::transaction(function () use ($venta, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
             // UNA sola caja: la venta entra al turno abierto del sistema
             // (quién cobró queda en cajero_id).
             $corteId = CorteCaja::query()
@@ -299,11 +433,6 @@ final class VentaService
                 ->where('venta_id', $venta->id)
                 ->whereIn('estado', ['pendiente', 'preparando', 'listo'])
                 ->update(['estado' => 'entregado', 'entregado_at' => now()]);
-
-            // Mismo orden que en registrarFactura: primero se descuenta el
-            // saldo y después se emite. El correlativo SAR sale de una
-            // secuencia de Postgres y un rollback NO lo devuelve.
-            $this->cobrarConSaldo($venta, $cuentaSaldo, $cajeroId);
 
             // update() ya refrescó los atributos en memoria; el desglose
             // (gravado/isv/total) no cambia, solo el estado de pago.

@@ -11,7 +11,9 @@ use App\Services\Cuentas\CuentaPrepagoService;
 
 /**
  * Cuentas prepago: la empresa deja dinero por adelantado y consume contra ese
- * saldo. El depósito NO es venta; la factura sale en cada consumo.
+ * saldo. Estas pruebas son del LIBRO MAYOR de la cuenta (que el saldo
+ * cuadre, que nada se pierda). Lo fiscal —que el depósito es la venta y
+ * que el consumo NO factura— vive en CuentaPrepagoFiscalTest.
  */
 function cuentaPrepago(array $extra = []): CuentaPrepago
 {

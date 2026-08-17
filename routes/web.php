@@ -24,6 +24,7 @@ use App\Http\Controllers\CorteTicketController;
 use App\Http\Controllers\CotizacionPdfController;
 use App\Http\Controllers\CuentaEstadoController;
 use App\Http\Controllers\FacturaPdfController;
+use App\Http\Controllers\NotaConsumoController;
 use App\Http\Controllers\TandaImpresionController;
 use App\Http\Controllers\VerificacionController;
 use App\Livewire\MenuPantalla;
@@ -88,4 +89,11 @@ Route::get('/cotizaciones/{cotizacion}/ver', [CotizacionPdfController::class, 'v
 // abre desde su WhatsApp para ver cuánto le queda y en qué se fue.
 Route::get('/cuentas/{token}/estado', [CuentaEstadoController::class, 'estado'])
     ->name('cuentas.estado')
+    ->middleware('signed');
+
+// Nota de consumo de cuenta prepago (80mm, HTML) — FIRMADA. NO es documento
+// fiscal: la venta ya se facturo al depositar. La imprime la caja para que
+// el cliente se lleve constancia de lo consumido y del saldo que le queda.
+Route::get('/ventas/{venta}/nota-consumo', [NotaConsumoController::class, 'show'])
+    ->name('ventas.nota-consumo')
     ->middleware('signed');

@@ -32,6 +32,7 @@ class VentasFiscalesExport implements FromQuery, ShouldAutoSize, WithHeadings, W
     public function query(): Builder
     {
         return Venta::query()
+            ->computables()   // los consumos de cuenta prepago no son ventas nuevas
             ->select(['id', 'tipo', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'isv', 'total', 'vendida_at'])
             ->with('factura:id,venta_id,numero') // evita N+1 al mapear el número de factura
             ->whereBetween('vendida_at', [$this->desde, $this->hasta])

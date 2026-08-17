@@ -49,6 +49,7 @@ class Producto extends Model
         'precio',
         'grava_isv',
         'activo',
+        'es_sistema',
         'fecha_especial',
     ];
 
@@ -59,10 +60,43 @@ class Producto extends Model
             'precio'                 => 'decimal:2',
             'grava_isv'              => 'boolean',
             'activo'                 => 'boolean',
+            'es_sistema'             => 'boolean',
             'combo_num_complementos' => 'integer',
             'combo_num_bebidas'      => 'integer',
             'fecha_especial'         => 'date',
         ];
+    }
+
+    /**
+     * El producto con el que se factura un abono a cuenta prepago.
+     *
+     * No es comida: es el concepto contable que lleva la única línea de la
+     * factura del depósito. Vive en `productos` porque venta_items exige un
+     * producto real, y se marca `es_sistema` para que el menú del POS no lo
+     * muestre nunca.
+     */
+    public static function abonoACuenta(): self
+    {
+        return self::query()->firstOrCreate(
+            ['es_sistema' => true],
+            [
+                'nombre'    => 'Abono a cuenta de consumo',
+                'categoria' => 'extra',
+                'precio'    => 0,
+                'grava_isv' => true,
+                'activo'    => true,
+            ],
+        );
+    }
+
+    /**
+     * Fuera los conceptos internos: al POS y al catálogo solo va comida.
+     *
+     * @param Builder<Producto> $query
+     */
+    public function scopeVendibles(Builder $query): Builder
+    {
+        return $query->where('es_sistema', false);
     }
 
     /** Solo productos disponibles para el POS. */

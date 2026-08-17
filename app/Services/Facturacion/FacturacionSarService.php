@@ -149,8 +149,9 @@ final class FacturacionSarService
                 'anulada_at'       => now(),
             ]);
 
-            // Si la venta salio de una cuenta prepago, la plata vuelve. Anular
-            // sin devolver deja al cliente pagando algo que ya no existe.
+            // La cuenta prepago tiene que reflejarlo: si la factura anulada
+            // era la de un depósito, ese saldo deja de existir; si era de un
+            // consumo viejo, la plata vuelve.
             $this->devolverSaldo($factura, $usuarioId);
 
             activity()
@@ -163,42 +164,55 @@ final class FacturacionSarService
     }
 
     /**
-     * Le devuelve a la cuenta prepago lo que esta venta le habia descontado.
+     * Deshace en la cuenta prepago el efecto de la venta que se está anulando.
      *
-     * Se busca por el movimiento de consumo y NO por el RTN: la plata vuelve
-     * exactamente a la cuenta de donde salio, aunque despues le hayan cambiado
-     * el cliente. Anular esta bloqueado si la factura ya estaba anulada, asi
-     * que no hay forma de devolver dos veces.
+     * Hay dos casos y van en direcciones opuestas:
+     *
+     *   DEPÓSITO — es lo normal desde 2026-08-17: la factura anulada es la
+     *   del abono, así que ese saldo deja de estar documentado y hay que
+     *   QUITARLO. Va forzado: la cuenta puede quedar debajo de su tope, pero
+     *   dejar saldo sin factura detrás es peor.
+     *
+     *   CONSUMO — solo datos viejos, de cuando cada consumo se facturaba.
+     *   Ahí la plata VUELVE a la cuenta.
+     *
+     * Se busca por el movimiento y no por el RTN: se toca exactamente la
+     * cuenta que se movió, aunque después le hayan cambiado el cliente.
+     * Anular está bloqueado si la factura ya estaba anulada, así que esto no
+     * puede correr dos veces sobre la misma venta.
      */
     private function devolverSaldo(Factura $factura, ?int $usuarioId): void
     {
-        $consumo = CuentaMovimiento::query()
+        $movimiento = CuentaMovimiento::query()
             ->where('venta_id', $factura->venta_id)
-            ->where('tipo', 'consumo')
+            ->whereIn('tipo', ['deposito', 'consumo'])
             ->first();
 
-        if ($consumo === null) {
-            return;   // no se pago con saldo: no hay nada que devolver
+        if ($movimiento === null) {
+            return;   // la venta no tocó ninguna cuenta prepago
         }
+
+        $esDeposito = $movimiento->tipo === 'deposito';
 
         $total = round((float) CuentaMovimiento::query()
             ->where('venta_id', $factura->venta_id)
-            ->where('tipo', 'consumo')
-            ->sum('monto'), 2);   // viene negativo
+            ->where('tipo', $movimiento->tipo)
+            ->sum('monto'), 2);   // depósito viene en +, consumo en −
 
-        if ($total >= 0) {
+        if (abs($total) < 0.01) {
             return;
         }
 
         /** @var CuentaPrepago $cuenta */
-        $cuenta = CuentaPrepago::query()->whereKey($consumo->cuenta_prepago_id)->firstOrFail();
+        $cuenta = CuentaPrepago::query()->whereKey($movimiento->cuenta_prepago_id)->firstOrFail();
 
         $this->cuentas->ajustar(
             $cuenta,
-            abs($total),
-            'Devolucion por anulacion de la factura '.$factura->numero,
+            -$total,   // el ajuste es siempre el espejo del movimiento original
+            ($esDeposito ? 'Se anuló la factura del depósito ' : 'Devolución por anulación de la factura ').$factura->numero,
             $usuarioId,
             $factura->venta,
+            forzar: $esDeposito,
         );
     }
 

@@ -90,8 +90,10 @@ final class CorteCajaService
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS efectivo,
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS tarjeta,
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia,
-                    -- Saldo a favor: la venta existe pero el dinero entró el
-                    -- día del depósito. NO es efectivo en gaveta ni terminal.
+                    -- Consumo de cuenta prepago: comida entregada hoy que ya
+                    -- se cobró y facturó al depositar. NO es efectivo en
+                    -- gaveta ni terminal, y tampoco suma a las ventas del
+                    -- turno (eso lo excluye el scope computables()).
                     coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'saldo'), 0)          AS saldo
                 FROM venta_pagos vp
                 JOIN ventas v ON v.id = vp.venta_id

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Venta — registro central. SIEMPRE existe y SIEMPRE lleva su desglose
@@ -193,6 +194,52 @@ class Venta extends Model
     public function scopeCuentaEnCaja(Builder $query): Builder
     {
         return $query->where('pagada', true)
+            // Un consumo de cuenta prepago no trae dinero: ya se cobró y se
+            // facturó el día del depósito. Contarlo como venta del turno
+            // inflaría el corte con plata que no entró hoy.
+            ->computables()
             ->whereDoesntHave('factura', fn (Builder $q) => $q->where('anulada', true));
+    }
+
+    /**
+     * Ventas que COMPUTAN como venta del negocio: fuera los consumos contra
+     * cuenta prepago.
+     *
+     * Un consumo no es una venta nueva — ese dinero ya se facturó y se
+     * declaró el día del depósito. Si entrara a la declaración de ISV, al
+     * libro de ventas o al total de ventas del corte, el mismo lempira se
+     * contaría dos veces. Este scope es el único freno; usarlo en TODO lo
+     * que reporte ventas.
+     *
+     * OJO: no confundir con scopeFiscales(), que filtra `tipo = factura`
+     * (deja fuera los recibos). Acá los recibos SÍ cuentan: son ventas.
+     *
+     * @param Builder<Venta> $query
+     */
+    public function scopeComputables(Builder $query): Builder
+    {
+        return $query->where('tipo', '!=', 'consumo');
+    }
+
+    /**
+     * Consumos contra cuenta prepago (comida entregada, ya facturada antes).
+     *
+     * @param Builder<Venta> $query
+     */
+    public function scopeConsumosDeCuenta(Builder $query): Builder
+    {
+        return $query->where('tipo', 'consumo');
+    }
+
+    /** ¿Es un consumo contra cuenta prepago (no fiscal)? */
+    public function esConsumoDeCuenta(): bool
+    {
+        return $this->tipo === 'consumo';
+    }
+
+    /** URL firmada de la nota de consumo (el comprobante no fiscal). */
+    public function urlNotaConsumo(): string
+    {
+        return URL::signedRoute('ventas.nota-consumo', ['venta' => $this->id]);
     }
 }

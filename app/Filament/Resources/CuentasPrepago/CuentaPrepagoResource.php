@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CuentasPrepago;
 
+use App\Domain\Exceptions\RestauranteException;
 use App\Filament\Resources\CuentasPrepago\Pages\ListCuentasPrepago;
 use App\Filament\Schemas\Components\MontoField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Cliente;
 use App\Models\CuentaPrepago;
 use App\Services\Cuentas\CuentaPrepagoService;
+use App\Services\Impresion\ColaImpresionService;
+use App\Services\Pos\VentaService;
 use App\Support\Acceso;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -154,12 +157,13 @@ class CuentaPrepagoResource extends Resource
                     ->label('Depósito')
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
-                    ->modalHeading('Registrar depósito')
+                    ->modalHeading('Registrar depósito y facturar')
                     ->modalDescription(fn (CuentaPrepago $record): string => $record->nombre
-                        .' · Saldo actual L. '.number_format((float) $record->saldo, 2))
+                        .' · Saldo actual L. '.number_format((float) $record->saldo, 2)
+                        .'. Se emite UNA factura por este monto; después los consumos solo descuentan.')
                     ->schema([
                         MontoField::make('monto', 'Monto del depósito')
-                            ->helperText('El depósito no genera factura: la factura sale en cada consumo.'),
+                            ->helperText('El ISV va incluido en este monto. Sale una sola factura y de ahí se va descontando lo que consuman.'),
                         ToggleButtons::make('forma_pago')->label('Cómo entró')
                             ->options(['efectivo' => 'Efectivo', 'transferencia' => 'Transferencia', 'cheque' => 'Cheque'])
                             ->icons([
@@ -183,20 +187,43 @@ class CuentaPrepagoResource extends Resource
                     ->action(function (CuentaPrepago $record, array $data): void {
                         abort_unless(Acceso::puede('Update:CuentaPrepago'), 403);
 
-                        app(CuentaPrepagoService::class)->depositar(
-                            $record,
-                            (float) $data['monto'],
-                            $data['forma_pago'],
-                            $data['banco'] ?? null,
-                            $data['referencia'] ?? null,
-                            $data['notas'] ?? null,
-                            (int) Auth::id(),
+                        // El depósito ES la venta: acá se emite la única
+                        // factura SAR de este dinero. Si no hay CAI activo la
+                        // transacción muere y la cuenta NO queda con saldo
+                        // sin documento detrás.
+                        try {
+                            $factura = app(VentaService::class)->registrarDeposito(
+                                $record,
+                                (float) $data['monto'],
+                                (int) Auth::id(),
+                                $data['forma_pago'],
+                                $data['banco'] ?? null,
+                                $data['referencia'] ?? null,
+                                $data['notas'] ?? null,
+                            );
+                        } catch (RestauranteException $e) {
+                            Notification::make()
+                                ->title('No se pudo facturar el depósito')
+                                ->body($e->getMessage().' Verificá que haya un CAI activo.')
+                                ->danger()->seconds(6)->send();
+
+                            return;
+                        }
+
+                        // La factura se encola: la saca la caja desde el POS.
+                        app(ColaImpresionService::class)->enviar(
+                            'factura',
+                            (int) $factura->id,
+                            "Factura {$factura->numero} · Abono {$record->nombre}",
+                            'L. '.number_format((float) $factura->total, 2),
                         );
 
                         Notification::make()
-                            ->title('Depósito registrado')
-                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2))
+                            ->title("Depósito facturado · N° {$factura->numero}")
+                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2)
+                                .' · La factura quedó en la cola de impresión de la caja.')
                             ->success()
+                            ->seconds(6)
                             ->send();
                     }),
 

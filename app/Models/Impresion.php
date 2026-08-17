@@ -91,7 +91,9 @@ class Impresion extends Model
             'factura'    => Factura::find($this->referencia_id)?->urlTicket(),
             'documentos' => Factura::find($this->referencia_id)?->urlDocumentos(),
             'corte'      => CorteCaja::find($this->referencia_id)?->urlTicket(),
-            default      => null,
+            // Comprobante NO fiscal de un consumo contra cuenta prepago.
+            'nota_consumo' => Venta::find($this->referencia_id)?->urlNotaConsumo(),
+            default        => null,
         };
     }
 
