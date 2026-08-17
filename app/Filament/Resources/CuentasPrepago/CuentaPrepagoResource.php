@@ -221,18 +221,18 @@ class CuentaPrepagoResource extends Resource
                             'L. '.number_format((float) $factura->total, 2),
                         );
 
-                        // Y se abre sola para imprimir, como en el POS: el ticket
-                        // trae window.print() al cargar. Esta pantalla no es el
-                        // POS y no tiene su listener, así que se abre en pestaña.
+                        // Sale el diálogo de impresión de una, sin pestaña nueva:
+                        // el MISMO evento que usa el POS. El script que lo escucha
+                        // está registrado por render hook en TODO el panel, carga
+                        // el ticket en un iframe oculto y dispara el print.
                         $ticket = $factura->urlTicket();
 
-                        if ($ticket !== null) {
-                            $livewire->js("window.open('".addslashes($ticket)."', '_blank')");
-                        }
+                        $livewire->dispatch('imprimir-factura', url: $ticket);
 
                         Notification::make()
                             ->title("Depósito facturado · N° {$factura->numero}")
-                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2))
+                            ->body('Saldo nuevo: L. '.number_format((float) $record->fresh()->saldo, 2)
+                                .' · Enviando la factura a impresión…')
                             ->actions([
                                 NotificationAction::make('imprimir')
                                     ->label('Imprimir factura')
