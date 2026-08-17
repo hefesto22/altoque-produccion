@@ -1970,17 +1970,19 @@ class PuntoDeVenta extends Page
             Notification::make()
                 ->title('Ese RTN no tiene cuenta con saldo')
                 ->body('Escribí el RTN de la empresa o cobrá con otra forma de pago.')
-                ->warning()->seconds(4)->send();
+                ->warning()->seconds(3)->send();
 
             return false;
         }
 
+        // El crédito de la cuenta ya absorbe lo que falte: si ni con él alcanza,
+        // no se descuenta nada y la caja lo cobra de otra forma.
         if (! $cuenta->alcanzaPara($total)) {
             Notification::make()
                 ->title('No alcanza el saldo')
                 ->body($cuenta->nombre.' tiene disponible L. '.number_format($cuenta->disponible(), 2)
                     .' y la venta es de L. '.number_format($total, 2).'. Registrá un depósito o cobrá de otra forma.')
-                ->warning()->seconds(6)->send();
+                ->warning()->seconds(4)->send();
 
             return false;
         }
@@ -2319,6 +2321,6 @@ class PuntoDeVenta extends Page
                 .($saldo < 0 ? ' — EN ROJO, avisale al cliente' : '')
                 .($url === null ? ' · la nota la imprime la caja' : ''))
             ->success()
-            ->seconds(4)->send();
+            ->seconds(3)->send();
     }
 }

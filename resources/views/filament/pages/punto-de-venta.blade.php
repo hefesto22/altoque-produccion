@@ -909,10 +909,11 @@
                              esa empresa dejó dinero adelantado. --}}
                         @php($cuentaSaldo = $this->cuentaSaldo)
                         @if ($cuentaSaldo !== null)
+                            {{-- Tres estados: alcanza con el saldo (verde), alcanza
+                                 usando el crédito y la cuenta queda en rojo (ámbar, hay
+                                 que decírselo al cliente en el momento), o se pasa del
+                                 tope y no se puede cargar acá. --}}
                             @php($alcanza = $cuentaSaldo->alcanzaPara($this->totalModal))
-                            {{-- Tres estados, no dos: alcanza con saldo (verde), alcanza
-                                 pero entra al crédito y queda en rojo (ámbar, hay que
-                                 decírselo al cliente en el momento), o se pasa del tope. --}}
                             @php($quedaEn = round((float) $cuentaSaldo->saldo - $this->totalModal, 2))
                             @php($entraAlCredito = $alcanza && $quedaEn < 0)
                             @php($color = ! $alcanza || $entraAlCredito ? '#f59e0b' : '#22c55e')
@@ -925,10 +926,6 @@
                                         · Con crédito L. {{ number_format($cuentaSaldo->disponible(), 2) }}
                                     @endif
                                 </div>
-                                {{-- Se dice en letras qué va a pasar: el botón verde
-                                     solo no alcanza, la caja cobraba en efectivo por
-                                     costumbre y el saldo no se movía. Y sobre todo, que
-                                     acá NO sale factura: ya se facturó al depositar. --}}
                                 @if ($formaPago === 'saldo')
                                     <div style="font-size:.78rem; font-weight:800; margin-top:.2rem;">
                                         ✓ Se descuenta de esta cuenta · sale NOTA DE CONSUMO, no factura
@@ -936,7 +933,7 @@
                                 @endif
                                 @if ($entraAlCredito)
                                     <div style="font-size:.78rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
-                                        Queda en rojo L. {{ number_format(abs($quedaEn), 2) }} — avisale al cliente.
+                                        Usa el crédito y queda en rojo L. {{ number_format(abs($quedaEn), 2) }} — avisale al cliente.
                                     </div>
                                 @elseif (! $alcanza)
                                     <div style="font-size:.75rem; color:#f59e0b; font-weight:700; margin-top:.2rem;">
@@ -953,8 +950,9 @@
                                 @foreach (['efectivo' => 'Efectivo', 'tarjeta' => 'Tarjeta', 'transferencia' => 'Transf.', 'mixto' => 'Mixto'] as $fp => $lbl)
                                     <x-filament::button size="sm" :color="$formaPago === $fp ? 'primary' : 'gray'" wire:click="$set('formaPago','{{ $fp }}')">{{ $lbl }}</x-filament::button>
                                 @endforeach
-                                {{-- "Saldo" solo aparece si hay cuenta Y alcanza: un botón
-                                     que al tocarlo va a fallar es peor que no tenerlo.
+                                {{-- "Saldo" solo aparece si hay cuenta Y alcanza (con su
+                                     crédito): un botón que al tocarlo va a fallar es peor
+                                     que no tenerlo.
                                      OJO: "Saldo" no es una forma de pago de esta factura —
                                      es cargar a la cuenta, que ya se facturó al depositar. --}}
                                 @if ($cuentaSaldo !== null && $cuentaSaldo->alcanzaPara($this->totalModal))

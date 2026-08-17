@@ -245,7 +245,7 @@ class CuentaPrepagoResource extends Resource
                                     ->url($factura->urlWhatsApp(), shouldOpenInNewTab: true),
                             ])
                             ->success()
-                            ->seconds(10)
+                            ->seconds(3)   // no se queda pegada al cambiar de pantalla
                             ->send();
                     }),
 
