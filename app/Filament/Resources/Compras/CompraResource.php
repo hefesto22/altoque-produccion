@@ -140,17 +140,17 @@ class CompraResource extends Resource
             // ── Paso 2: de quién y cuándo ───────────────────────────────
             Section::make('2 · Proveedor')
                 ->schema([
-                    // Sin default: el contador carga facturas de dias pasados y
-                    // con "hoy" puesto de entrada se le colaban con fecha errada.
-                    // Se escribe a mano (dd/mm/aaaa) o se elige del calendario.
+                    // Campo de fecha NATIVO del navegador, a propósito: el
+                    // picker de Filament obliga a navegar mes/año con el mouse
+                    // y el contador carga decenas de facturas de golpe. El
+                    // nativo se teclea de corrido (17 08 2026) sin soltar el
+                    // teclado. Y sin default: con "hoy" puesto de entrada se le
+                    // colaban facturas mal fechadas.
                     DatePicker::make('fecha')
                         ->label('Fecha de compra')
                         ->required()
-                        ->native(false)
-                        ->displayFormat('d/m/Y')
-                        ->format('Y-m-d')
-                        ->placeholder('dd/mm/aaaa')
-                        ->helperText('Escribila tal como viene en la factura.')
+                        ->native()
+                        ->helperText('Escribila con el teclado: día, mes y año.')
                         ->maxDate(now()),
 
                     // Doble ancho: un correlativo del SAR (000-001-01-00000657)
