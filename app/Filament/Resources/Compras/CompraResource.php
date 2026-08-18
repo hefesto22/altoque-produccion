@@ -12,7 +12,6 @@ use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -82,35 +81,20 @@ class CompraResource extends Resource
     }
 
     /**
-     * Desglosa un importe que YA trae el ISV incluido (así viene en la
-     * factura: "L. 1,000" con el 15% adentro).
+     * El total se arma de lo que escribe el contador, no al revés.
      *
-     * El ISV se saca por DIFERENCIA (bruto − base) y no como base × 0.15:
-     * de esa forma base + ISV da exactamente el bruto y nunca se pierde un
-     * centavo por redondeo, que en lo fiscal tiene que cuadrar al centavo.
-     *
-     * @return array{base: float, isv: float}
-     */
-    private static function desglosar(float $bruto): array
-    {
-        $base = round($bruto / 1.15, 2);
-
-        return ['base' => $base, 'isv' => round($bruto - $base, 2)];
-    }
-
-    /**
-     * Recalcula lo que se guarda (gravado sin impuesto, ISV y total) a partir
-     * de lo que el usuario escribe (gravado con ISV incluido + exento).
+     * Pedido del contador (2026-08-17): quiere copiar la factura del proveedor
+     * tal cual —gravado, ISV y exento por separado— en vez de escribir el
+     * gravado con el impuesto adentro y que el sistema derive el ISV. Son
+     * exactamente las columnas que la base ya guardaba, así que lo de antes
+     * era una vuelta de mas.
      */
     private static function recalcularTotal(Get $get, Set $set): void
     {
-        $bruto = self::num($get('gravado_bruto'));
-        $exento = self::num($get('exento'));
-        $d = self::desglosar($bruto);
-
-        $set('gravado', $d['base']);
-        $set('isv', $d['isv']);
-        $set('total', round($bruto + $exento, 2));
+        $set('total', round(
+            self::num($get('gravado')) + self::num($get('isv')) + self::num($get('exento')),
+            2,
+        ));
     }
 
     public static function form(Schema $schema): Schema
@@ -156,11 +140,17 @@ class CompraResource extends Resource
             // ── Paso 2: de quién y cuándo ───────────────────────────────
             Section::make('2 · Proveedor')
                 ->schema([
+                    // Sin default: el contador carga facturas de dias pasados y
+                    // con "hoy" puesto de entrada se le colaban con fecha errada.
+                    // Se escribe a mano (dd/mm/aaaa) o se elige del calendario.
                     DatePicker::make('fecha')
                         ->label('Fecha de compra')
                         ->required()
                         ->native(false)
-                        ->default(now())
+                        ->displayFormat('d/m/Y')
+                        ->format('Y-m-d')
+                        ->placeholder('dd/mm/aaaa')
+                        ->helperText('Escribila tal como viene en la factura.')
                         ->maxDate(now()),
 
                     // Doble ancho: un correlativo del SAR (000-001-01-00000657)
@@ -241,61 +231,76 @@ class CompraResource extends Resource
             // ── Paso 3: montos ──────────────────────────────────────────
             Section::make('3 · Montos')
                 ->description(fn (Get $get): string => self::esFactura($get)
-                    ? 'Copiá los montos tal como vienen en la factura: el gravado con el ISV ya incluido. El sistema calcula solo cuánto de eso es impuesto.'
+                    ? 'Copiá los montos tal como vienen en la factura del proveedor, cada uno en su casilla. El total se suma solo.'
                     : 'Solo el total de lo que pagaste.')
                 ->schema([
-                    // Lo que el usuario escribe: el monto CON impuesto, tal
-                    // cual lo lee de la factura. No se guarda: de acá salen
-                    // el gravado sin impuesto y el ISV (columnas reales).
-                    MontoField::make('gravado_bruto', 'Gravado (con ISV)')
+                    // Los tres montos van tal cual vienen en la factura del
+                    // proveedor y son las columnas reales de la base. Sin
+                    // `default(0)`: el contador pidió que las casillas nazcan
+                    // vacías, porque el cero puesto de entrada se quedaba
+                    // pegado y terminaba guardando montos en cero.
+                    MontoField::make('gravado', 'Gravado 15%')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
-                        ->dehydrated(false)
+                        ->default(null)
                         ->live(onBlur: true)
-                        ->helperText('La factura dice L. 1,000 → escribí 1000. El 15% ya va adentro.')
-                        ->afterStateHydrated(function (TextInput $component, ?Compra $record): void {
-                            // Al editar, se reconstruye desde lo guardado.
-                            if ($record !== null) {
-                                $component->state(round((float) $record->gravado + (float) $record->isv, 2));
-                            }
-                        })
+                        ->rules(['nullable'])
+                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
+                        ->helperText('El importe gravado SIN el impuesto, como lo separa la factura.')
+                        ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
+
+                    MontoField::make('isv', 'I.S.V. 15%')
+                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->default(null)
+                        ->required(false)
+                        ->rules(['nullable'])
+                        ->live(onBlur: true)
+                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
+                        ->helperText('El impuesto tal como lo dice la factura. Es el que se descuenta.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     MontoField::make('exento', 'Exento')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->default(null)
+                        ->required(false)
+                        ->rules(['nullable'])
                         ->live(onBlur: true)
+                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
                         ->helperText('Lo que no paga impuesto (si la factura lo separa).')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
-                    // En un recibo es el único campo: ocupa media fila para que
-                    // no quede un cuadrito suelto contra el borde.
-                    MontoField::make('total', 'Total pagado')
-                        ->helperText(fn (Get $get): ?string => self::esFactura($get)
-                            ? 'Gravado + exento. Debe cuadrar con la factura.'
-                            : null),
+                    // En factura no se escribe: es la suma de los tres de arriba,
+                    // así no puede discrepar. En recibo es el único campo.
+                    MontoField::make('total', 'Total')
+                        ->default(null)
+                        ->rules(['nullable'])
+                        ->disabled(fn (Get $get): bool => self::esFactura($get))
+                        ->dehydrated(true)
+                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
+                        ->helperText(fn (Get $get): string => self::esFactura($get)
+                            ? 'Gravado + ISV + exento. Se suma solo.'
+                            : 'Lo que pagaste en total.'),
 
-                    // El desglose se muestra, no se escribe: así el cajero
-                    // verifica de un vistazo contra la factura.
-                    Placeholder::make('desglose_isv')
+                    // Aviso, no freno: si el ISV escrito no es ~15% del gravado
+                    // casi siempre es un dígito mal tecleado. Se avisa y el
+                    // contador decide (hay facturas con retenciones o redondeos).
+                    Placeholder::make('chequeo_isv')
                         ->hiddenLabel()
                         ->columnSpanFull()
-                        ->visible(fn (Get $get): bool => self::esFactura($get) && self::num($get('gravado_bruto')) > 0)
+                        ->visible(function (Get $get): bool {
+                            if (! self::esFactura($get) || self::num($get('gravado')) <= 0) {
+                                return false;
+                            }
+
+                            return abs(self::num($get('isv')) - round(self::num($get('gravado')) * 0.15, 2)) > 1.00;
+                        })
                         ->content(function (Get $get): HtmlString {
-                            $d = self::desglosar(self::num($get('gravado_bruto')));
+                            $esperado = round(self::num($get('gravado')) * 0.15, 2);
 
                             return new HtmlString(
-                                '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;'
-                                .' border:1px solid rgba(22,163,74,.35); background:rgba(22,163,74,.08); border-radius:.6rem; padding:.6rem .9rem;">'
-                                .'<span style="font-size:.85rem; opacity:.8;">De ese gravado: base <strong>L. '.number_format($d['base'], 2)
-                                .'</strong> + impuesto <strong>L. '.number_format($d['isv'], 2).'</strong></span>'
-                                .'<span style="font-size:.9rem;">ISV que se descuenta: '
-                                .'<strong style="color:#16a34a; font-size:1.15rem;">L. '.number_format($d['isv'], 2).'</strong></span>'
-                                .'</div>'
+                                '<span style="font-size:.85rem; color:#d97706;">⚠ El 15% de ese gravado daría L. '
+                                .number_format($esperado, 2).'. Revisá el ISV contra la factura por si se coló un dígito.</span>'
                             );
                         }),
-
-                    // Columnas reales que se guardan, calculadas arriba.
-                    Hidden::make('gravado')->default(0),
-                    Hidden::make('isv')->default(0),
 
                     // Aviso sin bloquear: una factura con ISV pero sin RTN del
                     // proveedor es un crédito que el SAR puede rechazar.
@@ -303,7 +308,7 @@ class CompraResource extends Resource
                         ->hiddenLabel()
                         ->columnSpanFull()
                         ->visible(fn (Get $get): bool => self::esFactura($get)
-                            && self::num($get('gravado_bruto')) > 0
+                            && self::num($get('gravado')) > 0
                             && trim((string) $get('proveedor_rtn')) === '')
                         ->content(new HtmlString(
                             '<span style="font-size:.85rem; color:#d97706;">⚠ Estás descontando ISV sin el RTN del proveedor. Si el SAR audita, puede rechazar ese crédito.</span>'
@@ -332,6 +337,7 @@ class CompraResource extends Resource
                     ->formatStateUsing(fn (string $state): string => ucfirst($state))
                     ->toggleable(),
                 TextColumn::make('gravado')->label('Gravado')->money('HNL')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('isv')->label('I.S.V.')->money('HNL')->toggleable(),
                 // En un recibo se muestra un guion, no "L. 0.00": se lee como
                 // "no aplica" y no como un dato en cero.
                 TextColumn::make('isv')->label('ISV que descuenta')
