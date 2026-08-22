@@ -99,8 +99,10 @@
                                         @if (! empty($item['detalle']))
                                             <span style="display:block; font-size:.72rem; opacity:.7;">{{ implode(', ', $item['detalle']) }}</span>
                                         @endif
+                                        {{-- La nota se lee de lejos, igual que en el ticket:
+                                             es la excepción del plato, no un detalle más. --}}
                                         @if (! empty($item['nota']))
-                                            <span style="display:block; font-size:.74rem; color:#f59e0b; font-weight:700;">📝 {{ $item['nota'] }}</span>
+                                            <span style="display:block; font-size:.95rem; line-height:1.25; color:#f59e0b; font-weight:800; text-transform:uppercase;">📝 {{ $item['nota'] }}</span>
                                         @endif
                                     </li>
                                 @endforeach

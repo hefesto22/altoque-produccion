@@ -51,7 +51,12 @@
         .comanda td.cant { width: 30px; font-weight: 700; vertical-align: top; font-size: 15.5px; }
         .comanda td.item { font-size: 15.5px; font-weight: 700; text-transform: uppercase; }
         .comanda .detalle { font-size: 12px; padding-left: 30px; }
-        .comanda .nota { font-size: 13px; font-weight: 700; padding-left: 30px; }
+        /* La nota, más grande que el nombre del plato: es lo que no se puede
+           pasar por alto (mismo criterio que el ticket suelto de comanda). */
+        .comanda .nota {
+            font-size: 17px; font-weight: 700; text-transform: uppercase;
+            padding: 1px 0 3px 30px; -webkit-text-stroke: 0.35px #000;
+        }
         .comanda .banner {
             border: 2px solid #000; text-align: center; font-weight: 700;
             font-size: 15px; padding: 4px; margin-top: 6px;

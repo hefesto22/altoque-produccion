@@ -29,7 +29,13 @@
         td.cant { width: 30px; font-weight: 700; vertical-align: top; font-size: 15.5px; }
         td.item { font-size: 15.5px; font-weight: 700; text-transform: uppercase; }
         .detalle { font-size: 12px; padding-left: 30px; }
-        .nota    { font-size: 13px; font-weight: 700; padding-left: 30px; }
+        /* La nota es la EXCEPCIÓN del plato ("sin cebolla"): si se le pasa a
+           cocina, el plato se devuelve. Por eso es el texto más grande de la
+           línea —más que el nombre del plato— y en caja alta. */
+        .nota    {
+            font-size: 17px; font-weight: 700; text-transform: uppercase;
+            padding: 1px 0 3px 30px; -webkit-text-stroke: 0.35px #000;
+        }
         .banner  {
             border: 2px solid #000; text-align: center; font-weight: 700;
             font-size: 15px; padding: 4px; margin-top: 6px;
