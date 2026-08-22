@@ -156,3 +156,40 @@ it('descartar deja intacto lo que sigue pendiente de otras ventas', function () 
         ->and($enEspera->fresh()->estado)->toBe('cancelado')
         ->and(app(ColaImpresionService::class)->contarPendientes())->toBe(0);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Limpieza retroactiva (impresiones:limpiar-anuladas)
+|--------------------------------------------------------------------------
+| Lo anulado ANTES de este cambio quedó con su ticket en "Reimprimir…".
+*/
+
+it('el comando arrastra el papel de lo que ya estaba anulado', function () {
+    [$viejo, , $papelViejo] = pendienteYaImpreso((int) $this->admin->id, (int) $this->pollo->id);
+
+    // Anulado "a la vieja": se marca la venta sin tocar la cola de impresión.
+    $viejo->update(['anulada' => true, 'anulada_at' => now(), 'anulada_por' => $this->admin->id]);
+
+    expect(app(ColaImpresionService::class)->recientes())->toHaveCount(1);
+
+    $this->artisan('impresiones:limpiar-anuladas')->assertSuccessful();
+
+    expect($papelViejo->fresh()->estado)->toBe('cancelado')
+        ->and(app(ColaImpresionService::class)->recientes())->toHaveCount(0);
+});
+
+it('la limpieza no toca el papel de un pedido vivo y correrla dos veces no cambia nada', function () {
+    [, , $papelVivo] = pendienteYaImpreso((int) $this->admin->id, (int) $this->pollo->id);
+    [$anulado, , $papelAnulado] = pendienteYaImpreso((int) $this->admin->id, (int) $this->pollo->id);
+
+    $anulado->update(['anulada' => true, 'anulada_at' => now(), 'anulada_por' => $this->admin->id]);
+
+    $cola = app(ColaImpresionService::class);
+
+    expect($cola->limpiarAnuladas())->toBe(1)
+        // Idempotente: la segunda pasada ya no encuentra nada.
+        ->and($cola->limpiarAnuladas())->toBe(0)
+        ->and($papelAnulado->fresh()->estado)->toBe('cancelado')
+        ->and($papelVivo->fresh()->estado)->toBe('impreso')
+        ->and($cola->recientes())->toHaveCount(1);
+});

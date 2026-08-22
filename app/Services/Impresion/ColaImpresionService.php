@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Impresion;
 
+use App\Models\Comanda;
+use App\Models\Factura;
 use App\Models\Impresion;
 use App\Models\Venta;
 use App\Support\Acceso;
@@ -217,6 +219,49 @@ final class ColaImpresionService
         // Comprobante NO fiscal de un consumo contra cuenta prepago: su
         // referencia es la venta, no una factura.
         return $n + $this->descartarDe('nota_consumo', (int) $venta->id);
+    }
+
+    /**
+     * Limpieza retroactiva: saca de la cola el papel de TODO lo que ya está
+     * anulado (`php artisan impresiones:limpiar-anuladas`).
+     *
+     * Hace falta una sola vez por ambiente, al desplegar `descartarDeVenta()`:
+     * lo que se anuló ANTES dejó su trabajo en `impreso` y sigue ofrecido en
+     * "Reimprimir…", a un toque de volver a cocina. Es idempotente: correrla
+     * dos veces no hace nada la segunda.
+     *
+     * Va en UPDATEs con subconsulta y no fila por fila a propósito: la tabla
+     * guarda dos meses de impresiones (miles de filas al día) y traerlas a
+     * memoria para recorrerlas no escala.
+     */
+    public function limpiarAnuladas(): int
+    {
+        // Comandas de pedidos anulados.
+        $n = Impresion::query()
+            ->where('tipo', 'comanda')
+            ->whereIn('estado', ['pendiente', 'impreso'])
+            ->whereIn('referencia_id', Comanda::query()
+                ->whereIn('venta_id', Venta::query()->where('anulada', true)->select('id'))
+                ->select('id'))
+            ->update(['estado' => 'cancelado', 'updated_at' => now()]);
+
+        // Ticket fiscal y combinado factura+comanda: cae la factura anulada y
+        // también la de una venta anulada que igual llegó a facturarse.
+        $n += Impresion::query()
+            ->whereIn('tipo', ['factura', 'documentos'])
+            ->whereIn('estado', ['pendiente', 'impreso'])
+            ->whereIn('referencia_id', Factura::query()
+                ->where('anulada', true)
+                ->orWhereIn('venta_id', Venta::query()->where('anulada', true)->select('id'))
+                ->select('id'))
+            ->update(['estado' => 'cancelado', 'updated_at' => now()]);
+
+        // Nota de consumo: su referencia es la venta, no una factura.
+        return $n + Impresion::query()
+            ->where('tipo', 'nota_consumo')
+            ->whereIn('estado', ['pendiente', 'impreso'])
+            ->whereIn('referencia_id', Venta::query()->where('anulada', true)->select('id'))
+            ->update(['estado' => 'cancelado', 'updated_at' => now()]);
     }
 
     /** @return Collection<int, Impresion> */
