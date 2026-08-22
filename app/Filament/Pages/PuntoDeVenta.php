@@ -146,6 +146,27 @@ class PuntoDeVenta extends Page
      */
     public ?string $platilloEditGrupo = null;
 
+    // ── Nota rápida de una línea del carrito ────────────────────────────
+
+    /**
+     * Nota de UNA línea, sin pasar por el modal grande del platillo.
+     *
+     * Un producto suelto (una baleada, una bebida, un extra) no tiene modal
+     * donde escribirle "sin cebolla": hasta ahora la única nota posible era
+     * la del platillo armado. Esto le pone la misma indicación a CUALQUIER
+     * línea, y esa nota ya viaja sola hasta la comanda de cocina y hasta
+     * `venta_items.nota` — el camino ya existía, faltaba la puerta.
+     */
+    public bool $notando = false;
+
+    /** `key` de la línea del carrito que se está anotando. */
+    public string $notaKey = '';
+
+    /** Solo para el encabezado del cuadrito: qué línea se está anotando. */
+    public string $notaNombre = '';
+
+    public string $notaTexto = '';
+
     // ── Modal de factura ────────────────────────────────────────────────
     public bool $mostrarFactura = false;
 
@@ -743,8 +764,13 @@ class PuntoDeVenta extends Page
         }
 
         // Si ese producto suelto ya está en el carrito, solo sumá la cantidad.
+        // OJO: una línea CON nota no se fusiona. "Baleada sin cebolla" y
+        // "baleada" son dos cosas distintas para la cocina aunque sean el
+        // mismo producto; sumarlas dejaría a un cliente sin su indicación.
         foreach ($this->carrito as $idx => $item) {
-            if ($item['tipo'] === 'producto' && (int) $item['producto_id'] === $id) {
+            if ($item['tipo'] === 'producto'
+                && (int) $item['producto_id'] === $id
+                && trim((string) ($item['nota'] ?? '')) === '') {
                 $this->carrito[$idx]['cantidad'] = (int) $item['cantidad'] + 1;
 
                 return;
@@ -1059,9 +1085,70 @@ class PuntoDeVenta extends Page
         }
     }
 
+    // ── Nota rápida de una línea ────────────────────────────────────────
+
+    /**
+     * Indicaciones de todos los días, a un toque.
+     *
+     * @return array<int, string>
+     */
+    public function getNotaSugerenciasProperty(): array
+    {
+        return ['Sin cebolla', 'Sin chile', 'Sin sal', 'Sin salsa', 'Bien cocido', 'Aparte', 'Poquito'];
+    }
+
+    /** Abre el cuadrito de nota para una línea del carrito. */
+    public function abrirNota(string $key): void
+    {
+        foreach ($this->carrito as $item) {
+            if ($item['key'] === $key) {
+                $this->notaKey = $key;
+                $this->notaNombre = (string) $item['nombre'];
+                $this->notaTexto = (string) ($item['nota'] ?? '');
+                $this->notando = true;
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Guarda la nota en su línea. Texto vacío = quitarla.
+     *
+     * El texto llega COMO PARÁMETRO, no por `wire:model`: el cuadrito escribe
+     * en Alpine y manda una sola vez al guardar. Atado con `.live`, cada tecla
+     * re-renderiza el POS entero (~200 KB) y el servidor termina pisando lo
+     * que el cajero está escribiendo.
+     */
+    public function guardarNota(string $texto = ''): void
+    {
+        // Una línea sola en la comanda de 80 mm: sin saltos ni espacios dobles
+        // y con tope, para que no empuje el resto del ticket.
+        $texto = mb_substr(trim(preg_replace('/\s+/u', ' ', $texto) ?? ''), 0, 120);
+
+        foreach ($this->carrito as $i => $item) {
+            if ($item['key'] === $this->notaKey) {
+                $this->carrito[$i]['nota'] = $texto;
+
+                break;
+            }
+        }
+
+        $this->cerrarNota();
+    }
+
+    public function cerrarNota(): void
+    {
+        $this->notando = false;
+        $this->notaKey = '';
+        $this->notaNombre = '';
+        $this->notaTexto = '';
+    }
+
     public function limpiar(): void
     {
         $this->carrito = [];
+        $this->cerrarNota();
         $this->proteinaId = null;
         $this->complementoSel = [];
         $this->tipoServicio = 'local';

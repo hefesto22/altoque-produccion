@@ -206,7 +206,7 @@
             {{-- El poll se PAUSA mientras hay un modal abierto: cada refresco
                  re-renderiza el POS entero y, si cae mientras el cajero
                  escribe, se siente como un tirón. --}}
-            <div @if (! $mostrarFactura && ! $personalizando && ! $mostrarCierre && ! $mostrarApertura) wire:poll.15s @endif>
+            <div @if (! $mostrarFactura && ! $personalizando && ! $mostrarCierre && ! $mostrarApertura && ! $notando) wire:poll.15s @endif>
             @php($pendientes = $this->pedidosPendientes)
             @if (count($pendientes))
                 {{-- Abrir y cerrar es puro UI: lo maneja Alpine en el navegador.
@@ -560,8 +560,20 @@
                                 @if (! empty($p['detalle']))
                                     <div @if (isset($p['seleccion']) && is_array($p['seleccion'])) wire:click="editarPlatillo('{{ $grupo }}')" style="font-size:.72rem; opacity:.7; cursor:pointer;" @else style="font-size:.72rem; opacity:.7;" @endif>{{ implode(', ', $p['detalle']) }}</div>
                                 @endif
-                                @if (! empty($p['nota']))
-                                    <div style="font-size:.72rem; color:#f59e0b;">📝 {{ $p['nota'] }}</div>
+                                {{-- Nota de la línea: cualquier cosa del carrito puede llevar
+                                     su indicación para la cocina, no solo el platillo armado.
+                                     Con nota puesta se ve la nota (y tocarla la corrige); sin
+                                     nota, un "+ Nota" discreto que no compite con el precio. --}}
+                                @if (trim((string) ($p['nota'] ?? '')) !== '')
+                                    <button type="button" wire:click="abrirNota('{{ $p['key'] }}')" title="Tocá para cambiar la nota"
+                                        style="display:inline-flex; align-items:center; gap:.25rem; margin-top:.25rem; padding:.12rem .4rem; border:1px solid rgba(245,158,11,.45); background:rgba(245,158,11,.12); border-radius:.4rem; color:#f59e0b; font-size:.72rem; font-weight:600; cursor:pointer; text-align:left;">
+                                        📝 {{ $p['nota'] }}
+                                    </button>
+                                @else
+                                    <button type="button" wire:click="abrirNota('{{ $p['key'] }}')" title="Indicación para la cocina"
+                                        style="margin-top:.2rem; padding:0; border:none; background:none; color:#f59e0b; font-size:.72rem; font-weight:600; cursor:pointer; opacity:.8;">
+                                        + Nota
+                                    </button>
                                 @endif
                                 {{-- Extras del platillo, anidados debajo (mismo grupo) --}}
                                 @foreach ($g['extras'] as $ex)
@@ -767,6 +779,57 @@
                     <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.8rem;">
                         <x-filament::button color="gray" wire:click="cancelarPlatillo">Cancelar</x-filament::button>
                         <x-filament::button color="primary" wire:click="confirmarPlatillo">{{ $platilloEditGrupo ? 'Guardar cambios' : 'Agregar al carrito' }}</x-filament::button>
+                    </div>
+                </x-filament::section>
+            </div>
+        </div>
+    @endif
+
+    {{-- ─────────── MODAL NOTA DE UNA LÍNEA ─────────── --}}
+    {{-- Cualquier línea del carrito (un platillo armado, una baleada suelta,
+         una bebida) puede llevar su indicación para la cocina. Se escribe en
+         ALPINE y se manda UNA sola vez al guardar: con wire:model.live el POS
+         entero se re-renderiza en cada tecla y el servidor termina pisando lo
+         que el cajero está escribiendo. --}}
+    @if ($notando)
+        <div wire:key="nota-{{ $notaKey }}"
+            x-data="{ t: @js($notaTexto) }"
+            x-on:keydown.escape.window="$wire.cerrarNota()"
+            style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
+            <div style="width:100%; max-width:28rem;">
+                <x-filament::section>
+                    <x-slot name="heading">Nota para cocina</x-slot>
+                    <x-slot name="description">{{ $notaNombre }} — sale impresa en la comanda.</x-slot>
+
+                    <x-filament::input.wrapper>
+                        <x-filament::input
+                            type="text"
+                            x-model="t"
+                            maxlength="120"
+                            x-init="$nextTick(() => $el.focus())"
+                            x-on:keydown.enter.prevent="$wire.guardarNota(t)"
+                            placeholder="Ej: sin cebolla, bien cocido" />
+                    </x-filament::input.wrapper>
+
+                    {{-- Las de todos los días, a un toque: en hora pico nadie teclea. --}}
+                    <div style="display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.6rem;">
+                        @foreach ($this->notaSugerencias as $s)
+                            <button type="button"
+                                x-on:click="t = t.trim() === '' ? @js($s) : t.replace(/[\s,]+$/, '') + ', ' + @js(mb_strtolower($s))"
+                                style="font-size:.78rem; padding:.25rem .6rem; border-radius:999px; border:1px solid rgba(245,158,11,.45); background:rgba(245,158,11,.08); color:inherit; cursor:pointer;">
+                                {{ $s }}
+                            </button>
+                        @endforeach
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:.5rem; margin-top:.9rem;">
+                        @if (trim($notaTexto) !== '')
+                            <x-filament::button color="danger" outlined x-on:click="$wire.guardarNota('')">Quitar nota</x-filament::button>
+                        @endif
+                        <div style="display:flex; gap:.5rem; margin-left:auto;">
+                            <x-filament::button color="gray" wire:click="cerrarNota">Cancelar</x-filament::button>
+                            <x-filament::button color="primary" x-on:click="$wire.guardarNota(t)">Guardar nota</x-filament::button>
+                        </div>
                     </div>
                 </x-filament::section>
             </div>
