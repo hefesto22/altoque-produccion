@@ -18,8 +18,10 @@ use App\Models\Factura;
 use App\Models\PeriodoFiscal;
 use App\Models\Venta;
 use App\Services\Cuentas\CuentaPrepagoService;
+use App\Services\Impresion\ColaImpresionService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Emisión de factura SAR. Aquí vive LA race condition financiera del
@@ -136,7 +138,7 @@ final class FacturacionSarService
      */
     public function anular(Factura $factura, string $motivo, ?int $usuarioId = null): Factura
     {
-        return DB::transaction(function () use ($factura, $motivo, $usuarioId): Factura {
+        $anulada = DB::transaction(function () use ($factura, $motivo, $usuarioId): Factura {
             $bloqueo = $this->motivoNoAnulable($factura);
 
             if ($bloqueo !== null) {
@@ -161,6 +163,26 @@ final class FacturacionSarService
 
             return $factura;
         });
+
+        // El papel de una factura anulada no puede seguir ofreciéndose para
+        // reimprimir: sale de la cola el ticket fiscal, el combinado
+        // factura+comanda y las comandas de esa venta.
+        //
+        // FUERA de la transacción y a prueba de fallos, igual que enviar():
+        // la anulación ya quedó asentada y un problema con la cola de
+        // impresión no puede tumbarla.
+        try {
+            $this->cola()->descartarDeVenta($anulada->venta);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        return $anulada;
+    }
+
+    private function cola(): ColaImpresionService
+    {
+        return app(ColaImpresionService::class);
     }
 
     /**

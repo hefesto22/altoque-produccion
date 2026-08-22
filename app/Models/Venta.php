@@ -139,6 +139,21 @@ class Venta extends Model
         return $this->hasOne(Comanda::class)->latestOfMany();
     }
 
+    /**
+     * TODAS las comandas de la venta.
+     *
+     * `comanda()` devuelve solo la última a propósito (es la que se muestra),
+     * pero una orden con ampliación —lo que el cliente pidió después sobre la
+     * misma cuenta— tiene varias. Quien tenga que actuar sobre el papel de la
+     * venta entera las necesita todas.
+     *
+     * @return HasMany<Comanda, $this>
+     */
+    public function comandas(): HasMany
+    {
+        return $this->hasMany(Comanda::class);
+    }
+
     public function esFactura(): bool
     {
         return $this->tipo === 'factura';

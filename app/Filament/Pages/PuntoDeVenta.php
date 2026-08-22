@@ -1866,10 +1866,11 @@ class PuntoDeVenta extends Page
             return;
         }
 
-        // Si su comanda seguía esperando papel, ese ticket ya no tiene para qué salir.
-        if ($venta->comanda !== null) {
-            app(ColaImpresionService::class)->cancelarDe('comanda', (int) $venta->comanda->id);
-        }
+        // Su papel sale de la cola COMPLETO: el que estaba esperando y el que
+        // YA se imprimió. Cancelando solo los pendientes, el pedido anulado se
+        // quedaba ofrecido en "Reimprimir… (últimas 2 h)" y volvía a cocina de
+        // un toque — justo lo que anular tenía que impedir.
+        app(ColaImpresionService::class)->descartarDeVenta($venta);
 
         Notification::make()
             ->title("Pedido anulado · Orden {$venta->numero_orden}")

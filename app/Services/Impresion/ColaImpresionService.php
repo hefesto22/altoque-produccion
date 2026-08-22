@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Impresion;
 
 use App\Models\Impresion;
+use App\Models\Venta;
 use App\Support\Acceso;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -160,6 +161,62 @@ final class ColaImpresionService
             ->where('referencia_id', $referenciaId)
             ->where('estado', 'pendiente')
             ->update(['estado' => 'cancelado', 'updated_at' => now()]);
+    }
+
+    /**
+     * Saca de la cola TODO el papel de un documento: lo pendiente Y lo ya
+     * impreso.
+     *
+     * `cancelarDe()` descarta solo pendientes y con eso no alcanza cuando el
+     * pedido se ANULA: el trabajo ya impreso seguía ofreciéndose en
+     * "Reimprimir… (últimas 2 h)", así que un pedido anulado quedaba a un
+     * toque de volver a salir en la térmica y regresar a cocina.
+     *
+     * Se reusa el estado 'cancelado' en vez de inventar uno nuevo: el CHECK
+     * de `impresiones` solo admite pendiente/impreso/cancelado y una
+     * migración sobre la tabla en producción no se justifica para esto. Lo
+     * que de verdad pasó no se pierde — `impreso_at` e `impreso_por` quedan
+     * tal cual estaban.
+     */
+    public function descartarDe(string $tipo, int $referenciaId): int
+    {
+        return Impresion::query()
+            ->where('tipo', $tipo)
+            ->where('referencia_id', $referenciaId)
+            ->whereIn('estado', ['pendiente', 'impreso'])
+            ->update(['estado' => 'cancelado', 'updated_at' => now()]);
+    }
+
+    /**
+     * Saca de la cola el papel de una venta anulada, completo: sus comandas,
+     * su ticket fiscal, el combinado factura+comanda y la nota de consumo.
+     *
+     * Se recorren TODAS las comandas (`comandas()`, no `comanda()`): un
+     * pedido con ampliación tiene más de una y dejar una viva es dejar media
+     * orden anulada ofrecida para reimprimir.
+     */
+    public function descartarDeVenta(?Venta $venta): int
+    {
+        if ($venta === null) {
+            return 0;
+        }
+
+        $n = 0;
+
+        foreach ($venta->comandas()->pluck('id') as $comandaId) {
+            $n += $this->descartarDe('comanda', (int) $comandaId);
+        }
+
+        $facturaId = $venta->factura?->id;
+
+        if ($facturaId !== null) {
+            $n += $this->descartarDe('factura', $facturaId);
+            $n += $this->descartarDe('documentos', $facturaId);
+        }
+
+        // Comprobante NO fiscal de un consumo contra cuenta prepago: su
+        // referencia es la venta, no una factura.
+        return $n + $this->descartarDe('nota_consumo', (int) $venta->id);
     }
 
     /** @return Collection<int, Impresion> */
