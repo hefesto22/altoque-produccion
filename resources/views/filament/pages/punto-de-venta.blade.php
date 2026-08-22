@@ -693,7 +693,13 @@
     {{-- ─────────── MODAL PERSONALIZAR PLATILLO ─────────── --}}
     @if ($personalizando)
         @php($prev = $this->platilloResumen)
-        <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
+        {{-- `cerrando` cierra el modal EN EL NAVEGADOR, sin esperar al servidor.
+             Confirmar o cancelar sigue siendo un request, y cada respuesta
+             re-renderiza el POS entero (~200 KB): ese viaje se sentía como un
+             segundo de modal trabado sobre la pantalla. Ahora el modal se va
+             en el mismo toque y el servidor termina su parte por detrás. --}}
+        <div x-data="{ cerrando: false }" x-show="! cerrando"
+            style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:40rem; max-height:90vh; overflow-y:auto;">
                 <x-filament::section>
                     <x-slot name="heading">{{ $platilloEditGrupo ? 'Editar' : 'Personalizar' }}: {{ $platilloNombre }}</x-slot>
@@ -777,8 +783,8 @@
                     </div>
 
                     <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.8rem;">
-                        <x-filament::button color="gray" wire:click="cancelarPlatillo">Cancelar</x-filament::button>
-                        <x-filament::button color="primary" wire:click="confirmarPlatillo">{{ $platilloEditGrupo ? 'Guardar cambios' : 'Agregar al carrito' }}</x-filament::button>
+                        <x-filament::button color="gray" x-on:click="cerrando = true; $wire.cancelarPlatillo()">Cancelar</x-filament::button>
+                        <x-filament::button color="primary" x-on:click="cerrando = true; $wire.confirmarPlatillo()">{{ $platilloEditGrupo ? 'Guardar cambios' : 'Agregar al carrito' }}</x-filament::button>
                     </div>
                 </x-filament::section>
             </div>
@@ -792,9 +798,17 @@
          entero se re-renderiza en cada tecla y el servidor termina pisando lo
          que el cajero está escribiendo. --}}
     @if ($notando)
+        {{-- `cerrando`: el cuadrito se va en el mismo toque y el servidor
+             guarda por detrás (mismo criterio que el modal del platillo). --}}
         <div wire:key="nota-{{ $notaKey }}"
-            x-data="{ t: @js($notaTexto) }"
-            x-on:keydown.escape.window="$wire.cerrarNota()"
+            x-data="{
+                t: @js($notaTexto),
+                cerrando: false,
+                guardar(v) { this.cerrando = true; this.$wire.guardarNota(v) },
+                cerrar() { this.cerrando = true; this.$wire.cerrarNota() },
+            }"
+            x-show="! cerrando"
+            x-on:keydown.escape.window="cerrar()"
             style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:28rem;">
                 <x-filament::section>
@@ -807,7 +821,7 @@
                             x-model="t"
                             maxlength="120"
                             x-init="$nextTick(() => $el.focus())"
-                            x-on:keydown.enter.prevent="$wire.guardarNota(t)"
+                            x-on:keydown.enter.prevent="guardar(t)"
                             placeholder="Ej: sin cebolla, bien cocido" />
                     </x-filament::input.wrapper>
 
@@ -824,11 +838,11 @@
 
                     <div style="display:flex; align-items:center; gap:.5rem; margin-top:.9rem;">
                         @if (trim($notaTexto) !== '')
-                            <x-filament::button color="danger" outlined x-on:click="$wire.guardarNota('')">Quitar nota</x-filament::button>
+                            <x-filament::button color="danger" outlined x-on:click="guardar('')">Quitar nota</x-filament::button>
                         @endif
                         <div style="display:flex; gap:.5rem; margin-left:auto;">
-                            <x-filament::button color="gray" wire:click="cerrarNota">Cancelar</x-filament::button>
-                            <x-filament::button color="primary" x-on:click="$wire.guardarNota(t)">Guardar nota</x-filament::button>
+                            <x-filament::button color="gray" x-on:click="cerrar()">Cancelar</x-filament::button>
+                            <x-filament::button color="primary" x-on:click="guardar(t)">Guardar nota</x-filament::button>
                         </div>
                     </div>
                 </x-filament::section>
