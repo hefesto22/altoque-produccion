@@ -698,7 +698,11 @@
              re-renderiza el POS entero (~200 KB): ese viaje se sentía como un
              segundo de modal trabado sobre la pantalla. Ahora el modal se va
              en el mismo toque y el servidor termina su parte por detrás. --}}
-        <div x-data="{ cerrando: false }" x-show="! cerrando"
+        {{-- OJO: acá NO va `x-show`. Al mostrar, Alpine hace
+             `style.removeProperty('display')` y se lleva puesto el
+             `display:flex` del overlay — el modal deja de centrarse y se va a
+             la esquina. Con `:style` se dice explícitamente flex o none. --}}
+        <div x-data="{ cerrando: false }" :style="{ display: cerrando ? 'none' : 'flex' }"
             style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:40rem; max-height:90vh; overflow-y:auto;">
                 <x-filament::section>
@@ -807,7 +811,7 @@
                 guardar(v) { this.cerrando = true; this.$wire.guardarNota(v) },
                 cerrar() { this.cerrando = true; this.$wire.cerrarNota() },
             }"
-            x-show="! cerrando"
+            :style="{ display: cerrando ? 'none' : 'flex' }"
             x-on:keydown.escape.window="cerrar()"
             style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); padding:1rem;">
             <div style="width:100%; max-width:28rem;">
