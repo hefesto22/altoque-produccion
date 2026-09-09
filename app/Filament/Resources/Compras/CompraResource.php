@@ -21,9 +21,13 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 
 class CompraResource extends Resource
@@ -343,11 +347,36 @@ class CompraResource extends Resource
                 TextColumn::make('isv')->label('ISV que descuenta')
                     ->money('HNL')->weight('bold')->color('success')
                     ->state(fn (Compra $record): ?float => $record->esFactura() ? (float) $record->isv : null)
-                    ->placeholder('—'),
-                TextColumn::make('total')->label('Total')->money('HNL'),
+                    ->placeholder('—')
+                    // Al pie de la lista, el acumulado de lo que se está
+                    // viendo: con el filtro de un día puesto, es el crédito
+                    // fiscal y el gasto de ESE día.
+                    ->summarize(Sum::make()->label('Crédito')->money('HNL')),
+                TextColumn::make('total')->label('Total')
+                    ->money('HNL')
+                    ->summarize(Sum::make()->label('Total')->money('HNL')),
             ])
             ->defaultSort('fecha', 'desc')
             ->filters([
+                // Un día exacto. Es el filtro que encienden las tarjetas del
+                // desglose diario (ver ManageCompras): tocar una tarjeta
+                // escribe acá la fecha y el indicador de arriba la borra.
+                Filter::make('dia')
+                    ->label('Día')
+                    ->schema([
+                        DatePicker::make('valor')
+                            ->label('Ver solo el día')
+                            ->native()
+                            ->maxDate(now()),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        $data['valor'] ?? null,
+                        fn (Builder $query, $dia): Builder => $query->whereDate('fecha', $dia),
+                    ))
+                    ->indicateUsing(fn (array $data): ?string => filled($data['valor'] ?? null)
+                        ? 'Día: '.Carbon::parse((string) $data['valor'])->format('d/m/Y')
+                        : null),
+
                 SelectFilter::make('tipo_documento')->label('Tipo de documento')->options([
                     'factura' => 'Facturas (descuentan ISV)',
                     'recibo'  => 'Recibos (no descuentan)',
