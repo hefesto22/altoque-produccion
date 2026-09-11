@@ -43,12 +43,27 @@ final class FacturacionSarService
     ) {}
 
     /**
+     * @param string|null $ordenCompraExenta No. de Orden de Compra Exenta (OCE) del PAMEH que presenta un comprador exonerado
+     * @param string|null $constanciaExonerado No. de constancia de registro de exonerado del comprador
+     *
      * @throws SinCaiActivoException
      * @throws RangoCaiAgotadoException
      */
-    public function emitirFactura(Venta $venta, ?RTN $rtn, string $nombreCliente, ?bool $detallada = null): Factura
-    {
-        return DB::transaction(function () use ($venta, $rtn, $nombreCliente, $detallada): Factura {
+    public function emitirFactura(
+        Venta $venta,
+        ?RTN $rtn,
+        string $nombreCliente,
+        ?bool $detallada = null,
+        ?string $ordenCompraExenta = null,
+        ?string $constanciaExonerado = null,
+    ): Factura {
+        // Dato del PAPEL, no del cálculo: no toca gravado/ISV/total. Se
+        // normaliza acá para que la factura nunca guarde cadena vacía — el
+        // ticket distingue null (imprime "N/A") de un número real.
+        $ordenCompraExenta = self::limpiarDatoExoneracion($ordenCompraExenta);
+        $constanciaExonerado = self::limpiarDatoExoneracion($constanciaExonerado);
+
+        return DB::transaction(function () use ($venta, $rtn, $nombreCliente, $detallada, $ordenCompraExenta, $constanciaExonerado): Factura {
             // Bloquea el rango CAI activo para tomar el correlativo de
             // forma atómica frente a otras cajas.
             $cai = Cai::query()
@@ -89,6 +104,10 @@ final class FacturacionSarService
                 'hash_verificacion' => Factura::calcularHash($numero, $rtn !== null ? (string) $rtn : 'CF', $venta->total, $cai->id),
                 'rtn_cliente'       => $rtn !== null ? (string) $rtn : null,
                 'nombre_cliente'    => $nombreMayus,
+                // Compra exonerada (PAMEH). Casi siempre null: solo llega
+                // con compradores exonerados que traen su OCE en papel.
+                'orden_compra_exenta'  => $ordenCompraExenta,
+                'constancia_exonerado' => $constanciaExonerado,
                 // Snapshot del pago AL EMITIR: la reimpresión siempre muestra
                 // esto, aunque después se corrija el pago interno de la venta.
                 'forma_pago'    => $venta->forma_pago,
@@ -98,6 +117,7 @@ final class FacturacionSarService
                     ->all(),
                 'gravado'        => $venta->gravado,
                 'exento'         => $venta->exento,
+                'exonerado'      => $venta->exonerado,
                 'subtotal_lista' => $venta->subtotal_lista,
                 'descuento'      => $venta->descuento,
                 'isv'            => $venta->isv,
@@ -116,6 +136,19 @@ final class FacturacionSarService
             // Falla cualquier paso → rollback: no queda correlativo
             // consumido ni factura a medias.
         });
+    }
+
+    /**
+     * Normaliza un número de exoneración escrito a mano en la caja.
+     *
+     * Vacío y "   " valen lo mismo que no haberlo puesto: null. Mayúsculas
+     * porque así vienen impresos en el papel del PAMEH (OC2026186452).
+     */
+    private static function limpiarDatoExoneracion(?string $valor): ?string
+    {
+        $limpio = mb_strtoupper(trim((string) $valor));
+
+        return $limpio === '' ? null : $limpio;
     }
 
     /**

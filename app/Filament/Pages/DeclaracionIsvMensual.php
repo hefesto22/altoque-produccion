@@ -67,15 +67,16 @@ class DeclaracionIsvMensual extends Page
         $r = app(DeclaracionIsvService::class)->calcular($this->anio, $this->mes);
 
         $this->resumen = [
-            'cantidad' => $r->cantidadVentas,
-            'gravado'  => $r->gravado,
-            'exento'   => $r->exento,
-            'isv'      => $r->isv,
-            'total'    => $r->total,
-            'recibos'  => $r->recibosTotal,
-            'facturas' => $r->facturasTotal,
-            'credito'  => $r->creditoFiscal,
-            'a_pagar'  => $r->isvAPagar,
+            'cantidad'  => $r->cantidadVentas,
+            'gravado'   => $r->gravado,
+            'exento'    => $r->exento,
+            'exonerado' => $r->exonerado,
+            'isv'       => $r->isv,
+            'total'     => $r->total,
+            'recibos'   => $r->recibosTotal,
+            'facturas'  => $r->facturasTotal,
+            'credito'   => $r->creditoFiscal,
+            'a_pagar'   => $r->isvAPagar,
         ];
 
         $this->estadoPeriodo = PeriodoFiscal::query()

@@ -23,8 +23,11 @@ use Illuminate\Support\Facades\URL;
  * @property string $numero
  * @property string $rtn_cliente
  * @property string $nombre_cliente
+ * @property string|null $orden_compra_exenta
+ * @property string|null $constancia_exonerado
  * @property float $gravado
  * @property float $exento
+ * @property float $exonerado
  * @property float $subtotal_lista
  * @property float $descuento
  * @property float $isv
@@ -48,8 +51,11 @@ class Factura extends Model
         'hash_verificacion',
         'rtn_cliente',
         'nombre_cliente',
+        'orden_compra_exenta',
+        'constancia_exonerado',
         'gravado',
         'exento',
+        'exonerado',
         'subtotal_lista',
         'descuento',
         'isv',
@@ -69,6 +75,7 @@ class Factura extends Model
             'pagos_detalle'  => 'array',
             'gravado'        => 'decimal:2',
             'exento'         => 'decimal:2',
+            'exonerado'      => 'decimal:2',
             'subtotal_lista' => 'decimal:2',
             'descuento'      => 'decimal:2',
             'isv'            => 'decimal:2',

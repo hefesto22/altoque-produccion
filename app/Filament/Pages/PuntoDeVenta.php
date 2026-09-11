@@ -177,6 +177,22 @@ class PuntoDeVenta extends Page
     /** En la factura con RTN: detallar todo o facturar como "Alimentación". */
     public bool $facturaDetallada = false;
 
+    /**
+     * COMPRA EXONERADA (PAMEH): el cajero copia estos números del papel que
+     * trae el cliente exonerado (PMA, embajadas, ONGs con convenio).
+     *
+     * Solo existen en la factura con RTN — a Consumidor Final no hay
+     * exoneración que valga. Van SIN `.live` a propósito: no se necesitan en
+     * el servidor mientras se escriben y cada request re-renderiza el POS
+     * entero (~200 KB). Se leen al tocar "Emitir factura".
+     *
+     * NO tocan el ISV: hoy la factura se sigue cobrando gravada igual que
+     * siempre; estos números son dato del documento, no del cálculo.
+     */
+    public string $ordenCompraInput = '';
+
+    public string $constanciaExoneradoInput = '';
+
     /** @var array<int, array{rtn: string, nombre: string}> sugerencias de clientes */
     public array $sugerencias = [];
 
@@ -333,6 +349,8 @@ class PuntoDeVenta extends Page
             $this->rtnInput = $venta->rtn_cliente;
             $this->nombreInput = (string) $venta->nombre_cliente;
             $this->facturaDetallada = (bool) ($venta->factura?->detallada ?? false);
+            $this->ordenCompraInput = (string) ($venta->factura?->orden_compra_exenta ?? '');
+            $this->constanciaExoneradoInput = (string) ($venta->factura?->constancia_exonerado ?? '');
         }
 
         $mensaje = ($venta->rtn_cliente !== null && $venta->rtn_cliente !== '')
@@ -1160,6 +1178,8 @@ class PuntoDeVenta extends Page
         $this->rtnInput = '';
         $this->nombreInput = '';
         $this->facturaDetallada = false;
+        $this->ordenCompraInput = '';
+        $this->constanciaExoneradoInput = '';
         $this->sugerencias = [];
         $this->domNombre = '';
         $this->domTelefono = '';
@@ -1339,19 +1359,79 @@ class PuntoDeVenta extends Page
     public function getResumenProperty(): array
     {
         if ($this->carrito === []) {
-            return ['gravado' => 0.0, 'exento' => 0.0, 'isv' => 0.0, 'total' => 0.0, 'subtotal_lista' => 0.0, 'descuento' => 0.0];
+            return ['gravado' => 0.0, 'exento' => 0.0, 'isv' => 0.0, 'exonerado' => 0.0, 'total' => 0.0, 'subtotal_lista' => 0.0, 'descuento' => 0.0];
         }
 
-        $r = app(CotizadorVenta::class)->resumir($this->lineasDelCarrito());
+        // Con orden de compra el desglose cambia EN VIVO: el cajero tiene que
+        // ver bajar el total antes de emitir, no enterarse en el papel.
+        $r = app(CotizadorVenta::class)->resumir($this->lineasDelCarrito(), $this->getExonerandoProperty());
 
         return [
             'gravado'        => $r->gravado,
             'exento'         => $r->exento,
             'isv'            => $r->isv,
+            'exonerado'      => $r->exonerado,
             'total'          => $r->total,
             'subtotal_lista' => $r->subtotalLista,
             'descuento'      => $r->descuento,
         ];
+    }
+
+    /**
+     * ¿Se está facturando contra una Orden de Compra Exenta?
+     *
+     * El número ES el interruptor: el art. 11 del Acuerdo 481-2017 obliga a
+     * consignarlo en la factura, así que no puede haber venta exonerada sin
+     * él. Un toggle aparte podría quedar en desacuerdo con el campo; esto no.
+     */
+    public function getExonerandoProperty(): bool
+    {
+        return trim($this->ordenCompraInput) !== '';
+    }
+
+    /** ISV que la OCE le está quitando al cliente (para mostrarlo en el modal). */
+    public function getIsvExoneradoProperty(): float
+    {
+        if (! $this->getExonerandoProperty()) {
+            return 0.0;
+        }
+
+        if ($this->cobrandoPendienteId !== null) {
+            $conIsv = (float) (Venta::query()->whereKey($this->cobrandoPendienteId)->value('total') ?? 0);
+
+            return round($conIsv - $this->getTotalModalProperty(), 2);
+        }
+
+        $lineas = $this->lineasDelCarrito();
+
+        if ($lineas === []) {
+            return 0.0;
+        }
+
+        return round(
+            app(CotizadorVenta::class)->resumir($lineas)->total - $this->getResumenProperty()['total'],
+            2,
+        );
+    }
+
+    /**
+     * Lo que costaría un pendiente si se cobra exonerado.
+     *
+     * Reconstruye las líneas del snapshot y las pasa por el MISMO camino que
+     * usará VentaService al cobrar, para que el número del modal y el de la
+     * factura no puedan discrepar.
+     */
+    private function totalExoneradoDelPendiente(int $ventaId, float $conIsv): float
+    {
+        $venta = Venta::query()->with('items')->find($ventaId);
+
+        if ($venta === null || $venta->items->isEmpty()) {
+            return $conIsv;
+        }
+
+        $lineas = $venta->items->map(static fn ($item): LineaVenta => LineaVenta::desdeItem($item))->all();
+
+        return app(CotizadorVenta::class)->resumir($lineas, exonerada: true)->total;
     }
 
     // ── Cierre de venta ─────────────────────────────────────────────────
@@ -1375,7 +1455,16 @@ class PuntoDeVenta extends Page
     public function getTotalModalProperty(): float
     {
         if ($this->cobrandoPendienteId !== null) {
-            return (float) (Venta::query()->whereKey($this->cobrandoPendienteId)->value('total') ?? 0);
+            $total = (float) (Venta::query()->whereKey($this->cobrandoPendienteId)->value('total') ?? 0);
+
+            if (! $this->getExonerandoProperty()) {
+                return $total;
+            }
+
+            // El pendiente se registró con ISV incluido; con OCE se re-tarifa
+            // al cobrar (VentaService::retarifarComoExonerada). Acá se
+            // anticipa el MISMO número para que el cajero cobre lo correcto.
+            return $this->totalExoneradoDelPendiente($this->cobrandoPendienteId, $total);
         }
 
         return $this->getResumenProperty()['total'];
@@ -1889,12 +1978,22 @@ class PuntoDeVenta extends Page
         $this->cobrandoPendienteId = $ventaId;
         $this->rtnInput = '';
         $this->nombreInput = '';
+        $this->ordenCompraInput = '';
+        $this->constanciaExoneradoInput = '';
         $this->mostrarFactura = true;
     }
 
     /** Núcleo del cobro de un pendiente: emite el documento y marca pagado. */
-    private function ejecutarCobroPendiente(int $ventaId, ?RTN $rtn, string $nombre, string $formaPago, ?bool $detallada = null, ?string $banco = null): bool
-    {
+    private function ejecutarCobroPendiente(
+        int $ventaId,
+        ?RTN $rtn,
+        string $nombre,
+        string $formaPago,
+        ?bool $detallada = null,
+        ?string $banco = null,
+        ?string $ordenCompraExenta = null,
+        ?string $constanciaExonerado = null,
+    ): bool {
         abort_unless(Acceso::puede('Cobrar'), 403);
 
         $venta = Venta::pendientes()->find($ventaId);
@@ -1944,6 +2043,8 @@ class PuntoDeVenta extends Page
                 $detallada,
                 $formaPago === 'transferencia' ? $banco : null,
                 $formaPago === 'mixto' ? $this->pagosMixtos($formaPago) : null,
+                $ordenCompraExenta,
+                $constanciaExonerado,
             );
         } catch (RestauranteException $e) {
             Notification::make()->title('No se pudo cobrar')->body($e->getMessage())->danger()->seconds(3)->send();
@@ -2184,6 +2285,19 @@ class PuntoDeVenta extends Page
             return;
         }
 
+        // Cargar a la cuenta prepago NO emite factura (sale nota de consumo),
+        // y una OCE sin factura que la consigne no existe ante el SAR. Además
+        // el depósito de esa cuenta ya se facturó con su ISV en su momento.
+        if ($this->getExonerandoProperty() && $this->formaPago === 'saldo') {
+            Notification::make()
+                ->title('La compra exonerada no se puede cargar a la cuenta')
+                ->body('Con orden de compra tiene que salir factura. Cobrala por efectivo, tarjeta o transferencia.')
+                ->warning()
+                ->seconds(5)->send();
+
+            return;
+        }
+
         // Si venimos de "Factura con RTN" de un pendiente, se cobra ese pedido
         // (no el carrito). Si no, es la venta del carrito.
         if ($this->cobrandoPendienteId !== null) {
@@ -2194,6 +2308,8 @@ class PuntoDeVenta extends Page
                 $this->formaPago,
                 $this->facturaDetallada,
                 $this->banco,
+                $this->ordenCompraInput,
+                $this->constanciaExoneradoInput,
             );
 
             if ($ok) {
@@ -2201,12 +2317,20 @@ class PuntoDeVenta extends Page
                 $this->mostrarFactura = false;
                 $this->rtnInput = '';
                 $this->nombreInput = '';
+                $this->ordenCompraInput = '';
+                $this->constanciaExoneradoInput = '';
             }
 
             return;
         }
 
-        if ($this->procesarFactura($rtn, mb_strtoupper(trim($this->nombreInput)), $this->facturaDetallada)) {
+        if ($this->procesarFactura(
+            $rtn,
+            mb_strtoupper(trim($this->nombreInput)),
+            $this->facturaDetallada,
+            $this->ordenCompraInput,
+            $this->constanciaExoneradoInput,
+        )) {
             $this->mostrarFactura = false;
         }
     }
@@ -2215,8 +2339,13 @@ class PuntoDeVenta extends Page
      * Núcleo de cobro: emite factura SAR (con o sin RTN), imprime, manda a
      * cocina y limpia. Devuelve true si se emitió.
      */
-    private function procesarFactura(?RTN $rtn, string $nombre, ?bool $detallada = null): bool
-    {
+    private function procesarFactura(
+        ?RTN $rtn,
+        string $nombre,
+        ?bool $detallada = null,
+        ?string $ordenCompraExenta = null,
+        ?string $constanciaExonerado = null,
+    ): bool {
         if ($this->carrito === []) {
             Notification::make()->title('El carrito está vacío')->warning()->seconds(3)->send();
 
@@ -2270,6 +2399,8 @@ class PuntoDeVenta extends Page
                 $this->costoViajeNumerico(),
                 $this->pagosMixtos(),
                 trim($this->domNombre) !== '' ? $this->domNombre : null,
+                $ordenCompraExenta,
+                $constanciaExonerado,
             );
         } catch (RestauranteException $e) {
             Notification::make()
@@ -2382,6 +2513,8 @@ class PuntoDeVenta extends Page
         $this->mostrarFactura = false;
         $this->rtnInput = '';
         $this->nombreInput = '';
+        $this->ordenCompraInput = '';
+        $this->constanciaExoneradoInput = '';
 
         return true;
     }

@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $estado
  * @property float $gravado
  * @property float $exento
+ * @property float $exonerado
  * @property float $isv
  * @property float $total
  * @property float $recibos_total
@@ -40,6 +41,7 @@ class PeriodoFiscal extends Model
         'estado',
         'gravado',
         'exento',
+        'exonerado',
         'isv',
         'credito_fiscal',
         'isv_a_pagar',
@@ -59,6 +61,7 @@ class PeriodoFiscal extends Model
             'mes'             => 'integer',
             'gravado'         => 'decimal:2',
             'exento'          => 'decimal:2',
+            'exonerado'       => 'decimal:2',
             'isv'             => 'decimal:2',
             'credito_fiscal'  => 'decimal:2',
             'isv_a_pagar'     => 'decimal:2',

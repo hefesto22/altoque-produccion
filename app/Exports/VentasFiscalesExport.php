@@ -33,7 +33,7 @@ class VentasFiscalesExport implements FromQuery, ShouldAutoSize, WithHeadings, W
     {
         return Venta::query()
             ->computables()   // los consumos de cuenta prepago no son ventas nuevas
-            ->select(['id', 'tipo', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'isv', 'total', 'vendida_at'])
+            ->select(['id', 'tipo', 'numero_recibo', 'rtn_cliente', 'gravado', 'exento', 'exonerado', 'isv', 'total', 'vendida_at'])
             ->with('factura:id,venta_id,numero') // evita N+1 al mapear el número de factura
             ->whereBetween('vendida_at', [$this->desde, $this->hasta])
             ->orderBy('vendida_at');
@@ -42,7 +42,8 @@ class VentasFiscalesExport implements FromQuery, ShouldAutoSize, WithHeadings, W
     /** @return array<int, string> */
     public function headings(): array
     {
-        return ['#', 'Tipo', 'Documento', 'RTN', 'Gravado', 'Exento', 'ISV', 'Total', 'Fecha'];
+        // 'Exonerado' va al final para no correrle las columnas al contador.
+        return ['#', 'Tipo', 'Documento', 'RTN', 'Gravado', 'Exento', 'ISV', 'Total', 'Fecha', 'Exonerado'];
     }
 
     /**
@@ -62,6 +63,7 @@ class VentasFiscalesExport implements FromQuery, ShouldAutoSize, WithHeadings, W
             number_format((float) $venta->isv, 2),
             number_format((float) $venta->total, 2),
             $venta->vendida_at->format('d/m/Y H:i'),
+            number_format((float) $venta->exonerado, 2),
         ];
     }
 }

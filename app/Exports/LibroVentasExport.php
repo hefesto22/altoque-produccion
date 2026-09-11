@@ -33,7 +33,7 @@ class LibroVentasExport implements FromQuery, ShouldAutoSize, WithHeadings, With
     public function query(): Builder
     {
         return Factura::query()
-            ->select(['id', 'numero', 'rtn_cliente', 'nombre_cliente', 'gravado', 'exento', 'isv', 'total', 'anulada', 'emitida_at'])
+            ->select(['id', 'numero', 'rtn_cliente', 'nombre_cliente', 'gravado', 'exento', 'exonerado', 'isv', 'total', 'anulada', 'emitida_at', 'orden_compra_exenta'])
             ->whereBetween('emitida_at', [$this->desde, $this->hasta])
             ->orderBy('numero');
     }
@@ -41,7 +41,10 @@ class LibroVentasExport implements FromQuery, ShouldAutoSize, WithHeadings, With
     /** @return array<int, string> */
     public function headings(): array
     {
-        return ['Factura', 'RTN', 'Cliente', 'Exento', 'Gravado 15%', 'ISV', 'Total', 'Estado', 'Fecha emisión'];
+        // La columna de exoneración va AL FINAL a propósito: el contador ya
+        // tiene su plantilla armada sobre estas columnas y meterla en medio
+        // le correría todas las fórmulas.
+        return ['Factura', 'RTN', 'Cliente', 'Exento', 'Gravado 15%', 'ISV', 'Total', 'Estado', 'Fecha emisión', 'Exonerado', 'Orden compra exenta'];
     }
 
     /**
@@ -61,6 +64,8 @@ class LibroVentasExport implements FromQuery, ShouldAutoSize, WithHeadings, With
             number_format((float) $factura->total, 2),
             $factura->anulada ? 'ANULADA' : 'Vigente',
             $factura->emitida_at->format('d/m/Y H:i'),
+            number_format((float) $factura->exonerado, 2),
+            $factura->orden_compra_exenta ?? '',
         ];
     }
 }

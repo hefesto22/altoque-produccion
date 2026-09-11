@@ -20,6 +20,9 @@ final readonly class ResumenPeriodo
         public int $cantidadVentas,
         public float $gravado,
         public float $exento,
+        // Ventas amparadas por Orden de Compra Exenta. NO son exentas: van en
+        // la casilla 130 de la declaración, aparte, y no generan débito.
+        public float $exonerado,
         public float $isv,
         public float $total,
         public float $recibosTotal,

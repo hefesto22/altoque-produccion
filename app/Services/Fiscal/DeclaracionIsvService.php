@@ -24,6 +24,11 @@ use Illuminate\Support\Facades\DB;
  * El ISV del período es el de TODAS las ventas (recibo o factura), ya
  * que toda venta guarda su desglose para que el contador declare.
  *
+ * VENTAS EXONERADAS (Orden de Compra Exenta): suman en `exonerado` y NO
+ * generan débito. Van en su propia casilla de la declaración —la 130,
+ * "Ventas Exoneradas con OCE"—, que es distinta de la de ventas exentas.
+ * Meterlas en exento haría que el contador declare mal.
+ *
  * EXCEPTO las ventas con factura ANULADA: su corrección emitió una
  * factura nueva que sí suma; incluir ambas declararía el ISV dos veces.
  * (En el Libro de Ventas la anulada SÍ se lista, marcada "ANULADA" —
@@ -52,6 +57,7 @@ final class DeclaracionIsvService
                 count(*) as cantidad,
                 coalesce(sum(gravado), 0) as gravado,
                 coalesce(sum(exento), 0) as exento,
+                coalesce(sum(exonerado), 0) as exonerado,
                 coalesce(sum(isv), 0) as isv,
                 coalesce(sum(total), 0) as total,
                 coalesce(sum(total) filter (where tipo = \'recibo\'), 0) as recibos_total,
@@ -75,6 +81,7 @@ final class DeclaracionIsvService
             cantidadVentas: (int) ($fila->cantidad ?? 0),
             gravado: (float) ($fila->gravado ?? 0),
             exento: (float) ($fila->exento ?? 0),
+            exonerado: (float) ($fila->exonerado ?? 0),
             isv: $debito,
             total: (float) ($fila->total ?? 0),
             recibosTotal: (float) ($fila->recibos_total ?? 0),
@@ -114,6 +121,7 @@ final class DeclaracionIsvService
                 'estado'          => 'declarado',
                 'gravado'         => $resumen->gravado,
                 'exento'          => $resumen->exento,
+                'exonerado'       => $resumen->exonerado,
                 'isv'             => $resumen->isv,
                 'credito_fiscal'  => $resumen->creditoFiscal,
                 'isv_a_pagar'     => $resumen->isvAPagar,

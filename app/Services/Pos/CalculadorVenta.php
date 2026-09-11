@@ -33,6 +33,15 @@ use App\Domain\ValueObjects\ResumenVenta;
  *   prorratea por peso de lista (lo resuelve LineaVenta::repartoNeto), de
  *   modo que la base gravada y la exenta quedan correctas al centavo.
  *
+ * VENTA EXONERADA (Orden de Compra Exenta del PAMEH):
+ *   Con `$exonerada = true` lo que iría a 'gravado' va a 'exonerado' y el
+ *   ISV queda en CERO. Las líneas tienen que llegar YA tarifadas en neto
+ *   (LineaVenta::sinIsv) — acá no se vuelve a dividir entre 1+tasa, o se
+ *   quitaría el impuesto dos veces.
+ *
+ *   Lo exento NO se toca: sigue siendo exento. Exento y exonerado son cosas
+ *   distintas ante el SAR y van en casillas distintas de la declaración.
+ *
  * La tasa NUNCA se hardcodea aquí: se inyecta desde
  * config('honduras.impuestos.isv.tasa_general') vía el container.
  */
@@ -42,10 +51,13 @@ final class CalculadorVenta implements CalculaImpuestos
 
     /**
      * @param iterable<LineaVenta> $lineas
+     * @param bool $exonerada Venta con OCE: el importe gravable se declara
+     *                        exonerado y no genera ISV.
      */
-    public function calcular(iterable $lineas): ResumenVenta
+    public function calcular(iterable $lineas, bool $exonerada = false): ResumenVenta
     {
         $gravadoBase = 0.0;
+        $exonerado = 0.0;
         $isv = 0.0;
         $exento = 0.0;
         $subtotalLista = 0.0;
@@ -58,13 +70,22 @@ final class CalculadorVenta implements CalculaImpuestos
             foreach ($linea->repartoNeto() as $parte) {
                 $neto = $parte['neto'];
 
-                if ($parte['grava']) {
-                    $base = round($neto / (1 + $this->tasaIsv), 2);
-                    $gravadoBase += $base;
-                    $isv += round($neto - $base, 2);
-                } else {
+                if (! $parte['grava']) {
                     $exento += $neto;
+
+                    continue;
                 }
+
+                if ($exonerada) {
+                    // La línea ya viene en neto: este importe ES la base.
+                    $exonerado += $neto;
+
+                    continue;
+                }
+
+                $base = round($neto / (1 + $this->tasaIsv), 2);
+                $gravadoBase += $base;
+                $isv += round($neto - $base, 2);
             }
         }
 
@@ -72,9 +93,26 @@ final class CalculadorVenta implements CalculaImpuestos
             gravado: round($gravadoBase, 2),
             exento: round($exento, 2),
             isv: round($isv, 2),
-            total: round($gravadoBase + $isv + $exento, 2),
+            total: round($gravadoBase + $isv + $exento + $exonerado, 2),
             subtotalLista: round($subtotalLista, 2),
             descuento: round($descuento, 2),
+            exonerado: round($exonerado, 2),
         );
+    }
+
+    /**
+     * @param iterable<LineaVenta> $lineas
+     *
+     * @return array<int, LineaVenta>
+     */
+    public function tarifarSinIsv(iterable $lineas): array
+    {
+        $netas = [];
+
+        foreach ($lineas as $linea) {
+            $netas[] = $linea->sinIsv($this->tasaIsv);
+        }
+
+        return $netas;
     }
 }

@@ -58,6 +58,15 @@
                         <div style="font-size:.75rem; opacity:.7;">Exento</div>
                         <div style="font-size:1.35rem; font-weight:700;">L. {{ number_format($resumen['exento'], 2) }}</div>
                     </div>
+                    @if (($resumen['exonerado'] ?? 0) > 0)
+                        {{-- Solo aparece si hubo ventas con OCE en el mes. Va
+                             aparte de "Exento" porque el SAR las declara en la
+                             casilla 130, no en la de ventas exentas. --}}
+                        <div>
+                            <div style="font-size:.75rem; opacity:.7;">Exonerado (casilla 130)</div>
+                            <div style="font-size:1.35rem; font-weight:700;">L. {{ number_format($resumen['exonerado'], 2) }}</div>
+                        </div>
+                    @endif
                     <div>
                         <div style="font-size:.75rem; opacity:.7; color:rgb(217 119 6);">ISV (débito fiscal)</div>
                         <div style="font-size:1.35rem; font-weight:700; color:rgb(217 119 6);">L. {{ number_format($resumen['isv'], 2) }}</div>

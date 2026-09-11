@@ -10,6 +10,7 @@ use App\Domain\Exceptions\PagosNoCuadranException;
 use App\Domain\Exceptions\PedidoNoAnulableException;
 use App\Domain\Exceptions\SaldoInsuficienteException;
 use App\Domain\Exceptions\SinCaiActivoException;
+use App\Domain\Exceptions\VentaNoExonerableException;
 use App\Domain\Exceptions\VentaSinLineasException;
 use App\Domain\ValueObjects\LineaVenta;
 use App\Domain\ValueObjects\RTN;
@@ -73,17 +74,39 @@ final class VentaService
      *
      * @param array<int, LineaVenta> $lineas
      * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
+     * @param string|null $ordenCompraExenta Compra exonerada: No. de OCE del PAMEH (solo si el cliente la presenta)
+     * @param string|null $constanciaExonerado Compra exonerada: No. de constancia de registro de exonerado
      *
      * @throws VentaSinLineasException
      */
-    public function registrarFactura(array $lineas, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, string $tipoOrden = 'local', float $costoViaje = 0, ?array $pagos = null, ?string $nombreOrden = null): Factura
-    {
+    public function registrarFactura(
+        array $lineas,
+        int $cajeroId,
+        ?RTN $rtn,
+        string $nombre,
+        string $formaPago = 'efectivo',
+        ?bool $detallada = null,
+        ?string $banco = null,
+        string $tipoOrden = 'local',
+        float $costoViaje = 0,
+        ?array $pagos = null,
+        ?string $nombreOrden = null,
+        ?string $ordenCompraExenta = null,
+        ?string $constanciaExonerado = null,
+    ): Factura {
         $this->guardarContraVacio($lineas);
 
-        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden): Factura {
-            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden);
+        // LA OCE ES LO QUE EXONERA. No hay un flag aparte a propósito: el
+        // art. 11 del Acuerdo 481-2017 exige consignar el correlativo de la
+        // Orden de Compra Exenta en la factura, así que una venta exonerada
+        // SIN número no puede existir. Una sola fuente de verdad: si hay
+        // número, no se cobra ISV; si no hay, se cobra.
+        $exonerada = self::hayOrdenDeCompra($ordenCompraExenta);
 
-            return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
+        return DB::transaction(function () use ($lineas, $cajeroId, $rtn, $nombre, $formaPago, $detallada, $banco, $tipoOrden, $costoViaje, $pagos, $nombreOrden, $ordenCompraExenta, $constanciaExonerado, $exonerada): Factura {
+            $venta = $this->crearVenta($lineas, $cajeroId, tipo: 'factura', rtn: $rtn, nombre: $nombre, formaPago: $formaPago, banco: $banco, tipoOrden: $tipoOrden, costoViaje: $costoViaje, pagos: $pagos, nombreOrden: $nombreOrden, exonerada: $exonerada);
+
+            return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada, $ordenCompraExenta, $constanciaExonerado);
         });
     }
 
@@ -397,18 +420,41 @@ final class VentaService
      * existente (no crea otra), la marca pagada y la engancha al turno
      * abierto en que se cobra. La comanda ya se creó al dejarlo pendiente.
      *
+     * Si el cliente presenta una Orden de Compra Exenta ACÁ —que es cuando se
+     * emite e imprime la factura— el pedido se re-tarifa en neto antes de
+     * cobrar. Un pendiente todavía no tiene documento fiscal, así que no hay
+     * nada hecho que se esté tocando: la venta se completa en este momento.
+     *
      * @param array<int, array{metodo: string, banco?: string|null, monto: float}>|null $pagos Pago mixto (null = un solo método)
      *
      * @throws VentaSinLineasException
+     * @throws VentaNoExonerableException si se intenta exonerar algo ya facturado
      */
-    public function cobrarPendiente(Venta $venta, int $cajeroId, ?RTN $rtn, string $nombre, string $formaPago = 'efectivo', ?bool $detallada = null, ?string $banco = null, ?array $pagos = null): Factura
-    {
-        return DB::transaction(function () use ($venta, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos): Factura {
+    public function cobrarPendiente(
+        Venta $venta,
+        int $cajeroId,
+        ?RTN $rtn,
+        string $nombre,
+        string $formaPago = 'efectivo',
+        ?bool $detallada = null,
+        ?string $banco = null,
+        ?array $pagos = null,
+        ?string $ordenCompraExenta = null,
+        ?string $constanciaExonerado = null,
+    ): Factura {
+        return DB::transaction(function () use ($venta, $rtn, $nombre, $formaPago, $detallada, $banco, $pagos, $ordenCompraExenta, $constanciaExonerado): Factura {
             // UNA sola caja: la venta entra al turno abierto del sistema
             // (quién cobró queda en cajero_id).
             $corteId = CorteCaja::query()
                 ->where('estado', 'abierto')
                 ->value('id');
+
+            // Si el pedido resulta ser una compra exonerada, se re-tarifa
+            // ANTES de tocar los pagos: el total baja al quitarle el ISV y
+            // los pagos tienen que cuadrar contra el total NUEVO.
+            if (self::hayOrdenDeCompra($ordenCompraExenta)) {
+                $this->retarifarComoExonerada($venta);
+            }
 
             // El pago real se define al COBRAR (no al dejar pendiente).
             $normalizado = $this->normalizarPagos((float) $venta->total, $formaPago, $banco, $pagos);
@@ -434,10 +480,71 @@ final class VentaService
                 ->whereIn('estado', ['pendiente', 'preparando', 'listo'])
                 ->update(['estado' => 'entregado', 'entregado_at' => now()]);
 
-            // update() ya refrescó los atributos en memoria; el desglose
-            // (gravado/isv/total) no cambia, solo el estado de pago.
-            return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada);
+            // update() ya refrescó los atributos en memoria. El desglose solo
+            // cambió si la venta se re-tarifó como exonerada, arriba.
+            return $this->facturacion->emitirFactura($venta, $rtn, $nombre, $detallada, $ordenCompraExenta, $constanciaExonerado);
         });
+    }
+
+    /** ¿Trae número de Orden de Compra Exenta? Es lo que decide si se exonera. */
+    private static function hayOrdenDeCompra(?string $ordenCompraExenta): bool
+    {
+        return trim((string) $ordenCompraExenta) !== '';
+    }
+
+    /**
+     * Re-tarifa en NETO un pedido que ya estaba registrado, porque al cobrarlo
+     * resultó ser una compra amparada por una OCE.
+     *
+     * El pendiente se registró con precios "ISV incluido" (es lo normal: nadie
+     * sabe quién va a pagar hasta que llega a la caja). Al exonerarlo hay que
+     * bajarle el impuesto a CADA línea, no solo a los totales, o el detalle
+     * impreso sumaría más que el total a pagar.
+     *
+     * Los items se ACTUALIZAN en su lugar, no se borran y recrean: hay comandas
+     * ya impresas que salieron de este pedido y no vale la pena arriesgar sus
+     * referencias por un cambio de precio.
+     */
+    private function retarifarComoExonerada(Venta $venta): void
+    {
+        // LA REGLA: se exonera al emitir e imprimir la factura, ni antes ni
+        // después. Una venta ya facturada está hecha. Hoy es imposible llegar
+        // acá con una (scopePendientes exige pagada = false), pero la factura
+        // es el documento fiscal: si alguien abre otro camino mañana, que
+        // reviente aquí y no en la base.
+        $factura = $venta->factura;
+
+        if ($factura !== null) {
+            throw new VentaNoExonerableException($factura->numero);
+        }
+
+        $items = $venta->items()->orderBy('id')->get();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $lineas = $this->calculador->tarifarSinIsv(
+            $items->map(static fn ($item): LineaVenta => LineaVenta::desdeItem($item))->all(),
+        );
+
+        $filas = $this->filasDeItems($lineas);
+
+        foreach ($items as $i => $item) {
+            $item->update($filas[$i]);
+        }
+
+        $resumen = $this->calculador->calcular($lineas, exonerada: true);
+
+        $venta->update([
+            'gravado'        => $resumen->gravado,
+            'exento'         => $resumen->exento,
+            'exonerado'      => $resumen->exonerado,
+            'isv'            => $resumen->isv,
+            'total'          => $resumen->total,
+            'subtotal_lista' => $resumen->subtotalLista,
+            'descuento'      => $resumen->descuento,
+        ]);
     }
 
     /**
@@ -505,8 +612,16 @@ final class VentaService
         float $costoViaje = 0,
         ?array $pagos = null,
         ?string $nombreOrden = null,
+        bool $exonerada = false,
     ): Venta {
-        $resumen = $this->calculador->calcular($lineas);
+        // Venta con OCE: se re-tarifa ANTES de calcular y de congelar los
+        // items. Así el detalle impreso, el subtotal y el total salen todos
+        // del mismo precio neto y cuadran solos.
+        if ($exonerada) {
+            $lineas = $this->calculador->tarifarSinIsv($lineas);
+        }
+
+        $resumen = $this->calculador->calcular($lineas, $exonerada);
 
         // Los pagos se normalizan y validan ANTES de persistir nada:
         // si no cuadran al centavo, la venta no se crea (fail fast).
@@ -542,6 +657,7 @@ final class VentaService
             'nombre_orden'   => $nombreOrden !== null && trim($nombreOrden) !== '' ? mb_strtoupper(trim($nombreOrden)) : null,
             'gravado'        => $resumen->gravado,
             'exento'         => $resumen->exento,
+            'exonerado'      => $resumen->exonerado,
             'subtotal_lista' => $resumen->subtotalLista,
             'descuento'      => $resumen->descuento,
             'isv'            => $resumen->isv,

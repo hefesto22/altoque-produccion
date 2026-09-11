@@ -179,6 +179,16 @@
                 <tr><td class="lbl">Fecha y hora de emisión</td><td class="right bold">{{ $f->emitida_at->format('d/m/Y h:i A') }}</td></tr>
                 <tr><td class="lbl">Cliente</td><td class="right bold">{{ $f->nombre_cliente }}</td></tr>
                 <tr><td class="lbl">RTN / Identidad</td><td class="right bold">{{ $f->rtn_cliente ?? 'Consumidor Final' }}</td></tr>
+                {{-- Compra exonerada: solo aparecen si la factura los lleva.
+                     Que el comprador exonerado pueda verificar SU número de
+                     orden en la página pública es justo lo que necesita para
+                     conciliar contra el papel del PAMEH. --}}
+                @if ($f->orden_compra_exenta)
+                    <tr><td class="lbl">No. orden compra exenta</td><td class="right bold">{{ $f->orden_compra_exenta }}</td></tr>
+                @endif
+                @if ($f->constancia_exonerado)
+                    <tr><td class="lbl">No. constancia exonerado</td><td class="right bold">{{ $f->constancia_exonerado }}</td></tr>
+                @endif
             </table>
 
             <div class="hr"></div>
@@ -230,7 +240,7 @@
                 <tr><td class="lbl">Subtotal</td><td class="right">L. {{ number_format($subtotal, 2) }}</td></tr>
                 <tr><td class="lbl">Descuentos y rebajas otorgados</td><td class="right">L. {{ number_format($descuento, 2) }}</td></tr>
                 <tr><td class="lbl">Importe exento</td><td class="right">L. {{ number_format((float) $f->exento, 2) }}</td></tr>
-                <tr><td class="lbl">Importe exonerado</td><td class="right">L. 0.00</td></tr>
+                <tr><td class="lbl">Importe exonerado</td><td class="right">L. {{ number_format((float) $f->exonerado, 2) }}</td></tr>
                 <tr><td class="lbl">Importe gravado 15%</td><td class="right">L. {{ number_format((float) $f->gravado, 2) }}</td></tr>
                 <tr><td class="lbl">Importe gravado 18%</td><td class="right">L. 0.00</td></tr>
                 <tr><td class="lbl">I.S.V. 15%</td><td class="right">L. {{ number_format((float) $f->isv, 2) }}</td></tr>

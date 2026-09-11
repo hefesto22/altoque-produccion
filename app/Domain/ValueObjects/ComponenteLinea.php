@@ -32,6 +32,27 @@ final readonly class ComponenteLinea
         return round($this->precio * $this->cantidad, 2);
     }
 
+    /**
+     * Copia del componente a precio NETO (sin ISV) cuando grava.
+     *
+     * El detalle de una factura exonerada se imprime producto por producto:
+     * si los componentes siguieran a precio con impuesto, las líneas no
+     * sumarían el total exonerado.
+     */
+    public function sinIsv(float $tasaIsv): self
+    {
+        if (! $this->gravaIsv) {
+            return $this;
+        }
+
+        return new self(
+            nombre: $this->nombre,
+            precio: round($this->precio / (1 + $tasaIsv), 2),
+            gravaIsv: $this->gravaIsv,
+            cantidad: $this->cantidad,
+        );
+    }
+
     /** @return array{nombre: string, precio: float, grava_isv: bool, cantidad: int} */
     public function toArray(): array
     {

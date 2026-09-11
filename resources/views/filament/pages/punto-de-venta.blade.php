@@ -611,7 +611,15 @@
                         <div style="display:flex; justify-content:space-between; color:#16a34a; font-weight:600;"><span>Descuento</span><span>− L. {{ number_format($this->resumen['descuento'], 2) }}</span></div>
                     @endif
                     <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Exento</span><span>L. {{ number_format($this->resumen['exento'], 2) }}</span></div>
-                    <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Gravado</span><span>L. {{ number_format($this->resumen['gravado'], 2) }}</span></div>
+                    @if (($this->resumen['exonerado'] ?? 0) > 0)
+                        {{-- Compra con OCE: lo que normalmente sería gravado va
+                             a exonerado y el ISV queda en cero. Se pinta en
+                             ámbar (aviso) para que el cajero no lo pase por
+                             alto: el total NO es el de siempre. --}}
+                        <div style="display:flex; justify-content:space-between; color:#f59e0b; font-weight:700;"><span>Exonerado (OCE)</span><span>L. {{ number_format($this->resumen['exonerado'], 2) }}</span></div>
+                    @else
+                        <div style="display:flex; justify-content:space-between; opacity:.75;"><span>Gravado</span><span>L. {{ number_format($this->resumen['gravado'], 2) }}</span></div>
+                    @endif
                     <div style="display:flex; justify-content:space-between; opacity:.75;"><span>ISV (15%)</span><span>L. {{ number_format($this->resumen['isv'], 2) }}</span></div>
                     <div style="display:flex; justify-content:space-between; font-size:1.15rem; font-weight:700; padding-top:.25rem;"><span>Total</span><span>L. {{ number_format($this->resumen['total'], 2) }}</span></div>
                 </div>
@@ -961,6 +969,27 @@
                     <x-slot name="description">Total a facturar: L. {{ number_format($this->totalModal, 2) }}</x-slot>
 
                     <div style="display:flex; flex-direction:column; gap:.75rem;">
+                        {{-- Con orden de compra el cliente paga MENOS: el precio
+                             de menú trae el ISV adentro y la OCE dispensa ese
+                             impuesto. Se avisa fuerte y arriba porque es plata:
+                             el cajero tiene que cobrar el total nuevo. --}}
+                        @if ($this->exonerando)
+                            @php($isvFuera = $this->isvExonerado)
+                            <div style="border:1.5px solid #f59e0b; background:#f59e0b1a; border-radius:.6rem; padding:.55rem .7rem;">
+                                <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; opacity:.75;">Compra exonerada</div>
+                                <div style="font-weight:800;">No se cobra ISV</div>
+                                @if ($isvFuera > 0)
+                                    <div style="font-size:.8rem;">
+                                        Se le quitan L. {{ number_format($isvFuera, 2) }} de impuesto ·
+                                        cobrá <strong>L. {{ number_format($this->totalModal, 2) }}</strong>
+                                    </div>
+                                @endif
+                                <div style="font-size:.75rem; opacity:.75; margin-top:.2rem;">
+                                    Quedate con la orden de compra: es el respaldo de esta factura.
+                                </div>
+                            </div>
+                        @endif
+
                         <div>
                             <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">RTN del cliente</label>
                             <x-filament::input.wrapper>
@@ -1078,6 +1107,51 @@
                             <input type="checkbox" wire:model="facturaDetallada" style="width:1.1rem; height:1.1rem;" />
                             <span style="font-size:.85rem;">Detallar productos en la factura<br><span style="font-size:.72rem; opacity:.65;">Si no, se factura como “Alimentación”</span></span>
                         </label>
+
+                        {{-- ───── Compra exonerada (PAMEH) ─────
+                             Solo cuando el cliente llega con su Orden de Compra
+                             Exenta en papel (PMA, embajadas, ONGs con convenio).
+                             Como es la excepción y no la regla, nace CERRADO: la
+                             caja de todos los días no lo ve. Abrir y cerrar es
+                             puro navegador — un wire:click acá costaría
+                             re-renderizar el POS entero (~200 KB). Si viene
+                             precargado desde “Anular y corregir”, nace abierto
+                             para que no se pierda de vista.
+                             OJO: el div interno NO lleva `display` en el style;
+                             x-show al mostrar borra esa propiedad y lo dejaría
+                             descolocado (misma trampa del overlay centrado). --}}
+                        @php($exoneradaAbierta = $ordenCompraInput !== '' || $constanciaExoneradoInput !== '')
+                        <div x-data="{ abierto: {{ $exoneradaAbierta ? 'true' : 'false' }} }"
+                             style="border:1px solid rgba(128,128,128,.25); border-radius:.5rem; overflow:hidden;">
+                            <button type="button" x-on:click="abierto = ! abierto"
+                                    style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.5rem; background:none; border:none; color:inherit; cursor:pointer; text-align:left; font:inherit;">
+                                <span style="font-size:.85rem; font-weight:600;">
+                                    Compra exonerada
+                                    <span style="display:block; font-size:.72rem; font-weight:400; opacity:.65;">Solo si el cliente trae orden de compra exenta</span>
+                                </span>
+                                <span x-text="abierto ? '−' : '+'" style="font-size:1.15rem; font-weight:700; opacity:.55;">+</span>
+                            </button>
+                            <div x-show="abierto" style="padding:0 .5rem .5rem;{{ $exoneradaAbierta ? '' : ' display:none;' }}">
+                                <label style="display:block; font-size:.8rem; font-weight:600; margin-bottom:.25rem;">N.° de orden de compra exenta</label>
+                                <x-filament::input.wrapper>
+                                    {{-- .live a propósito: este número ES lo que
+                                         exonera, así que al escribirlo tiene que
+                                         recalcularse el total del modal. Debounce
+                                         alto porque cada request re-renderiza el
+                                         POS entero. NUNCA reasignar esta propiedad
+                                         desde el servidor (las mayúsculas van por
+                                         CSS y se normalizan al guardar). --}}
+                                    <x-filament::input type="text" wire:model.live.debounce.700ms="ordenCompraInput" maxlength="40" placeholder="OC2026186452" style="text-transform:uppercase;" />
+                                </x-filament::input.wrapper>
+                                <label style="display:block; font-size:.8rem; font-weight:600; margin:.6rem 0 .25rem;">N.° de constancia de exonerado</label>
+                                <x-filament::input.wrapper>
+                                    <x-filament::input type="text" wire:model="constanciaExoneradoInput" maxlength="40" placeholder="Opcional" style="text-transform:uppercase;" />
+                                </x-filament::input.wrapper>
+                                <div style="font-size:.72rem; opacity:.65; margin-top:.45rem;">
+                                    Se imprimen en la factura. Vacíos, sale “N/A” y se cobra normal.
+                                </div>
+                            </div>
+                        </div>
                         <div style="display:flex; justify-content:flex-end; gap:.5rem; margin-top:.5rem;">
                             <x-filament::button color="gray" wire:click="cerrarModalFactura">Cancelar</x-filament::button>
                             <x-filament::button color="primary" wire:click="emitirFactura">Emitir factura</x-filament::button>

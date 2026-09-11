@@ -58,9 +58,20 @@
         <tr><td>Cliente:</td><td class="right">{{ $f->rtn_cliente === null && $nombreOrden ? $nombreOrden : $f->nombre_cliente }}</td></tr>
         <tr><td>RTN / ID:</td><td class="right">{{ $f->rtn_cliente ?? 'C.F.' }}</td></tr>
     </table>
+    {{-- Datos de COMPRA EXONERADA. Vienen del papel (PAMEH) que presenta el
+         comprador exonerado y se capturan a mano en la caja; casi siempre van
+         vacíos y entonces se imprime "N/A", que es lo que exige el formato.
+         Registro SAG es de insumos agropecuarios: en un restaurante no aplica
+         nunca, por eso sigue fijo. --}}
     <table class="sm">
-        <tr><td>No. orden compra exenta:</td><td class="right">N/A</td></tr>
-        <tr><td>No. constancia exonerado:</td><td class="right">N/A</td></tr>
+        <tr>
+            <td>No. orden compra exenta:</td>
+            <td class="right{{ $f->orden_compra_exenta ? ' bold' : '' }}" style="word-break:break-all;">{{ $f->orden_compra_exenta ?: 'N/A' }}</td>
+        </tr>
+        <tr>
+            <td>No. constancia exonerado:</td>
+            <td class="right{{ $f->constancia_exonerado ? ' bold' : '' }}" style="word-break:break-all;">{{ $f->constancia_exonerado ?: 'N/A' }}</td>
+        </tr>
         <tr><td>No. registro SAG:</td><td class="right">N/A</td></tr>
     </table>
 
@@ -138,7 +149,7 @@
         <tr><td>Subtotal:</td><td class="right">L. {{ number_format($subtotal, 2) }}</td></tr>
         <tr><td>Descuentos y rebajas:</td><td class="right">L. {{ number_format($descuento, 2) }}</td></tr>
         <tr><td>Importe exento:</td><td class="right">L. {{ number_format((float) $f->exento, 2) }}</td></tr>
-        <tr><td>Importe exonerado:</td><td class="right">L. 0.00</td></tr>
+        <tr><td>Importe exonerado:</td><td class="right{{ (float) $f->exonerado > 0 ? ' bold' : '' }}">L. {{ number_format((float) $f->exonerado, 2) }}</td></tr>
         <tr><td>Importe gravado 15%:</td><td class="right">L. {{ number_format((float) $f->gravado, 2) }}</td></tr>
         <tr><td>Importe gravado 18%:</td><td class="right">L. 0.00</td></tr>
         <tr><td>I.S.V. 15%:</td><td class="right">L. {{ number_format((float) $f->isv, 2) }}</td></tr>

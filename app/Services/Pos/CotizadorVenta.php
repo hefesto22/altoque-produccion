@@ -297,9 +297,16 @@ final class CotizadorVenta
      * corriendo en la pantalla de cobro).
      *
      * @param array<int, LineaVenta> $lineas
+     * @param bool $exonerada Compra con OCE: se re-tarifa en neto y no se
+     *                        cobra ISV. Sirve para que el cajero vea bajar el
+     *                        total en el momento en que escribe la orden.
      */
-    public function resumir(array $lineas): ResumenVenta
+    public function resumir(array $lineas, bool $exonerada = false): ResumenVenta
     {
-        return $this->calculador->calcular($lineas);
+        if ($exonerada) {
+            $lineas = $this->calculador->tarifarSinIsv($lineas);
+        }
+
+        return $this->calculador->calcular($lineas, $exonerada);
     }
 }
