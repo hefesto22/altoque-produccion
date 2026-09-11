@@ -62,9 +62,62 @@
             font-size: 15px; padding: 4px; margin-top: 6px;
         }
     </style>
+    <script>
+        /* ─────────────────────────────────────────────────────────────
+           LA HOJA SE AJUSTA AL ALTO REAL DEL TICKET.
+
+           El alto estaba fijo en 250mm y el ticket CRECE con cada platillo:
+           una factura detallada de 3 platos ya se partía en dos hojas y las
+           leyendas del SAR salían solas en la segunda. Subir el número fijo
+           no arregla nada —solo mueve el corte más adelante y alimenta papel
+           de más en los tickets cortos—, así que se mide el contenido y se
+           escribe el @page con ese alto.
+
+           Corre en 'load' (con el logo y el QR ya cargados, o la medida sale
+           corta) y otra vez en 'beforeprint', porque el POS imprime por
+           iframe y ahí el print lo dispara la página de arriba.
+
+           Si algo falla queda el @page fijo del CSS: el comportamiento de
+           antes, nunca peor. La vista del CLIENTE se excluye — esa se ve en
+           el teléfono y tiene sus propios tamaños.
+           ───────────────────────────────────────────────────────────── */
+        function ajustarHoja() {
+            try {
+                if (document.body.classList.contains('cliente')) { return; }
+
+                var PX_POR_MM = 96 / 25.4;
+                var alto = 0;
+
+                document.querySelectorAll('.doc, .comanda').forEach(function (el) {
+                    alto = Math.max(alto, el.getBoundingClientRect().height);
+                });
+
+                if (!alto) { return; }
+
+                /* +8mm = los 6mm de margen (3 arriba + 3 abajo) y 2mm de
+                   holgura, para que un redondeo no vuelva a empujar la última
+                   línea a otra hoja. */
+                var mm = Math.min(900, Math.max(120, Math.ceil(alto / PX_POR_MM) + 8));
+
+                var st = document.getElementById('hoja-auto');
+
+                if (!st) {
+                    st = document.createElement('style');
+                    st.id = 'hoja-auto';
+                    document.head.appendChild(st);
+                }
+
+                st.textContent = '@page { size: 80mm ' + mm + 'mm; margin: 3mm; }';
+            } catch (e) { /* queda el @page fijo del CSS */ }
+        }
+
+        window.addEventListener('load', ajustarHoja);
+        window.addEventListener('beforeprint', ajustarHoja);
+    </script>
 </head>
-{{-- Auto-print solo si se abre directo (el POS imprime vía iframe). --}}
-<body onload="if (window.self === window.top) window.print()">
+{{-- Auto-print solo si se abre directo (el POS imprime vía iframe).
+     Se ajusta la hoja ANTES de imprimir: el orden importa. --}}
+<body onload="ajustarHoja(); if (window.self === window.top) window.print()">
 <div class="doc">
 @include('pdf.partials.factura-contenido')
 </div>
