@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Domain\Exceptions\VentaNoExonerableException;
 use App\Domain\ValueObjects\ComponenteLinea;
 use App\Domain\ValueObjects\LineaVenta;
-use App\Domain\Exceptions\VentaNoExonerableException;
 use App\Domain\ValueObjects\RTN;
 use App\Models\Cai;
 use App\Models\Factura;

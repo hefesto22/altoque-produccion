@@ -168,6 +168,29 @@
         <div class="sm" style="margin-top:2px;">Forma de pago: {{ mb_strtoupper($formaPagoFactura).(! empty($pagosFactura->first()['banco'] ?? null) ? ' ('.$pagosFactura->first()['banco'].')' : '') }}</div>
     @endif
 
+    {{-- ───── Compra exonerada, a la vista antes del QR ─────
+         El bloque de arriba ("Datos del Adquirente Exonerado") es el que
+         exige el formato del Acuerdo 481-2017 art. 10 num. 8 y va junto a los
+         datos del cliente; ese NO se mueve. Este es un recordatorio al pie,
+         donde cae la vista de quien revisa el ticket: es el número que
+         respalda que esta factura no lleve ISV. Solo sale si hay orden. --}}
+    @if ($f->orden_compra_exenta)
+        <div class="hr"></div>
+        <div class="center bold">COMPRA EXONERADA</div>
+        <table class="sm">
+            <tr>
+                <td>Orden de compra exenta:</td>
+                <td class="right bold" style="word-break:break-all;">{{ $f->orden_compra_exenta }}</td>
+            </tr>
+            @if ($f->constancia_exonerado)
+                <tr>
+                    <td>Constancia de exonerado:</td>
+                    <td class="right bold" style="word-break:break-all;">{{ $f->constancia_exonerado }}</td>
+                </tr>
+            @endif
+        </table>
+    @endif
+
     <div class="hr"></div>
 
     {{-- ───── QR de verificación ───── --}}
