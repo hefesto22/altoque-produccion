@@ -171,24 +171,16 @@
     {{-- ───── Compra exonerada, a la vista antes del QR ─────
          El bloque de arriba ("Datos del Adquirente Exonerado") es el que
          exige el formato del Acuerdo 481-2017 art. 10 num. 8 y va junto a los
-         datos del cliente; ese NO se mueve. Este es un recordatorio al pie,
-         donde cae la vista de quien revisa el ticket: es el número que
-         respalda que esta factura no lleve ISV. Solo sale si hay orden. --}}
+         datos del cliente; ese NO se mueve. Esto es el recordatorio al pie,
+         donde cae la vista de quien revisa el ticket.
+
+         ⚠️ UN SOLO RENGLÓN, a propósito. La hoja del ticket son 80x250mm con
+         3mm de margen = 244mm útiles, y la factura ya llegaba casi al borde:
+         con encabezado, tabla y separador propios (4 renglones) las dos
+         leyendas finales del SAR se iban a una segunda hoja. Cualquier cosa
+         que se agregue acá abajo cuesta papel — medirlo antes. --}}
     @if ($f->orden_compra_exenta)
-        <div class="hr"></div>
-        <div class="center bold">COMPRA EXONERADA</div>
-        <table class="sm">
-            <tr>
-                <td>Orden de compra exenta:</td>
-                <td class="right bold" style="word-break:break-all;">{{ $f->orden_compra_exenta }}</td>
-            </tr>
-            @if ($f->constancia_exonerado)
-                <tr>
-                    <td>Constancia de exonerado:</td>
-                    <td class="right bold" style="word-break:break-all;">{{ $f->constancia_exonerado }}</td>
-                </tr>
-            @endif
-        </table>
+        <div class="sm bold" style="margin-top:2px; word-break:break-all;">COMPRA EXONERADA · O/C {{ $f->orden_compra_exenta }}@if ($f->constancia_exonerado) · CONST. {{ $f->constancia_exonerado }}@endif</div>
     @endif
 
     <div class="hr"></div>
