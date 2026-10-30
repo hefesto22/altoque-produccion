@@ -188,25 +188,48 @@ class CompraResource extends Resource
                             'otros'     => 'Otros',
                         ]),
 
-                    // Autocompletado: al escribir el nombre de un proveedor ya
-                    // registrado, su RTN se llena solo. El catálogo se alimenta
-                    // al guardar cada compra (ver Compra::booted).
-                    TextInput::make('proveedor_nombre')
+                    // Buscador del catálogo de proveedores, filtrado por el tipo
+                    // de documento: con factura solo los que tienen RTN, con
+                    // recibo solo los que no. Busca en la base con límite (antes
+                    // el catálogo ENTERO viajaba al navegador en cada refresco
+                    // del formulario) y al abrir ofrece los últimos usados.
+                    // Un nombre que no está en el catálogo se usa igual con la
+                    // opción "+ Nuevo": se registra solo al guardar la compra
+                    // (ver Compra::booted). Al elegir, su RTN se llena solo.
+                    Select::make('proveedor_nombre')
                         ->label('Proveedor (empresa)')
                         ->required()
-                        ->maxLength(255)
                         ->columnSpan(2)
-                        ->datalist(fn (): array => Proveedor::nombres())
+                        ->searchable()
+                        ->searchDebounce(300)
+                        ->options(fn (Get $get): array => Proveedor::recientes(self::esFactura($get)))
+                        ->getSearchResultsUsing(function (string $search, Get $get): array {
+                            $termino = mb_strtoupper(trim($search));
+                            $resultados = Proveedor::buscar($termino, self::esFactura($get));
+
+                            // Al final y no primero: así Enter toma el proveedor
+                            // que ya existe y no crea uno nuevo con medio nombre.
+                            if ($termino !== '' && ! array_key_exists($termino, $resultados)) {
+                                $resultados[$termino] = '+ Nuevo: '.$termino;
+                            }
+
+                            return $resultados;
+                        })
+                        // Cualquier nombre es válido, esté o no en el catálogo:
+                        // el proveedor nuevo se da de alta al guardar.
+                        ->getOptionLabelUsing(fn (?string $value): ?string => $value)
+                        ->rules(['max:255'])
+                        ->placeholder('Escribí las primeras letras: el RTN se llena solo')
+                        ->searchPrompt('Escribí el nombre del proveedor')
                         ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(trim((string) $state)))
-                        ->live(onBlur: true)
+                        ->live()
                         ->afterStateUpdated(function (?string $state, Set $set): void {
                             $rtn = Proveedor::rtnDe($state);
 
                             if ($rtn !== null && $rtn !== '') {
                                 $set('proveedor_rtn', $rtn);
                             }
-                        })
-                        ->placeholder('Escribí las primeras letras: el RTN se llena solo'),
+                        }),
 
                     TextInput::make('proveedor_rtn')
                         ->label('RTN del proveedor')
