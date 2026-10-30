@@ -53,6 +53,8 @@ class ManageCompras extends ManageRecords
         return [
             CreateAction::make()
                 ->label('Registrar compra')
+                // Crear siempre a la vista aunque la pantalla sea bajita.
+                ->stickyModalFooter()
                 ->mutateDataUsing(function (array $data): array {
                     $data['registrado_por'] = Auth::id();
 

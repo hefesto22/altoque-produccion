@@ -106,11 +106,16 @@ class CompraResource extends Resource
         // Una sola columna de secciones: cada paso ocupa el ancho completo del
         // modal y acomoda sus campos adentro. Con secciones lado a lado (lo
         // anterior) la más corta dejaba un hueco enorme al lado.
+        //
+        // Todo tiene que caber sin scroll hasta el botón Crear (el contador
+        // carga decenas de facturas seguidas): secciones compactas y las
+        // ayudas de cada campo como ícono con tooltip junto a la etiqueta, en
+        // vez de texto debajo que agregaba una fila entera por campo.
         return $schema->columns(1)->components([
 
             // ── Paso 1: qué documento entregó el proveedor ──────────────
             Section::make('1 · ¿Qué te dio el proveedor?')
-                ->description('De esto depende si el ISV se puede descontar o no.')
+                ->compact()
                 ->schema([
                     ToggleButtons::make('tipo_documento')
                         ->hiddenLabel()
@@ -143,6 +148,7 @@ class CompraResource extends Resource
 
             // ── Paso 2: de quién y cuándo ───────────────────────────────
             Section::make('2 · Proveedor')
+                ->compact()
                 ->schema([
                     // Campo de fecha NATIVO del navegador, a propósito: el
                     // picker de Filament obliga a navegar mes/año con el mouse
@@ -154,7 +160,7 @@ class CompraResource extends Resource
                         ->label('Fecha de compra')
                         ->required()
                         ->native()
-                        ->helperText('Escribila con el teclado: día, mes y año.')
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Escribila con el teclado: día, mes y año.')
                         ->maxDate(now()),
 
                     // Doble ancho: un correlativo del SAR (000-001-01-00000657)
@@ -199,14 +205,15 @@ class CompraResource extends Resource
                                 $set('proveedor_rtn', $rtn);
                             }
                         })
-                        ->helperText('Escribí las primeras letras: si ya lo registraste antes, aparece en la lista y su RTN se llena solo.'),
+                        ->placeholder('Escribí las primeras letras…')
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Si ya lo registraste antes, aparece en la lista y su RTN se llena solo.'),
 
                     TextInput::make('proveedor_rtn')
                         ->label('RTN del proveedor')
                         ->maxLength(14)
                         ->columnSpan(2)
                         ->live(onBlur: true)
-                        ->helperText(fn (Get $get): string => self::esFactura($get)
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn (Get $get): string => self::esFactura($get)
                             ? 'Necesario para que el SAR acepte el descuento del ISV.'
                             : 'Opcional en un recibo.'),
 
@@ -234,6 +241,7 @@ class CompraResource extends Resource
 
             // ── Paso 3: montos ──────────────────────────────────────────
             Section::make('3 · Montos')
+                ->compact()
                 ->description(fn (Get $get): string => self::esFactura($get)
                     ? 'Copiá los montos tal como vienen en la factura del proveedor, cada uno en su casilla. El total se suma solo.'
                     : 'Solo el total de lo que pagaste.')
@@ -243,13 +251,26 @@ class CompraResource extends Resource
                     // `default(0)`: el contador pidió que las casillas nazcan
                     // vacías, porque el cero puesto de entrada se quedaba
                     // pegado y terminaba guardando montos en cero.
+                    // Orden exento → gravado → ISV: es el que sigue la factura
+                    // del proveedor al copiarla, así el Tab va en línea recta.
+                    // Los tres más el total van en una sola fila de cuatro.
+                    MontoField::make('exento', 'Exento')
+                        ->visible(fn (Get $get): bool => self::esFactura($get))
+                        ->default(null)
+                        ->required(false)
+                        ->rules(['nullable'])
+                        ->live(onBlur: true)
+                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lo que no paga impuesto (si la factura lo separa).')
+                        ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
+
                     MontoField::make('gravado', 'Gravado 15%')
                         ->visible(fn (Get $get): bool => self::esFactura($get))
                         ->default(null)
                         ->live(onBlur: true)
                         ->rules(['nullable'])
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->helperText('El importe gravado SIN el impuesto, como lo separa la factura.')
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'El importe gravado SIN el impuesto, como lo separa la factura.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     MontoField::make('isv', 'I.S.V. 15%')
@@ -259,17 +280,7 @@ class CompraResource extends Resource
                         ->rules(['nullable'])
                         ->live(onBlur: true)
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->helperText('El impuesto tal como lo dice la factura. Es el que se descuenta.')
-                        ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
-
-                    MontoField::make('exento', 'Exento')
-                        ->visible(fn (Get $get): bool => self::esFactura($get))
-                        ->default(null)
-                        ->required(false)
-                        ->rules(['nullable'])
-                        ->live(onBlur: true)
-                        ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->helperText('Lo que no paga impuesto (si la factura lo separa).')
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'El impuesto tal como lo dice la factura. Es el que se descuenta.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     // En factura no se escribe: es la suma de los tres de arriba,
@@ -280,8 +291,8 @@ class CompraResource extends Resource
                         ->disabled(fn (Get $get): bool => self::esFactura($get))
                         ->dehydrated(true)
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->helperText(fn (Get $get): string => self::esFactura($get)
-                            ? 'Gravado + ISV + exento. Se suma solo.'
+                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn (Get $get): string => self::esFactura($get)
+                            ? 'Exento + gravado + ISV. Se suma solo.'
                             : 'Lo que pagaste en total.'),
 
                     // Aviso, no freno: si el ISV escrito no es ~15% del gravado
@@ -322,7 +333,7 @@ class CompraResource extends Resource
                         ->label('Notas (opcional)')
                         ->maxLength(255)
                         ->columnSpanFull(),
-                ])->columns(3),
+                ])->columns(4),
         ]);
     }
 
@@ -387,7 +398,7 @@ class CompraResource extends Resource
                 ]),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->stickyModalFooter(),
                 DeleteAction::make(),
             ]);
     }
