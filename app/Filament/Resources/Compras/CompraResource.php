@@ -108,9 +108,11 @@ class CompraResource extends Resource
         // anterior) la más corta dejaba un hueco enorme al lado.
         //
         // Todo tiene que caber sin scroll hasta el botón Crear (el contador
-        // carga decenas de facturas seguidas): secciones compactas y las
-        // ayudas de cada campo como ícono con tooltip junto a la etiqueta, en
-        // vez de texto debajo que agregaba una fila entera por campo.
+        // carga decenas de facturas seguidas): secciones compactas y nada de
+        // texto de ayuda debajo de cada campo (agregaba una fila por campo).
+        // La guía va en el placeholder o como texto gris corto junto a la
+        // etiqueta. Íconos de ayuda NO: se ven recargados y cada uno es un
+        // botón que se roba un Tab, y el contador carga a puro teclado.
         return $schema->columns(1)->components([
 
             // ── Paso 1: qué documento entregó el proveedor ──────────────
@@ -160,7 +162,6 @@ class CompraResource extends Resource
                         ->label('Fecha de compra')
                         ->required()
                         ->native()
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Escribila con el teclado: día, mes y año.')
                         ->maxDate(now()),
 
                     // Doble ancho: un correlativo del SAR (000-001-01-00000657)
@@ -205,17 +206,16 @@ class CompraResource extends Resource
                                 $set('proveedor_rtn', $rtn);
                             }
                         })
-                        ->placeholder('Escribí las primeras letras…')
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Si ya lo registraste antes, aparece en la lista y su RTN se llena solo.'),
+                        ->placeholder('Escribí las primeras letras: el RTN se llena solo'),
 
                     TextInput::make('proveedor_rtn')
                         ->label('RTN del proveedor')
                         ->maxLength(14)
                         ->columnSpan(2)
                         ->live(onBlur: true)
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn (Get $get): string => self::esFactura($get)
-                            ? 'Necesario para que el SAR acepte el descuento del ISV.'
-                            : 'Opcional en un recibo.'),
+                        ->hint(fn (Get $get): string => self::esFactura($get)
+                            ? 'Necesario para descontar el ISV'
+                            : 'Opcional'),
 
                     // Aviso (no bloquea): registrar dos veces la misma factura
                     // descontaría el ISV por duplicado.
@@ -261,7 +261,6 @@ class CompraResource extends Resource
                         ->rules(['nullable'])
                         ->live(onBlur: true)
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Lo que no paga impuesto (si la factura lo separa).')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     MontoField::make('gravado', 'Gravado 15%')
@@ -270,7 +269,6 @@ class CompraResource extends Resource
                         ->live(onBlur: true)
                         ->rules(['nullable'])
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'El importe gravado SIN el impuesto, como lo separa la factura.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     MontoField::make('isv', 'I.S.V. 15%')
@@ -280,7 +278,6 @@ class CompraResource extends Resource
                         ->rules(['nullable'])
                         ->live(onBlur: true)
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'El impuesto tal como lo dice la factura. Es el que se descuenta.')
                         ->afterStateUpdated(fn (Get $get, Set $set) => self::recalcularTotal($get, $set)),
 
                     // En factura no se escribe: es la suma de los tres de arriba,
@@ -291,9 +288,7 @@ class CompraResource extends Resource
                         ->disabled(fn (Get $get): bool => self::esFactura($get))
                         ->dehydrated(true)
                         ->dehydrateStateUsing(fn (mixed $state): float => self::num($state))
-                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn (Get $get): string => self::esFactura($get)
-                            ? 'Exento + gravado + ISV. Se suma solo.'
-                            : 'Lo que pagaste en total.'),
+                        ->hint(fn (Get $get): ?string => self::esFactura($get) ? 'Se suma solo' : null),
 
                     // Aviso, no freno: si el ISV escrito no es ~15% del gravado
                     // casi siempre es un dígito mal tecleado. Se avisa y el
