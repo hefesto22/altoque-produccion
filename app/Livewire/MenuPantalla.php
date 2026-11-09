@@ -68,7 +68,13 @@ class MenuPantalla extends Component
                 ]);
 
         // Precios individuales por nivel (tier) de proteína presente hoy.
-        $tierMapa = Tier::mapa();
+        // En la TV la pleca se cambia por "ó" ("POLLO Ó CERDO"); solo cambia
+        // lo que se pinta, el nombre del tier en la BD sigue igual para el
+        // POS y los reportes.
+        $tierMapa = array_map(
+            static fn (string $nombre): string => (string) preg_replace('#\s*/\s*#u', ' ó ', $nombre),
+            Tier::mapa(),
+        );
         $individuales = [];
 
         foreach ($proteinas->whereNotNull('tier_combo')->groupBy('tier_combo') as $codigo => $grupo) {
