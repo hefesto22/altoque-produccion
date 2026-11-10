@@ -70,62 +70,17 @@ final class CorteCajaService
     public function cerrar(CorteCaja $corte, ?float $efectivoContado, ?string $notas = null, bool $automatico = false): CorteCaja
     {
         return DB::transaction(function () use ($corte, $efectivoContado, $notas, $automatico): CorteCaja {
-            // cuentaEnCaja: fuera pendientes por cobrar Y ventas con factura
-            // anulada (su dinero se devolvió o se recobró en la corregida).
-            $fila = Venta::query()
-                ->where('corte_caja_id', $corte->id)
-                ->cuentaEnCaja()
-                ->selectRaw('
-                    count(*) as cantidad,
-                    coalesce(sum(total), 0) as total,
-                    coalesce(sum(isv), 0) as isv
-                ')
-                ->first();
-
-            // Por método se suma desde venta_pagos: con pago mixto una venta
-            // reparte su total entre varios métodos y el efectivo esperado
-            // en gaveta debe contar SOLO la porción en efectivo.
-            $pagos = DB::selectOne("
-                SELECT
-                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS efectivo,
-                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS tarjeta,
-                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia,
-                    -- Consumo de cuenta prepago: comida entregada hoy que ya
-                    -- se cobró y facturó al depositar. NO es efectivo en
-                    -- gaveta ni terminal, y tampoco suma a las ventas del
-                    -- turno (eso lo excluye el scope computables()).
-                    coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'saldo'), 0)          AS saldo
-                FROM venta_pagos vp
-                JOIN ventas v ON v.id = vp.venta_id
-                WHERE v.corte_caja_id = ? AND v.pagada = true
-                  AND NOT EXISTS (SELECT 1 FROM facturas f WHERE f.venta_id = v.id AND f.anulada = true)
-            ", [$corte->id]);
-
-            $totalEfectivo = (float) ($pagos->efectivo ?? 0);
-            $esperado = (float) $corte->fondo_inicial + $totalEfectivo;
-
-            // Nuevo saldo del terminal POS: lo que traía al abrir + lo que
-            // entró por tarjeta y transferencia en el turno.
-            $terminalFinal = round(
-                (float) $corte->fondo_terminal + (float) ($pagos->tarjeta ?? 0) + (float) ($pagos->transferencia ?? 0),
-                2,
-            );
+            $totales = $this->totalesDelTurno($corte);
+            $esperado = (float) $corte->fondo_inicial + $totales['total_efectivo'];
 
             $corte->update([
-                'estado'              => 'cerrado',
-                'cerrado_at'          => now(),
-                'cantidad_ventas'     => (int) ($fila->cantidad ?? 0),
-                'total_ventas'        => (float) ($fila->total ?? 0),
-                'total_isv'           => (float) ($fila->isv ?? 0),
-                'total_efectivo'      => $totalEfectivo,
-                'total_tarjeta'       => (float) ($pagos->tarjeta ?? 0),
-                'total_transferencia' => (float) ($pagos->transferencia ?? 0),
-                'total_saldo'         => (float) ($pagos->saldo ?? 0),
-                'terminal_final'      => $terminalFinal,
-                'cierre_automatico'   => $automatico,
-                'efectivo_contado'    => $efectivoContado,
-                'diferencia'          => $efectivoContado !== null ? round($efectivoContado - $esperado, 2) : null,
-                'notas'               => $notas,
+                ...$totales,
+                'estado'            => 'cerrado',
+                'cerrado_at'        => now(),
+                'cierre_automatico' => $automatico,
+                'efectivo_contado'  => $efectivoContado,
+                'diferencia'        => $efectivoContado !== null ? round($efectivoContado - $esperado, 2) : null,
+                'notas'             => $notas,
             ]);
 
             // Cierre de día: la pantalla de cocina se vacía (todo lo que quede
@@ -136,5 +91,99 @@ final class CorteCajaService
 
             return $corte;
         });
+    }
+
+    /**
+     * Vuelve a cuadrar un turno YA cerrado con las ventas que tiene hoy.
+     *
+     * Existe para la venta que entró tarde a un turno cerrado (ver el
+     * comando facturas:registrar-atrasada): el dinero estuvo en la gaveta
+     * ese día, así que el arqueo de ese día es el que debe reflejarlo.
+     *
+     * Solo toca los totales y la diferencia que depende de ellos. NO cambia
+     * estado, cerrado_at, efectivo_contado, notas ni cierre_automatico: el
+     * conteo que hizo la persona sigue siendo el que hizo. Ojo con tarjeta o
+     * transferencia: cambian terminal_final, pero el fondo_terminal del turno
+     * siguiente ya se abrió con el valor viejo y aquí no se toca.
+     *
+     * Un turno abierto se deja igual: sus totales se calculan al cerrarlo.
+     */
+    public function recalcularCerrado(CorteCaja $corte): CorteCaja
+    {
+        if ($corte->estado !== 'cerrado') {
+            return $corte;
+        }
+
+        return DB::transaction(function () use ($corte): CorteCaja {
+            $totales = $this->totalesDelTurno($corte);
+            $esperado = (float) $corte->fondo_inicial + $totales['total_efectivo'];
+            $contado = $corte->efectivo_contado;
+
+            $corte->update([
+                ...$totales,
+                'diferencia' => $contado !== null ? round((float) $contado - $esperado, 2) : null,
+            ]);
+
+            return $corte;
+        });
+    }
+
+    /**
+     * Snapshot del turno por agregación SQL. Lo comparten el cierre y el
+     * recálculo de un turno cerrado, para que los dos cuenten exactamente
+     * igual.
+     *
+     * @return array{cantidad_ventas: int, total_ventas: float, total_isv: float, total_efectivo: float, total_tarjeta: float, total_transferencia: float, total_saldo: float, terminal_final: float}
+     */
+    private function totalesDelTurno(CorteCaja $corte): array
+    {
+        // cuentaEnCaja: fuera pendientes por cobrar Y ventas con factura
+        // anulada (su dinero se devolvió o se recobró en la corregida).
+        $fila = Venta::query()
+            ->where('corte_caja_id', $corte->id)
+            ->cuentaEnCaja()
+            ->selectRaw('
+                count(*) as cantidad,
+                coalesce(sum(total), 0) as total,
+                coalesce(sum(isv), 0) as isv
+            ')
+            ->first();
+
+        // Por método se suma desde venta_pagos: con pago mixto una venta
+        // reparte su total entre varios métodos y el efectivo esperado
+        // en gaveta debe contar SOLO la porción en efectivo.
+        $pagos = DB::selectOne("
+            SELECT
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'efectivo'), 0)      AS efectivo,
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'tarjeta'), 0)       AS tarjeta,
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'transferencia'), 0) AS transferencia,
+                -- Consumo de cuenta prepago: comida entregada hoy que ya
+                -- se cobró y facturó al depositar. NO es efectivo en
+                -- gaveta ni terminal, y tampoco suma a las ventas del
+                -- turno (eso lo excluye el scope computables()).
+                coalesce(sum(vp.monto) FILTER (WHERE vp.metodo = 'saldo'), 0)          AS saldo
+            FROM venta_pagos vp
+            JOIN ventas v ON v.id = vp.venta_id
+            WHERE v.corte_caja_id = ? AND v.pagada = true
+              AND NOT EXISTS (SELECT 1 FROM facturas f WHERE f.venta_id = v.id AND f.anulada = true)
+        ", [$corte->id]);
+
+        // Nuevo saldo del terminal POS: lo que traía al abrir + lo que
+        // entró por tarjeta y transferencia en el turno.
+        $terminalFinal = round(
+            (float) $corte->fondo_terminal + (float) ($pagos->tarjeta ?? 0) + (float) ($pagos->transferencia ?? 0),
+            2,
+        );
+
+        return [
+            'cantidad_ventas'     => (int) ($fila->cantidad ?? 0),
+            'total_ventas'        => (float) ($fila->total ?? 0),
+            'total_isv'           => (float) ($fila->isv ?? 0),
+            'total_efectivo'      => (float) ($pagos->efectivo ?? 0),
+            'total_tarjeta'       => (float) ($pagos->tarjeta ?? 0),
+            'total_transferencia' => (float) ($pagos->transferencia ?? 0),
+            'total_saldo'         => (float) ($pagos->saldo ?? 0),
+            'terminal_final'      => $terminalFinal,
+        ];
     }
 }
