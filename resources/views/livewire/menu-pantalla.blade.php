@@ -72,6 +72,10 @@
             </div>
         @endif
 
+        {{-- Aviso de alergias: arriba de todo, justo bajo la cinta, para que sea
+             lo primero que se lee al ver el menú (en el pie nadie lo veía). --}}
+        <div class="alergias">⚠️ Si es alérgico a algún alimento, favor de reportarlo al hacer su pedido.</div>
+
         {{-- Porciones individuales: pegado a la cinta de bebidas, arriba de todo
              el menú. Es lo primero que pregunta quien no quiere el combo. --}}
         @if (count($individuales))
@@ -138,9 +142,6 @@
         {{-- Contacto al pie --}}
 
         <div class="pie-wrap">
-            {{-- Aviso de alergias: dentro del pie (que va pegado abajo) para
-                 que siempre se vea al final del menú, sin competir con precios. --}}
-            <div class="alergias">⚠️ Si es alérgico a algún alimento, favor de reportarlo al hacer su pedido.</div>
             @if ($empresa['telefono'])<div class="pie">📲 {{ $empresa['telefono'] }}</div>@endif
             @if ($empresa['formas_pago_texto'])<div class="pie">💳 {{ $empresa['formas_pago_texto'] }}</div>@endif
             @if ($empresa['direccion'])<div class="pie">📍 {{ $empresa['direccion'] }}</div>@endif
