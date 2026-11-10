@@ -82,6 +82,14 @@
         .plato-dia .nota { display: block; font-size: calc(2.5vw * var(--esc)); font-weight: 500; opacity: .6; }
         .pie-wrap { margin-top: auto; border-top: 3px dashed #ccc; padding-top: 1.5vw; }
         .pie { font-size: calc(3vw * var(--esc)); margin-top: .6vw; line-height: 1.4; }
+        /* Aviso de alergias (primer elemento del pie). Ámbar para que se
+           distinga del verde de los precios; todo en --esc como el resto. */
+        .alergias { font-size: calc(3.2vw * var(--esc)); font-weight: 700; line-height: 1.35;
+            background: #fff4e5; color: #8a4b00;
+            border-left: calc(1.2vw * var(--esc)) solid #f59e0b;
+            border-radius: calc(1.5vw * var(--esc));
+            padding: calc(1.2vw * var(--esc)) calc(2vw * var(--esc));
+            margin-bottom: calc(1vw * var(--esc)); }
 
         /* Barra de control (oculta al bloquear). */
         .bar { position: fixed; top: 0; left: 0; right: 0; background: #111; color: #fff; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; flex-wrap: wrap; z-index: 50; }

@@ -138,6 +138,9 @@
         {{-- Contacto al pie --}}
 
         <div class="pie-wrap">
+            {{-- Aviso de alergias: dentro del pie (que va pegado abajo) para
+                 que siempre se vea al final del menú, sin competir con precios. --}}
+            <div class="alergias">⚠️ Si es alérgico a algún alimento, favor de reportarlo al hacer su pedido.</div>
             @if ($empresa['telefono'])<div class="pie">📲 {{ $empresa['telefono'] }}</div>@endif
             @if ($empresa['formas_pago_texto'])<div class="pie">💳 {{ $empresa['formas_pago_texto'] }}</div>@endif
             @if ($empresa['direccion'])<div class="pie">📍 {{ $empresa['direccion'] }}</div>@endif
