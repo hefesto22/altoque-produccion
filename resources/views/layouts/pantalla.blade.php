@@ -82,15 +82,53 @@
         .plato-dia .nota { display: block; font-size: calc(2.5vw * var(--esc)); font-weight: 500; opacity: .6; }
         .pie-wrap { margin-top: auto; border-top: 3px dashed #ccc; padding-top: 1.5vw; }
         .pie { font-size: calc(3vw * var(--esc)); margin-top: .6vw; line-height: 1.4; }
-        /* Aviso de alergias, arriba bajo la cinta. Rojo suave para que no se
-           confunda con el amarillo de PORCIONES INDIVIDUALES que va debajo;
-           todo en --esc como el resto. */
-        .alergias { font-size: calc(3.4vw * var(--esc)); font-weight: 800; line-height: 1.3;
-            background: #fdecea; color: #a12a1f;
-            border-left: calc(1.2vw * var(--esc)) solid #e53935;
-            border-radius: calc(1.5vw * var(--esc));
-            padding: calc(1.2vw * var(--esc)) calc(2vw * var(--esc));
-            margin-top: calc(2vw * var(--esc)); }
+        /* Aviso de alergias, arriba bajo la cinta. Rojo sólido con letra blanca:
+           es lo único rojo del menú, así que salta a la vista. Las animaciones
+           usan solo transform y box-shadow, que NO cambian el alto del bloque,
+           para no mover el ajuste automático de --esc. */
+        .alergias { position: relative; overflow: hidden;
+            display: flex; align-items: center; gap: calc(1.8vw * var(--esc));
+            background: linear-gradient(90deg, #c62828, #e53935);
+            color: #fff; line-height: 1.25;
+            border-radius: calc(1.8vw * var(--esc));
+            padding: calc(1.4vw * var(--esc)) calc(2.4vw * var(--esc));
+            margin-top: calc(2vw * var(--esc));
+            animation: alergia-pulso 2s ease-out infinite; }
+        .alergias .icono { position: relative; z-index: 1; flex-shrink: 0;
+            display: inline-block; font-size: calc(6vw * var(--esc)); line-height: 1;
+            transform-origin: 50% 85%;
+            animation: alergia-sacudida 2s ease-in-out infinite; }
+        .alergias .texto { position: relative; z-index: 1; }
+        .alergias .texto strong { display: block; font-size: calc(3.9vw * var(--esc));
+            font-weight: 900; letter-spacing: .02em; }
+        .alergias .texto span { display: block; font-size: calc(3.2vw * var(--esc)); font-weight: 600; }
+        /* Brillo que cruza la franja de izquierda a derecha. */
+        .alergias::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 25%;
+            background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
+            transform: translateX(-150%) skewX(-20deg);
+            animation: alergia-brillo 3.5s ease-in-out infinite; }
+        /* En los keyframes se usa vw sin --esc: box-shadow no ocupa espacio en
+           el layout, y así no dependemos de var() dentro de @keyframes. */
+        @keyframes alergia-pulso {
+            0%   { box-shadow: 0 0 0 0 rgba(229, 57, 53, .65); }
+            70%  { box-shadow: 0 0 0 2.2vw rgba(229, 57, 53, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+        }
+        @keyframes alergia-sacudida {
+            0%, 55%, 100% { transform: rotate(0); }
+            62% { transform: rotate(-16deg) scale(1.15); }
+            69% { transform: rotate(13deg) scale(1.15); }
+            76% { transform: rotate(-9deg) scale(1.1); }
+            83% { transform: rotate(5deg); }
+            90% { transform: rotate(0); }
+        }
+        @keyframes alergia-brillo {
+            0%       { transform: translateX(-150%) skewX(-20deg); }
+            55%, 100% { transform: translateX(450%) skewX(-20deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .alergias, .alergias .icono, .alergias::after { animation: none; }
+        }
 
         /* Barra de control (oculta al bloquear). */
         .bar { position: fixed; top: 0; left: 0; right: 0; background: #111; color: #fff; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; flex-wrap: wrap; z-index: 50; }

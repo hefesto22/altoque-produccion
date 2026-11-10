@@ -74,7 +74,13 @@
 
         {{-- Aviso de alergias: arriba de todo, justo bajo la cinta, para que sea
              lo primero que se lee al ver el menú (en el pie nadie lo veía). --}}
-        <div class="alergias">⚠️ Si es alérgico a algún alimento, favor de reportarlo al hacer su pedido.</div>
+        <div class="alergias" role="note">
+            <span class="icono" aria-hidden="true">⚠️</span>
+            <span class="texto">
+                <strong>¿ES ALÉRGICO A ALGÚN ALIMENTO?</strong>
+                <span>Favor de reportarlo al hacer su pedido.</span>
+            </span>
+        </div>
 
         {{-- Porciones individuales: pegado a la cinta de bebidas, arriba de todo
              el menú. Es lo primero que pregunta quien no quiere el combo. --}}
