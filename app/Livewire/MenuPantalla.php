@@ -67,19 +67,24 @@ class MenuPantalla extends Component
                     'del_dia'  => $c->esDelDia(),
                 ]);
 
-        // Precios individuales por nivel (tier) de proteína presente hoy.
-        // En la TV la pleca se cambia por "ó" ("POLLO Ó CERDO"); solo cambia
-        // lo que se pinta, el nombre del tier en la BD sigue igual para el
-        // POS y los reportes.
+        // En la TV la pleca de los tiers se cambia por "ó" ("POLLO Ó CERDO");
+        // solo cambia lo que se pinta, el nombre del tier en la BD sigue igual
+        // para el POS y los reportes.
+        $tiers = Tier::mapa();
         $tierMapa = array_map(
             static fn (string $nombre): string => (string) preg_replace('#\s*/\s*#u', ' ó ', $nombre),
-            Tier::mapa(),
+            $tiers,
         );
+
+        // Precios individuales por nivel (tier) de proteína presente hoy.
         $individuales = [];
 
         foreach ($proteinas->whereNotNull('tier_combo')->groupBy('tier_combo') as $codigo => $grupo) {
-            $nombre = $tierMapa[$codigo] ?? $codigo;
-            $individuales[] = mb_strtoupper($nombre).' L.'.number_format((float) $grupo->min('precio'), 0);
+            $linea = self::lineaIndividual($tiers[$codigo] ?? (string) $codigo, $grupo->pluck('precio')->all());
+
+            if ($linea !== null) {
+                $individuales[] = $linea;
+            }
         }
 
         if ($complementos->isNotEmpty()) {
@@ -122,6 +127,54 @@ class MenuPantalla extends Component
                 'horario'           => $e->horario,
             ],
             'logoUrl' => $logoPath ? Storage::disk('public')->url($logoPath) : null,
+            'navidad' => self::esTemporadaNavidad(Carbon::now()),
         ]);
+    }
+
+    /**
+     * Línea de PORCIONES INDIVIDUALES para un nivel de proteína.
+     *
+     * Un tier como "Pollo / Cerdo" es UN solo nivel con un solo precio, pero
+     * en la TV se anuncia cada carne con su precio: "POLLO L.60 Ó CERDO L.60"
+     * (pedido de Mauricio, 2026-11-11). En los combos sigue como
+     * "POLLO Ó CERDO + 2 COMPLEMENTOS".
+     *
+     * El precio es el más bajo del grupo, pero sin los que están en 0: eso es
+     * un producto mal cargado, no una oferta, y la TV anunciaba "L.0" (pasó
+     * con POLLO EN CREMA DE HONGOS). Si todos están en 0 no sale la línea.
+     *
+     * @param iterable<mixed> $precios
+     */
+    public static function lineaIndividual(string $nombreTier, iterable $precios): ?string
+    {
+        $validos = [];
+
+        foreach ($precios as $precio) {
+            if (is_numeric($precio) && (float) $precio > 0) {
+                $validos[] = (float) $precio;
+            }
+        }
+
+        if ($validos === []) {
+            return null;
+        }
+
+        $monto = ' L.'.number_format(min($validos), 0);
+        $partes = preg_split('#\s*/\s*#u', trim($nombreTier)) ?: [$nombreTier];
+
+        return implode(' Ó ', array_map(
+            static fn (string $parte): string => mb_strtoupper($parte).$monto,
+            $partes,
+        ));
+    }
+
+    /**
+     * Temporada navideña: del 1 de noviembre al 6 de enero (Día de Reyes),
+     * ambos incluidos. La pantalla se viste sola y el 7 de enero vuelve a la
+     * normalidad sin deploy (pedido de Mauricio, 2026-11-11).
+     */
+    public static function esTemporadaNavidad(Carbon $hoy): bool
+    {
+        return $hoy->month >= 11 || ($hoy->month === 1 && $hoy->day <= 6);
     }
 }

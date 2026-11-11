@@ -39,8 +39,27 @@
     {{-- Botón discreto para desbloquear --}}
     <button class="unlock" x-on:click="toggle()" title="Desbloquear">🔓</button>
 
+    {{-- Temporada navideña (1 nov – 6 ene, ver MenuPantalla::esTemporadaNavidad).
+         La nieve es fixed y va FUERA de .board: no ocupa lugar ni entra en el
+         ajuste al alto. Posiciones y ritmos fijos (sin random) para que cada
+         refresco de Livewire no la redibuje. --}}
+    @if ($navidad)
+        <div class="nieve" aria-hidden="true">
+            @foreach (range(0, 27) as $i)
+                @php($dur = 11 + ($i * 5) % 9)
+                @php($ret = ($i * 13) % 20)
+                <span style="left: {{ ($i * 37 + 11) % 100 }}%; font-size: {{ 1.6 + (($i * 7) % 5) * 0.5 }}vw; -webkit-animation-duration: {{ $dur }}s; animation-duration: {{ $dur }}s; -webkit-animation-delay: -{{ $ret }}s; animation-delay: -{{ $ret }}s;">&#10052;&#xFE0E;</span>
+            @endforeach
+        </div>
+    @endif
+
     {{-- Menú formato flyer, vertical para pantalla tótem (0.70 x 1.90) --}}
-    <div class="board">
+    <div class="board {{ $navidad ? 'navidad' : '' }}">
+        @if ($navidad)
+            {{-- Guirnalda de luces sobre el logo. --}}
+            <div class="luces" aria-hidden="true">@for ($i = 0; $i < 16; $i++)<i></i>@endfor</div>
+        @endif
+
         <div class="head {{ $bebidas->isNotEmpty() ? 'sin-linea' : '' }}">
             @if ($logoUrl)
                 {{-- Dos caras para que el giro de moneda nunca muestre el logo en espejo --}}
@@ -50,6 +69,9 @@
                 </div>
             @endif
             <div class="titulo">{{ $empresa['nombre'] }}</div>
+            @if ($navidad)
+                <div class="fiestas">✨ ¡Felices Fiestas! ✨</div>
+            @endif
             <div class="sub">🟡 Menú {{ ucfirst($fecha) }}@if ($servicioNombre)<span class="servicio">{{ mb_strtoupper($servicioNombre) }}</span>@endif</div>
         </div>
 
@@ -72,15 +94,10 @@
             </div>
         @endif
 
-        {{-- Aviso de alergias: arriba de todo, justo bajo la cinta, para que sea
-             lo primero que se lee al ver el menú (en el pie nadie lo veía). --}}
-        <div class="alergias" role="note">
-            <span class="icono" aria-hidden="true">⚠️</span>
-            <span class="texto">
-                <strong>¿ES ALÉRGICO A ALGÚN ALIMENTO?</strong>
-                <span>Favor de reportarlo al hacer su pedido.</span>
-            </span>
-        </div>
+        @if ($navidad)
+            {{-- Franja de bastón de caramelo bajo la cinta. --}}
+            <div class="baston" aria-hidden="true"></div>
+        @endif
 
         {{-- Porciones individuales: pegado a la cinta de bebidas, arriba de todo
              el menú. Es lo primero que pregunta quien no quiere el combo. --}}
@@ -127,16 +144,26 @@
 
         {{-- Combos --}}
         @if (count($combos))
-            <div class="combo-h">🟢 PRECIOS EN DESCUENTO</div>
+            <div class="combo-h">{{ $navidad ? '🎄' : '🟢' }} PRECIOS EN DESCUENTO</div>
             @foreach ($combos as $combo)
                 <div class="combo">{{ $combo }}</div>
             @endforeach
         @endif
 
+        {{-- Aviso de alergias: justo después de PRECIOS EN DESCUENTO (pedido de
+             Mauricio, 2026-11-11), donde se termina de decidir el pedido. --}}
+        <div class="alergias" role="note">
+            <span class="icono" aria-hidden="true">⚠️</span>
+            <span class="texto">
+                <strong>¿ES ALÉRGICO A ALGÚN ALIMENTO?</strong>
+                <span>Favor de reportarlo al hacer su pedido.</span>
+            </span>
+        </div>
+
         {{-- Platillos completos (con nombre y precio fijo). El plato del día
              ya salió arriba; acá solo van los permanentes. --}}
         @if ($platillos->isNotEmpty())
-            <div class="combo-h">⭐ PLATILLOS COMPLETOS</div>
+            <div class="combo-h">{{ $navidad ? '🎁' : '⭐' }} PLATILLOS COMPLETOS</div>
             @foreach ($platillos as $ce)
                 <div class="combo">
                     {{ mb_strtoupper($ce['nombre']) }} L.{{ number_format($ce['precio'], 2) }}

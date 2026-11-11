@@ -130,6 +130,73 @@
             .alergias, .alergias .icono, .alergias::after { animation: none; }
         }
 
+        /* ── TEMPORADA NAVIDEÑA (1 nov – 6 ene; la decide MenuPantalla) ──────
+           Lo que ocupa lugar dentro de .board mide en calc(Xvw * var(--esc))
+           para no romper el ajuste al alto. La nieve es fixed y va FUERA de
+           .board. Se anima solo opacity/transform, con prefijo -webkit-: los
+           navegadores de las TVs son forks viejos de WebKit. */
+
+        /* Guirnalda de luces sobre el logo: foquitos colgando de un cable,
+           inclinados a un lado y al otro, que titilan desfasados. */
+        .luces { display: flex; justify-content: space-between; align-items: flex-start;
+            margin: 0 -2vw calc(1.2vw * var(--esc)); padding: 0 1vw;
+            border-top: calc(.35vw * var(--esc)) solid #2f4a35;
+            height: calc(4.4vw * var(--esc)); }
+        .luces i { position: relative; display: block;
+            width: calc(1.7vw * var(--esc)); height: calc(2.5vw * var(--esc));
+            border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+            background: #e53935; box-shadow: 0 0 calc(1.6vw * var(--esc)) #e53935;
+            -webkit-animation: titilar 1.4s ease-in-out infinite alternate;
+            animation: titilar 1.4s ease-in-out infinite alternate; }
+        .luces i::before { content: ''; position: absolute; left: 50%; top: calc(-.7vw * var(--esc));
+            width: calc(.9vw * var(--esc)); height: calc(.8vw * var(--esc)); margin-left: calc(-.45vw * var(--esc));
+            background: #3d4f40; border-radius: calc(.2vw * var(--esc)); }
+        .luces i:nth-child(odd) { margin-top: calc(.6vw * var(--esc));
+            -webkit-transform: rotate(-12deg); transform: rotate(-12deg); }
+        .luces i:nth-child(even) { margin-top: calc(1.5vw * var(--esc));
+            -webkit-transform: rotate(12deg); transform: rotate(12deg); }
+        .luces i:nth-child(4n+2) { background: #ffca28; box-shadow: 0 0 calc(1.6vw * var(--esc)) #ffca28;
+            -webkit-animation-delay: .35s; animation-delay: .35s; }
+        .luces i:nth-child(4n+3) { background: #43a047; box-shadow: 0 0 calc(1.6vw * var(--esc)) #43a047;
+            -webkit-animation-delay: .7s; animation-delay: .7s; }
+        .luces i:nth-child(4n+4) { background: #1e88e5; box-shadow: 0 0 calc(1.6vw * var(--esc)) #1e88e5;
+            -webkit-animation-delay: 1.05s; animation-delay: 1.05s; }
+        @-webkit-keyframes titilar { from { opacity: 1; } to { opacity: .35; } }
+        @keyframes titilar { from { opacity: 1; } to { opacity: .35; } }
+
+        /* "¡Felices Fiestas!" entre el nombre y la fecha. */
+        .head .fiestas { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700;
+            font-size: calc(3.6vw * var(--esc)); color: #c62828; letter-spacing: .02em;
+            margin-top: calc(.4vw * var(--esc)); }
+
+        /* Franja de bastón de caramelo pegada a la cinta verde. */
+        .navidad .cinta { margin-bottom: 0; }
+        .baston { height: calc(1.1vw * var(--esc)); margin: 0 -4vw calc(2vw * var(--esc));
+            background: repeating-linear-gradient(-45deg, #c62828 0, #c62828 1.4vw, #fff 1.4vw, #fff 2.8vw); }
+
+        /* Nieve: capa fija que no recibe toques (el candado y "Hay más menú"
+           van por encima, z-index 45-50). Celeste suave: en fondo blanco la
+           nieve blanca no se vería. */
+        .nieve { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;
+            pointer-events: none; z-index: 40; }
+        .nieve span { position: absolute; top: -8vh; color: #9fc5e8; opacity: .75; line-height: 1;
+            text-shadow: 0 0 3px rgba(70, 120, 170, .35); will-change: transform;
+            -webkit-animation-name: nevar; animation-name: nevar;
+            -webkit-animation-timing-function: linear; animation-timing-function: linear;
+            -webkit-animation-iteration-count: infinite; animation-iteration-count: infinite; }
+        @-webkit-keyframes nevar {
+            from { -webkit-transform: translate3d(0, 0, 0) rotate(0deg); }
+            to   { -webkit-transform: translate3d(5vw, 116vh, 0) rotate(300deg); }
+        }
+        @keyframes nevar {
+            from { -webkit-transform: translate3d(0, 0, 0) rotate(0deg); transform: translate3d(0, 0, 0) rotate(0deg); }
+            to   { -webkit-transform: translate3d(5vw, 116vh, 0) rotate(300deg); transform: translate3d(5vw, 116vh, 0) rotate(300deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .nieve { display: none; }
+            .luces i { -webkit-animation: none; animation: none; }
+        }
+
         /* Barra de control (oculta al bloquear). */
         .bar { position: fixed; top: 0; left: 0; right: 0; background: #111; color: #fff; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; flex-wrap: wrap; z-index: 50; }
         .bar .sp { flex: 1; }
