@@ -101,6 +101,17 @@ class MenuPantalla extends Component
             ))->all();
 
         $e = EmpresaSetting::actual();
+
+        // Texto escrito a mano en Datos de la Empresa → Pantalla de menú. Si
+        // está, manda: el negocio anuncia sus precios como quiere (pollo L.60 y
+        // cerdo L.70 aunque compartan nivel de combo) sin tocar productos ni
+        // niveles. Vacío: la línea se calcula de los productos del día.
+        $porcionesTexto = trim((string) $e->menu_porciones_texto);
+
+        if ($porcionesTexto !== '') {
+            $individuales = [mb_strtoupper($porcionesTexto)];
+        }
+
         $logoPath = BrandingSetting::current()->logo_path;
 
         // Qué servicio se está mostrando. La pantalla recuerda el último

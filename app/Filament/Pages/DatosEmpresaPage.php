@@ -88,6 +88,12 @@ class DatosEmpresaPage extends Page
                     ->schema([
                         TextInput::make('horario')->label('Horario')->placeholder('Lunes a Sábado de 7:00 am a 8:30 pm'),
                         TextInput::make('formas_pago_texto')->label('Formas de pago (texto)')->placeholder('Aceptamos tarjetas y transferencias'),
+                        TextInput::make('menu_porciones_texto')
+                            ->label('Precios de porciones individuales')
+                            ->placeholder('RES L.70, POLLO L.60, CERDO L.70, COMPLEMENTOS L.30')
+                            ->helperText('Opcional. Si lo llenás, la pantalla muestra exactamente esto en PORCIONES INDIVIDUALES. Vacío: se calcula solo con los precios de los productos del día.')
+                            ->maxLength(255)
+                            ->columnSpanFull(),
                     ])->columns(2),
 
                 Section::make('Facturación')

@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $sitio_web
  * @property string|null $horario
  * @property string|null $formas_pago_texto
+ * @property string|null $menu_porciones_texto
  * @property string $factura_concepto
  * @property bool $factura_detallada
  * @property bool $comanda_en_local
